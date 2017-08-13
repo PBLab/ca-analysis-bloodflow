@@ -15,8 +15,6 @@ def main():
     """ Analyze calcium traces and compare them to vessel diameter """
 
     # Parameters
-    time_per_frame = 1 / 30.03  # seconds, 30 Hz imaging
-    num_of_rois = 1
     colors = [f"C{idx}" for idx in range(10)]  # use default matplotlib colormap
 
     # Main GUI
@@ -24,14 +22,26 @@ def main():
     root.title("Choose what you'd like to analyze")
     style = ttk.Style()
     style.theme_use("clam")
+
     ca_analysis = BooleanVar(value=True)
     bloodflow_analysis = BooleanVar(value=True)
+    time_per_frame = StringVar(value=f"{1 / 30.03}")  # seconds, 30 Hz imaging
+    num_of_rois = StringVar(value="1")
+
     frame = Frame(root)
     frame.pack()
     check_cells = ttk.Checkbutton(frame, text="Analyze calcium?", variable=ca_analysis)
-    check_cells.pack(side="left")
+    check_cells.pack()
     check_bloodflow = ttk.Checkbutton(frame, text="Analyze bloodflow?", variable=bloodflow_analysis)
-    check_bloodflow.pack(side="right")
+    check_bloodflow.pack()
+    label_rois = ttk.Label(frame, text="Number of ROIs: ")
+    label_rois.pack()
+    rois_entry = ttk.Entry(frame, textvariable=num_of_rois)
+    rois_entry.pack()
+    label_time_per_frame = ttk.Label(frame, text="Time per frame: ")
+    label_time_per_frame.pack()
+    time_per_frame_entry = ttk.Entry(frame, textvariable=time_per_frame)
+    time_per_frame_entry.pack()
     root.mainloop()
 
     if ca_analysis.get():
@@ -39,8 +49,8 @@ def main():
         root1.withdraw()
         filename = filedialog.askopenfilename(title="Choose a tiff stack for ROIs", filetypes=[("Tiff stack", "*.tif")])
         img_neuron, time_vec, fluo_trace, rois = draw_rois_and_find_fluo(filename=filename,
-                                                                         time_per_frame=time_per_frame,
-                                                                         num_of_rois=num_of_rois,
+                                                                         time_per_frame=float(time_per_frame.get()),
+                                                                         num_of_rois=int(num_of_rois.get()),
                                                                          colors=colors)
 
     if bloodflow_analysis.get():
