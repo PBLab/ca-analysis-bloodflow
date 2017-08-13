@@ -25,7 +25,7 @@ def main():
 
     ca_analysis = BooleanVar(value=True)
     bloodflow_analysis = BooleanVar(value=True)
-    time_per_frame = StringVar(value=f"{1 / 30.03}")  # seconds, 30 Hz imaging
+    frame_rate = StringVar(value="30.03")  # Hz
     num_of_rois = StringVar(value="1")
 
     frame = Frame(root)
@@ -38,9 +38,9 @@ def main():
     label_rois.pack()
     rois_entry = ttk.Entry(frame, textvariable=num_of_rois)
     rois_entry.pack()
-    label_time_per_frame = ttk.Label(frame, text="Time per frame: ")
+    label_time_per_frame = ttk.Label(frame, text="Frame rate [Hz]: ")
     label_time_per_frame.pack()
-    time_per_frame_entry = ttk.Entry(frame, textvariable=time_per_frame)
+    time_per_frame_entry = ttk.Entry(frame, textvariable=frame_rate)
     time_per_frame_entry.pack()
     root.mainloop()
 
@@ -49,7 +49,7 @@ def main():
         root1.withdraw()
         filename = filedialog.askopenfilename(title="Choose a tiff stack for ROIs", filetypes=[("Tiff stack", "*.tif")])
         img_neuron, time_vec, fluo_trace, rois = draw_rois_and_find_fluo(filename=filename,
-                                                                         time_per_frame=float(time_per_frame.get()),
+                                                                         time_per_frame=1/float(frame_rate.get()),
                                                                          num_of_rois=int(num_of_rois.get()),
                                                                          colors=colors)
 
@@ -85,6 +85,7 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
     fluorescent_trace = np.zeros((num_of_rois, num_of_slices))
 
     # Display the mean image and draw ROIs
+
     mean_image = np.mean(tif, 0)
 
     for idx in range(num_of_rois):
@@ -94,6 +95,7 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
         plt.show(block=True)
 
     # Calculate the mean fluo. and draw the cells in a single figure
+    print("Calculating mean...")
     fig_cells = plt.figure()
     ax_cells = fig_cells.add_subplot(121)
     ax_cells.set_title("Field of View")
