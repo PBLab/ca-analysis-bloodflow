@@ -27,6 +27,8 @@ def main():
     bloodflow_analysis = BooleanVar(value=True)
     frame_rate = StringVar(value="30.03")  # Hz
     num_of_rois = StringVar(value="1")
+    num_of_chans = IntVar(value=2)
+    chan_of_neurons = IntVar(value=1)
 
     frame = Frame(root)
     frame.pack()
@@ -34,7 +36,7 @@ def main():
     check_cells.pack()
     check_bloodflow = ttk.Checkbutton(frame, text="Analyze bloodflow?", variable=bloodflow_analysis)
     check_bloodflow.pack()
-    label_rois = ttk.Label(frame, text="Number of ROIs: ")
+    label_rois = ttk.Label(frame, text="Number of cell ROIs: ")
     label_rois.pack()
     rois_entry = ttk.Entry(frame, textvariable=num_of_rois)
     rois_entry.pack()
@@ -42,16 +44,26 @@ def main():
     label_time_per_frame.pack()
     time_per_frame_entry = ttk.Entry(frame, textvariable=frame_rate)
     time_per_frame_entry.pack()
+    label_num_of_chans = ttk.Label(frame, text="Number of channels: ")
+    label_num_of_chans.pack()
+    num_of_chans_entry = ttk.Entry(frame, textvariable=num_of_chans)
+    num_of_chans_entry.pack()
+    label_chan_of_neurons = ttk.Label(frame, text="Channel of neurons: ")
+    label_chan_of_neurons.pack()
+    chan_of_neurons_entry = ttk.Entry(frame, textvariable=chan_of_neurons)
+    chan_of_neurons_entry.pack()
+
     root.mainloop()
 
     if ca_analysis.get():
         root1 = Tk()
         root1.withdraw()
-        filename = filedialog.askopenfilename(title="Choose a tiff stack for ROIs", filetypes=[("Tiff stack", "*.tif")])
+        filename = filedialog.askopenfilename(title="Choose a tiff stack for cell ROIs", filetypes=[("Tiff stack", "*.tif")])
         img_neuron, time_vec, fluo_trace, rois = draw_rois_and_find_fluo(filename=filename,
                                                                          time_per_frame=1/float(frame_rate.get()),
                                                                          num_of_rois=int(num_of_rois.get()),
-                                                                         colors=colors)
+                                                                         colors=colors, num_of_channels=num_of_chans.get(),
+                                                                         channel_to_keep=chan_of_neurons.get())
 
     if bloodflow_analysis.get():
         root2 = Tk()
@@ -74,23 +86,35 @@ def main():
 
 
 def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
-                            num_of_rois: int, colors: List):
+                            num_of_rois: int, colors: List, num_of_channels: int,
+                            channel_to_keep: int):
+    """
 
+    :param filename:
+    :param time_per_frame: 1/Hz (1/framerate)
+    :param num_of_rois: Number of GCaMP-labeled cells to mark
+    :param colors:
+    :param num_of_channels: How many channels does the stack contain
+    :param channel_to_keep: Which channel (1..end) contains the GCaMP data?
+    :return:
+    """
     print("Reading stack...")
     tif = tifffile.imread(filename)
+    data = tif[channel_to_keep-1::num_of_channels, :]
+
     print("Reading complete.")
-    num_of_slices = tif.shape[0]
+    num_of_slices = data.shape[0]
     max_time = num_of_slices * time_per_frame  # second
     rois = []
     fluorescent_trace = np.zeros((num_of_rois, num_of_slices))
 
     # Display the mean image and draw ROIs
 
-    mean_image = np.mean(tif, 0)
-
+    mean_image = np.mean(data, 0)
     for idx in range(num_of_rois):
-        plt.figure()
-        plt.imshow(mean_image, cmap='gray')
+        fig_rois = plt.figure()
+        ax_rois = fig_rois.add_subplot(111)
+        ax_rois.imshow(mean_image, cmap='gray')
         rois.append(roipoly(roicolor=colors[idx]))
         plt.show(block=True)
 
@@ -103,7 +127,7 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
 
     for idx, roi in enumerate(rois):
         cur_mask = roi.getMask(mean_image)
-        fluorescent_trace[idx, :] = np.mean(tif[:, cur_mask], axis=-1)
+        fluorescent_trace[idx, :] = np.mean(data[:, cur_mask], axis=-1)
         roi.displayROI()
 
     # Add offset to the traces
