@@ -6,39 +6,61 @@ from scipy.io import loadmat
 from matplotlib.gridspec import GridSpec
 from typing import List
 from collections import namedtuple
-import tkinter as tk
+from tkinter import ttk
 from tkinter import filedialog
+from tkinter import *
 
 
 def main():
-    root = tk.Tk()
-    root.withdraw()
-    filename = filedialog.askopenfilename(title="Choose a tiff stack for ROIs", filetypes=[("Tiff stack", "*.tif")])
+    """ Analyze calcium traces and compare them to vessel diameter """
+
+    # Parameters
     time_per_frame = 1 / 30.03  # seconds, 30 Hz imaging
     num_of_rois = 1
     colors = [f"C{idx}" for idx in range(10)]  # use default matplotlib colormap
 
-    img_neuron, time_vec, fluo_trace, rois = draw_rois_and_find_fluo(filename=filename,
-                                                                     time_per_frame=time_per_frame,
-                                                                     num_of_rois=num_of_rois,
-                                                                     colors=colors)
+    # Main GUI
+    root = Tk()
+    root.title("Choose what you'd like to analyze")
+    style = ttk.Style()
+    style.theme_use("clam")
+    ca_analysis = BooleanVar(value=True)
+    bloodflow_analysis = BooleanVar(value=True)
+    frame = Frame(root)
+    frame.pack()
+    check_cells = ttk.Checkbutton(frame, text="Analyze calcium?", variable=ca_analysis)
+    check_cells.pack(side="left")
+    check_bloodflow = ttk.Checkbutton(frame, text="Analyze bloodflow?", variable=bloodflow_analysis)
+    check_bloodflow.pack(side="right")
+    root.mainloop()
 
-    # Vessel part
-    root2 = tk.Tk()
-    root2.withdraw()
-    andy_mat = filedialog.askopenfilename(title="Choose a .mat file for vessel analysis",
-                                          filetypes=[("MATLAB files", "*.mat")])
-    struct_name = "mv_mpP"
-    vessel_lines, diameter_data, img_vessels = import_andy_and_plot(filename=andy_mat,
-                                                                    struct_name=struct_name,
-                                                                    colors=colors,
-                                                                    rois=rois)
+    if ca_analysis.get():
+        root1 = Tk()
+        root1.withdraw()
+        filename = filedialog.askopenfilename(title="Choose a tiff stack for ROIs", filetypes=[("Tiff stack", "*.tif")])
+        img_neuron, time_vec, fluo_trace, rois = draw_rois_and_find_fluo(filename=filename,
+                                                                         time_per_frame=time_per_frame,
+                                                                         num_of_rois=num_of_rois,
+                                                                         colors=colors)
 
-    idx_of_closest_vessel = find_closest_vessel(rois=rois, vessels=vessel_lines)
+    if bloodflow_analysis.get():
+        root2 = Tk()
+        root2.withdraw()
+        andy_mat = filedialog.askopenfilename(title="Choose a .mat file for vessel analysis",
+                                              filetypes=[("MATLAB files", "*.mat")])
+        struct_name = "mv_mpP"
+        vessel_lines, diameter_data, img_vessels = import_andy_and_plot(filename=andy_mat,
+                                                                        struct_name=struct_name,
+                                                                        colors=colors)
 
-    plot_neuron_with_vessel(rois=rois, vessels=vessel_lines, closest=idx_of_closest_vessel,
-                            img_vessels=img_vessels, fluo_trace=fluo_trace, time_vec=time_vec,
-                            diameter_data=diameter_data, img_neuron=img_neuron)
+        if ca_analysis.get():
+            idx_of_closest_vessel = find_closest_vessel(rois=rois, vessels=vessel_lines)
+
+            plot_neuron_with_vessel(rois=rois, vessels=vessel_lines, closest=idx_of_closest_vessel,
+                                    img_vessels=img_vessels, fluo_trace=fluo_trace, time_vec=time_vec,
+                                    diameter_data=diameter_data, img_neuron=img_neuron)
+
+    plt.show()
 
 
 def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
@@ -102,7 +124,7 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
     return mean_image, time_vec, fluorescent_trace, rois
 
 
-def import_andy_and_plot(filename: str, struct_name: str, colors: List, rois: List):
+def import_andy_and_plot(filename: str, struct_name: str, colors: List):
     """
     Import the output of the VesselDiameter.m Matlab script and draw it
     :param filename:
