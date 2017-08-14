@@ -20,6 +20,8 @@ def main():
     # Main GUI
     root = Tk()
     root.title("Choose what you'd like to analyze")
+    frame = ttk.Frame(root)
+    frame.pack()
     style = ttk.Style()
     style.theme_use("clam")
 
@@ -30,8 +32,6 @@ def main():
     num_of_chans = IntVar(value=2)
     chan_of_neurons = IntVar(value=1)
 
-    frame = Frame(root)
-    frame.pack()
     check_cells = ttk.Checkbutton(frame, text="Analyze calcium?", variable=ca_analysis)
     check_cells.pack()
     check_bloodflow = ttk.Checkbutton(frame, text="Analyze bloodflow?", variable=bloodflow_analysis)
@@ -82,7 +82,7 @@ def main():
                                     img_vessels=img_vessels, fluo_trace=fluo_trace, time_vec=time_vec,
                                     diameter_data=diameter_data, img_neuron=img_neuron)
 
-    plt.show()
+    plt.show(block=False)
 
 
 def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
