@@ -10,6 +10,7 @@ from tkinter import ttk
 from tkinter import filedialog
 from tkinter import *
 from PIL import Image
+from pathlib import Path
 
 
 def main() -> Dict:
@@ -70,6 +71,7 @@ def main() -> Dict:
         return_vals['fluo_trace'] = fluo_trace
         return_vals['time_vec'] = time_vec
         return_vals['img_neuron'] = img_neuron
+        return_vals['cells_filename'] = Path(filename).name[:-4]
 
     if bloodflow_analysis.get():
         root2 = Tk()
@@ -82,6 +84,7 @@ def main() -> Dict:
                                                                         colors=colors)
         return_vals['diameter_data'] = diameter_data
         return_vals['img_vessels'] = img_vessels
+        return_vals['vessels_filename'] = Path(andy_mat).name[:-4]
 
         if ca_analysis.get():
             idx_of_closest_vessel = find_closest_vessel(rois=rois, vessels=vessel_lines)
@@ -89,6 +92,7 @@ def main() -> Dict:
             plot_neuron_with_vessel(rois=rois, vessels=vessel_lines, closest=idx_of_closest_vessel,
                                     img_vessels=img_vessels, fluo_trace=fluo_trace, time_vec=time_vec,
                                     diameter_data=diameter_data, img_neuron=img_neuron)
+            return_vals['idx_of_closest_vessel'] = idx_of_closest_vessel
 
     plt.show(block=False)
     return return_vals
@@ -163,7 +167,7 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
     ax.set_yticklabels(np.arange(1, num_of_rois + 1))
     ax.set_title("Fluorescence trace")
 
-    return mean_image, time_vec, fluorescent_trace, rois
+    return mean_image, time_vec, fluorescent_trace_normed, rois
 
 
 def resize_image(data: np.array) -> np.array:
@@ -287,3 +291,4 @@ def plot_neuron_with_vessel(rois: List[roipoly], vessels: List, closest: np.arra
 
 if __name__ == '__main__':
     vals = main()
+    np.save(f'vals_{vals["cells_filename"]}.npy', vals)
