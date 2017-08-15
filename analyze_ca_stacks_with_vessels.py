@@ -4,14 +4,15 @@ import tifffile
 import numpy as np
 from scipy.io import loadmat
 from matplotlib.gridspec import GridSpec
-from typing import List
+from typing import List, Dict
 from collections import namedtuple
 from tkinter import ttk
 from tkinter import filedialog
 from tkinter import *
+from PIL import Image
 
 
-def main():
+def main() -> Dict:
     """ Analyze calcium traces and compare them to vessel diameter """
 
     # Parameters
@@ -55,6 +56,8 @@ def main():
 
     root.mainloop()
 
+    return_vals = {}
+
     if ca_analysis.get():
         root1 = Tk()
         root1.withdraw()
@@ -64,6 +67,9 @@ def main():
                                                                          num_of_rois=int(num_of_rois.get()),
                                                                          colors=colors, num_of_channels=num_of_chans.get(),
                                                                          channel_to_keep=chan_of_neurons.get())
+        return_vals['fluo_trace'] = fluo_trace
+        return_vals['time_vec'] = time_vec
+        return_vals['img_neuron'] = img_neuron
 
     if bloodflow_analysis.get():
         root2 = Tk()
@@ -74,6 +80,8 @@ def main():
         vessel_lines, diameter_data, img_vessels = import_andy_and_plot(filename=andy_mat,
                                                                         struct_name=struct_name,
                                                                         colors=colors)
+        return_vals['diameter_data'] = diameter_data
+        return_vals['img_vessels'] = img_vessels
 
         if ca_analysis.get():
             idx_of_closest_vessel = find_closest_vessel(rois=rois, vessels=vessel_lines)
@@ -83,6 +91,7 @@ def main():
                                     diameter_data=diameter_data, img_neuron=img_neuron)
 
     plt.show(block=False)
+    return return_vals
 
 
 def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
@@ -101,6 +110,10 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
     print("Reading stack...")
     tif = tifffile.imread(filename)
     data = tif[channel_to_keep-1::num_of_channels, :]
+
+    # If image isn't symmetric - expand it. Useful for PYSIGHT outputs
+    if data.shape[1] != data.shape[2]:
+        data = resize_image(data)
 
     print("Reading complete.")
     num_of_slices = data.shape[0]
@@ -130,13 +143,7 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
         fluorescent_trace[idx, :] = np.mean(data[:, cur_mask], axis=-1)
         roi.displayROI()
 
-    # Add offset to the traces
-    maxes = np.max(fluorescent_trace, 1).reshape((num_of_rois, 1))
-    maxes = np.tile(maxes, num_of_slices)
-    assert maxes.shape == fluorescent_trace.shape
-
-    fluorescent_trace_normed = fluorescent_trace / maxes
-    assert np.max(fluorescent_trace_normed) <= 1
+    fluorescent_trace_normed = compute_final_trace(fluorescent_trace)
 
     offset_vec = np.arange(num_of_rois).reshape((num_of_rois, 1))
     offset_vec = np.tile(offset_vec, num_of_slices)
@@ -148,7 +155,6 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
     assert time_vec.shape == fluorescent_trace_normed_off.shape
 
     # Plot fluorescence results
-
     ax = fig_cells.add_subplot(122)
     ax.plot(time_vec.T, fluorescent_trace_normed_off.T)
     ax.set_xlabel("Time [sec]")
@@ -158,6 +164,39 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
     ax.set_title("Fluorescence trace")
 
     return mean_image, time_vec, fluorescent_trace, rois
+
+
+def resize_image(data: np.array) -> np.array:
+    """ Change the image size to be symmetric """
+    im = Image.fromarray(data)
+    size = 512, 512
+    resized = im.resize(size, Image.BICUBIC)
+    data = resized.getdata()
+    return data
+
+
+def compute_final_trace(trace: np.array) -> np.array:
+    """
+    Take a fluorescent trace and normalize it for display purposes.
+    :param trace: Raw trace
+    :return: np.array of the normalized trace, a row per ROI.
+    """
+    num_of_rois = trace.shape[0]
+    num_of_slices = trace.shape[1]
+
+    maxes = np.max(trace, 1).reshape((num_of_rois, 1))
+    maxes = np.tile(maxes, num_of_slices)
+    assert maxes.shape == trace.shape
+    mins = np.min(trace, 1).reshape((num_of_rois, 1))
+    mins = np.tile(mins, num_of_slices)
+    dynamic_range = maxes - mins
+    subtract_factor = maxes / dynamic_range - 1
+    fluorescent_trace_normed_pre_subtract = trace / dynamic_range
+    fluorescent_trace_normed = fluorescent_trace_normed_pre_subtract - subtract_factor
+
+    assert fluorescent_trace_normed.max() <= 1
+    assert fluorescent_trace_normed.min() >= -1
+    return fluorescent_trace_normed
 
 
 def import_andy_and_plot(filename: str, struct_name: str, colors: List):
@@ -247,4 +286,4 @@ def plot_neuron_with_vessel(rois: List[roipoly], vessels: List, closest: np.arra
 
 
 if __name__ == '__main__':
-    main()
+    vals = main()
