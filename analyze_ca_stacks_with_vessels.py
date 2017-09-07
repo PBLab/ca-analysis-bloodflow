@@ -141,6 +141,7 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
     ax_cells = fig_cells.add_subplot(121)
     ax_cells.set_title("Field of View")
     ax_cells.imshow(mean_image, cmap='gray')
+    ax_cells.set_axis_off()
 
     for idx, roi in enumerate(rois):
         cur_mask = roi.getMask(mean_image)
@@ -172,7 +173,7 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
 
 def resize_image(data: np.array) -> np.array:
     """ Change the image size to be symmetric """
-    im = Image.fromarray(data)
+    im = Image.fromarray(np.rollaxis(data, 0, 3))
     size = 512, 512
     resized = im.resize(size, Image.BICUBIC)
     data = resized.getdata()
@@ -271,6 +272,7 @@ def plot_neuron_with_vessel(rois: List[roipoly], vessels: List, closest: np.arra
     ax_img = plt.subplot(gs2[:, 0])
     ax_img.imshow(img_vessels, cmap='gray')
     ax_img.imshow(img_neuron, cmap='cool', alpha=0.5)
+    ax_img.set_axis_off()
     for idx, roi in enumerate(rois):
         roi.displayROI()
         closest_vessel = vessels[closest[idx]]
