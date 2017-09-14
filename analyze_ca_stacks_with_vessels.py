@@ -293,4 +293,4 @@ def plot_neuron_with_vessel(rois: List[roipoly], vessels: List, closest: np.arra
 
 if __name__ == '__main__':
     vals = main()
-    np.save(f'vals_{vals["cells_filename"]}.npy', vals)
+    # np.save(f'vals_{vals["cells_filename"]}.npy', vals)
