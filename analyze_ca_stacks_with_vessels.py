@@ -11,6 +11,7 @@ from tkinter import filedialog
 from tkinter import *
 from PIL import Image
 from pathlib import Path
+from h5py import File
 
 
 def main() -> Dict:
@@ -62,12 +63,14 @@ def main() -> Dict:
     if ca_analysis.get():
         root1 = Tk()
         root1.withdraw()
-        filename = filedialog.askopenfilename(title="Choose a tiff stack for cell ROIs", filetypes=[("Tiff stack", "*.tif")])
-        img_neuron, time_vec, fluo_trace, rois = draw_rois_and_find_fluo(filename=filename,
-                                                                         time_per_frame=1/float(frame_rate.get()),
-                                                                         num_of_rois=int(num_of_rois.get()),
-                                                                         colors=colors, num_of_channels=num_of_chans.get(),
-                                                                         channel_to_keep=chan_of_neurons.get())
+        filename = filedialog.askopenfilename(title="Choose a stack for cell ROIs",
+                                              filetypes=[("Tiff stack", "*.tif"), ("HDF5 stack", "*.h5")])
+        img_neuron, time_vec, fluo_trace, rois = determine_manual_or_auto(filename=filename,
+                                                                          time_per_frame=1/float(frame_rate.get()),
+                                                                          num_of_rois=int(num_of_rois.get()),
+                                                                          colors=colors,
+                                                                          num_of_channels=num_of_chans.get(),
+                                                                          channel_to_keep=chan_of_neurons.get())
         return_vals['fluo_trace'] = fluo_trace
         return_vals['time_vec'] = time_vec
         return_vals['img_neuron'] = img_neuron
@@ -98,6 +101,29 @@ def main() -> Dict:
     return return_vals
 
 
+def determine_manual_or_auto(filename: str, time_per_frame: float,
+                            num_of_rois: int, colors: List, num_of_channels: int,
+                            channel_to_keep: int):
+    """
+    Helper function to decide whether to let the user draw the ROIs himself or use an existing .npz file
+    :param filename:
+    :param time_per_frame:
+    :param num_of_rois:
+    :param colors:
+    :param num_of_channels:
+    :param channel_to_keep:
+    :return:
+    """
+    parent_folder = Path(filename).parent
+
+    img_neuron, time_vec, fluo_trace, rois = draw_rois_and_find_fluo(filename=filename,
+                                                                     time_per_frame=time_per_frame,
+                                                                     num_of_rois=num_of_rois, colors=colors,
+                                                                     num_of_channels=num_of_channels,
+                                                                     channel_to_keep=channel_to_keep)
+    return img_neuron, time_vec, fluo_trace, rois
+
+
 def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
                             num_of_rois: int, colors: List, num_of_channels: int,
                             channel_to_keep: int):
@@ -112,8 +138,12 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
     :return:
     """
     print("Reading stack...")
-    tif = tifffile.imread(filename)
-    data = tif[channel_to_keep-1::num_of_channels, :]
+    if filename.endswith(".tif"):
+        tif = tifffile.imread(filename)
+        data = tif[channel_to_keep-1::num_of_channels, :]
+    elif filename.endswith(".h5"):
+        with File(filename, 'r') as h5file:
+            data = h5file['mov'].value  # EP's motion correction output
 
     # If image isn't symmetric - expand it. Useful for PYSIGHT outputs
     if data.shape[1] != data.shape[2]:
@@ -189,19 +219,13 @@ def compute_final_trace(trace: np.array) -> np.array:
     num_of_rois = trace.shape[0]
     num_of_slices = trace.shape[1]
 
-    maxes = np.max(trace, 1).reshape((num_of_rois, 1))
-    maxes = np.tile(maxes, num_of_slices)
-    assert maxes.shape == trace.shape
-    mins = np.min(trace, 1).reshape((num_of_rois, 1))
-    mins = np.tile(mins, num_of_slices)
-    dynamic_range = maxes - mins
-    subtract_factor = maxes / dynamic_range - 1
-    fluorescent_trace_normed_pre_subtract = trace / dynamic_range
-    fluorescent_trace_normed = fluorescent_trace_normed_pre_subtract - subtract_factor
+    median_f0 = np.median(trace, 1).reshape((num_of_rois, 1))
+    median_f0 = np.tile(median_f0, num_of_slices)
+    assert median_f0.shape == trace.shape
+    df = trace - median_f0
+    df_over_f = df / median_f0
 
-    assert fluorescent_trace_normed.max() <= 1
-    assert fluorescent_trace_normed.min() >= -1
-    return fluorescent_trace_normed
+    return df_over_f
 
 
 def import_andy_and_plot(filename: str, struct_name: str, colors: List):
