@@ -12,6 +12,8 @@ from tkinter import *
 from PIL import Image
 from pathlib import Path
 from h5py import File
+from os.path import splitext
+import random
 
 
 def main() -> Dict:
@@ -65,7 +67,7 @@ def main() -> Dict:
         root1.withdraw()
         filename = filedialog.askopenfilename(title="Choose a stack for cell ROIs",
                                               filetypes=[("Tiff stack", "*.tif"), ("HDF5 stack", "*.h5")])
-        img_neuron, time_vec, fluo_trace, rois = determine_manual_or_auto(filename=filename,
+        img_neuron, time_vec, fluo_trace, rois = determine_manual_or_auto(filename=Path(filename),
                                                                           time_per_frame=1/float(frame_rate.get()),
                                                                           num_of_rois=int(num_of_rois.get()),
                                                                           colors=colors,
@@ -75,19 +77,24 @@ def main() -> Dict:
         return_vals['time_vec'] = time_vec
         return_vals['img_neuron'] = img_neuron
         return_vals['cells_filename'] = Path(filename).name[:-4]
+        if type(rois[0]) == roipoly:  # extract CoM
+            rois = [np.array([np.mean(roi.allxpoints), np.mean(roi.allypoints)]) for roi in rois]
+        return_vals['rois'] = rois
 
     if bloodflow_analysis.get():
-        root2 = Tk()
-        root2.withdraw()
-        andy_mat = filedialog.askopenfilename(title="Choose a .mat file for vessel analysis",
-                                              filetypes=[("MATLAB files", "*.mat")])
+        basename = Path(filename).name[:-4]
+        patrick = Path(filename).parent.glob("*" + basename + "*vessels*.mat")
+        for cur_file in patrick:
+            patrick_mat = str(cur_file)
+        if patrick_mat is None:
+            raise UserWarning("Patrick's output .mat file not found in folder.")
         struct_name = "mv_mpP"
-        vessel_lines, diameter_data, img_vessels = import_andy_and_plot(filename=andy_mat,
+        vessel_lines, diameter_data, img_vessels = import_andy_and_plot(filename=patrick_mat,
                                                                         struct_name=struct_name,
                                                                         colors=colors)
         return_vals['diameter_data'] = diameter_data
         return_vals['img_vessels'] = img_vessels
-        return_vals['vessels_filename'] = Path(andy_mat).name[:-4]
+        return_vals['vessels_filename'] = Path(patrick_mat).name[:-4]
 
         if ca_analysis.get():
             idx_of_closest_vessel = find_closest_vessel(rois=rois, vessels=vessel_lines)
@@ -101,7 +108,7 @@ def main() -> Dict:
     return return_vals
 
 
-def determine_manual_or_auto(filename: str, time_per_frame: float,
+def determine_manual_or_auto(filename: Path, time_per_frame: float,
                             num_of_rois: int, colors: List, num_of_channels: int,
                             channel_to_keep: int):
     """
@@ -114,13 +121,69 @@ def determine_manual_or_auto(filename: str, time_per_frame: float,
     :param channel_to_keep:
     :return:
     """
-    parent_folder = Path(filename).parent
+    name = splitext(filename.name)[0]
+    parent_folder = filename.parent
+    try:
+        corresponding_npz = next(parent_folder.glob("*" + name + ".npz"))
+        img_neuron, time_vec, fluo_trace, rois = parse_npz_from_caiman(filename=corresponding_npz,
+                                                                       time_per_frame=time_per_frame)
+    except StopIteration:
+        img_neuron, time_vec, fluo_trace, rois = draw_rois_and_find_fluo(filename=filename,
+                                                                         time_per_frame=time_per_frame,
+                                                                         num_of_rois=num_of_rois, colors=colors,
+                                                                         num_of_channels=num_of_channels,
+                                                                         channel_to_keep=channel_to_keep)
+    except:
+        raise ValueError("Unknown error.")
 
-    img_neuron, time_vec, fluo_trace, rois = draw_rois_and_find_fluo(filename=filename,
-                                                                     time_per_frame=time_per_frame,
-                                                                     num_of_rois=num_of_rois, colors=colors,
-                                                                     num_of_channels=num_of_channels,
-                                                                     channel_to_keep=channel_to_keep)
+    return img_neuron, time_vec, fluo_trace, rois
+
+
+def parse_npz_from_caiman(filename: Path, time_per_frame: float):
+
+    # Setup - load file and create figure
+    full_dict = np.load(str(filename), encoding='bytes')
+    fig = plt.figure()
+    r = lambda: random.randint(0, 255)
+    colors = ['#%02X%02X%02X' % (r(),r(),r()) for idx in range(100)]
+
+    # Get image and plot it
+    img_neuron = full_dict['Cn']
+    ax_img = fig.add_subplot(121)
+    ax_img.imshow(img_neuron, cmap='gray')
+    ax_img.set_axis_off()
+    ax_img.set_title("Field of View")
+
+    # Generate ROIs and plot them
+    rois = []
+    for idx, item in enumerate(full_dict['crd']):
+        cur_coor = item[b'coordinates']
+        cur_coor = cur_coor[~np.isnan(cur_coor)].reshape((-1, 2))
+        ax_img.plot(cur_coor[:, 0], cur_coor[:, 1], colors[idx])
+        rois.append(item[b'CoM'])
+
+    # Plot the fluorescent traces
+    ax_fluo = fig.add_subplot(122)
+    fluo_trace = full_dict['Cf']
+    num_of_rois, num_of_slices = fluo_trace.shape[0], fluo_trace.shape[1]
+    offset_vec = np.arange(num_of_rois).reshape((num_of_rois, 1))
+    offset_vec = np.tile(offset_vec, num_of_slices)
+    fps = full_dict['metadata'][0][b'SI.hRoiManager.scanFrameRate']
+    time_vec = np.arange(start=0, stop=1/fps*(fluo_trace.shape[1]), step=1/fps)
+    time_vec = np.tile(time_vec, (num_of_rois, 1))
+
+    final_trace = compute_final_trace(fluo_trace)
+    assert offset_vec.shape == final_trace.shape
+
+    fluorescent_trace_normed_off = final_trace + offset_vec
+    assert time_vec.shape == fluorescent_trace_normed_off.shape
+
+    ax_fluo.plot(time_vec.T, fluorescent_trace_normed_off.T)
+    ax_fluo.set_xlabel("Time [sec]")
+    ax_fluo.set_ylabel("Cell ID")
+    ax_fluo.set_yticks(np.arange(num_of_rois) + 0.5)
+    ax_fluo.set_yticklabels(np.arange(1, num_of_rois + 1))
+    ax_fluo.set_title("Fluorescence trace")
     return img_neuron, time_vec, fluo_trace, rois
 
 
@@ -196,7 +259,7 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
     ax.set_ylabel("Cell ID")
     ax.set_yticks(np.arange(num_of_rois) + 0.5)
     ax.set_yticklabels(np.arange(1, num_of_rois + 1))
-    ax.set_title("Fluorescence trace")
+    ax.set_title("Fluorescence Trace")
 
     return mean_image, time_vec, fluorescent_trace_normed, rois
 
@@ -219,7 +282,7 @@ def compute_final_trace(trace: np.array) -> np.array:
     num_of_rois = trace.shape[0]
     num_of_slices = trace.shape[1]
 
-    median_f0 = np.median(trace, 1).reshape((num_of_rois, 1))
+    median_f0 = np.mean(trace, 1).reshape((num_of_rois, 1))  # CHANGED FROM MEDIAN TO MEAN
     median_f0 = np.tile(median_f0, num_of_slices)
     assert median_f0.shape == trace.shape
     df = trace - median_f0
@@ -265,7 +328,7 @@ def import_andy_and_plot(filename: str, struct_name: str, colors: List):
     return vessel_lines, diameter_data, img
 
 
-def find_closest_vessel(rois: List[roipoly], vessels: List) -> np.array:
+def find_closest_vessel(rois: List[np.ndarray], vessels: List) -> np.array:
     """ For a list of ROIs, find the index of the nearest blood vessel """
 
     com_vessels = np.zeros((len(vessels), 2))
@@ -274,7 +337,7 @@ def find_closest_vessel(rois: List[roipoly], vessels: List) -> np.array:
 
     idx_of_closest_vessel = np.zeros((len(rois)), dtype=int)
     for idx, roi in enumerate(rois):
-        com_x, com_y = np.mean(roi.allxpoints), np.mean(roi.allypoints)  # center of ROI
+        com_x, com_y = roi[0], roi[1]  # center of ROI
         helper_array = np.tile(np.array([com_x, com_y]).reshape((1, 2)), (com_vessels.shape[0], 1))
         dist = np.sqrt(np.sum((helper_array - com_vessels) ** 2, 1))
         idx_of_closest_vessel[idx] = np.argmin(dist)
@@ -282,27 +345,33 @@ def find_closest_vessel(rois: List[roipoly], vessels: List) -> np.array:
     return idx_of_closest_vessel
 
 
-def plot_neuron_with_vessel(rois: List[roipoly], vessels: List, closest: np.array, img_neuron: np.array,
+def plot_neuron_with_vessel(rois: List[np.ndarray], vessels: List, closest: np.array, img_neuron: np.array,
                             fluo_trace: np.array, time_vec: np.array, diameter_data: List, img_vessels: np.array):
     """ Plot them together """
 
     # Inits
     fig_comp = plt.figure()
-    fig_comp.suptitle("Neurons with its closest vessel")
+    fig_comp.suptitle("Neurons With Their Closest Vessel")
     gs2 = GridSpec(len(rois) * 2, 2)
-    colors = [f"C{idx}" for idx in range(10)]
+    r = lambda: random.randint(0, 255)
+    colors = ['#%02X%02X%02X' % (r(), r(), r()) for idx in range(100)]
 
     # Show image with contours on one side
     ax_img = plt.subplot(gs2[:, 0])
     ax_img.imshow(img_vessels, cmap='gray')
     ax_img.imshow(img_neuron, cmap='cool', alpha=0.5)
     ax_img.set_axis_off()
-    for idx, roi in enumerate(rois):
-        roi.displayROI()
-        closest_vessel = vessels[closest[idx]]
-        ax_img.plot([closest_vessel.x1, closest_vessel.x2],
-                    [closest_vessel.y1, closest_vessel.y2],
+    for idx, vessel in enumerate(vessels):
+        ax_img.plot([vessel.x1, vessel.x2],
+                    [vessel.y1, vessel.y2],
                     color=colors[idx])
+        try:
+            cur_cells, = np.where(closest == idx)
+        except ValueError:  # no result
+            continue
+        for loc in cur_cells:
+            circ = plt.Circle((rois[loc][0], rois[loc][1]), edgecolor=colors[idx], fill=False)
+            ax_img.add_artist(circ)
 
     # Go through rois and plot two traces
     ax_neurons = []
