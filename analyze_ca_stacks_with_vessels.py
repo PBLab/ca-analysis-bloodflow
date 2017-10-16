@@ -14,9 +14,24 @@ from pathlib import Path
 from h5py import File
 from os.path import splitext
 import random
+import warnings
+import matplotlib.pyplot as plt
 
 
-def main() -> Dict:
+def batch_process(close_figs=True):
+    """
+    Run analysis on all files in folder
+    :return:
+    """
+    foldername = Path(r'X:\David\THY_1_GCaMP_BEFOREAFTER_TAC_290517')
+    all_files = foldername.rglob('*DAY*EXP_STIM*FOV*.tif')
+    for file in all_files:
+        print(f"Starting {str(file)}...")
+        main(filename=str(file), save_file=True)
+        if close_figs:
+            plt.close('all')
+
+def main(filename=None, save_file=False) -> Dict:
     """ Analyze calcium traces and compare them to vessel diameter """
 
     # Parameters
@@ -57,16 +72,15 @@ def main() -> Dict:
     label_chan_of_neurons.pack()
     chan_of_neurons_entry = ttk.Entry(frame, textvariable=chan_of_neurons)
     chan_of_neurons_entry.pack()
-
-    root.mainloop()
-
     return_vals = {}
-
     if ca_analysis.get():
-        root1 = Tk()
-        root1.withdraw()
-        filename = filedialog.askopenfilename(title="Choose a stack for cell ROIs",
-                                              filetypes=[("Tiff stack", "*.tif"), ("HDF5 stack", "*.h5")])
+        if filename is None:
+            root.mainloop()
+
+            root1 = Tk()
+            root1.withdraw()
+            filename = filedialog.askopenfilename(title="Choose a stack for cell ROIs",
+                                                  filetypes=[("Tiff stack", "*.tif"), ("HDF5 stack", "*.h5")])
         img_neuron, time_vec, fluo_trace, rois = determine_manual_or_auto(filename=Path(filename),
                                                                           time_per_frame=1/float(frame_rate.get()),
                                                                           num_of_rois=int(num_of_rois.get()),
@@ -84,27 +98,32 @@ def main() -> Dict:
     if bloodflow_analysis.get():
         basename = Path(filename).name[:-4]
         patrick = Path(filename).parent.glob("*" + basename + "*vessels*.mat")
-        for cur_file in patrick:
-            patrick_mat = str(cur_file)
-        if patrick_mat is None:
-            raise UserWarning("Patrick's output .mat file not found in folder.")
-        struct_name = "mv_mpP"
-        vessel_lines, diameter_data, img_vessels = import_andy_and_plot(filename=patrick_mat,
-                                                                        struct_name=struct_name,
-                                                                        colors=colors)
-        return_vals['diameter_data'] = diameter_data
-        return_vals['img_vessels'] = img_vessels
-        return_vals['vessels_filename'] = Path(patrick_mat).name[:-4]
+        try:
+            patrick_mat = str(next(patrick))
+        except StopIteration:
+            warnings.warn(f"File {filename} has no Patrick .mat file.")
+        else:
+            struct_name = "mv_mpP"
+            vessel_lines, diameter_data, img_vessels = import_andy_and_plot(filename=patrick_mat,
+                                                                            struct_name=struct_name,
+                                                                            colors=colors)
+            return_vals['diameter_data'] = diameter_data
+            return_vals['img_vessels'] = img_vessels
+            return_vals['vessels_filename'] = Path(patrick_mat).name[:-4]
 
-        if ca_analysis.get():
-            idx_of_closest_vessel = find_closest_vessel(rois=rois, vessels=vessel_lines)
+            if ca_analysis.get():
+                idx_of_closest_vessel = find_closest_vessel(rois=rois, vessels=vessel_lines)
 
-            plot_neuron_with_vessel(rois=rois, vessels=vessel_lines, closest=idx_of_closest_vessel,
-                                    img_vessels=img_vessels, fluo_trace=fluo_trace, time_vec=time_vec,
-                                    diameter_data=diameter_data, img_neuron=img_neuron)
-            return_vals['idx_of_closest_vessel'] = idx_of_closest_vessel
+                plot_neuron_with_vessel(rois=rois, vessels=vessel_lines, closest=idx_of_closest_vessel,
+                                        img_vessels=img_vessels, fluo_trace=fluo_trace, time_vec=time_vec,
+                                        diameter_data=diameter_data, img_neuron=img_neuron)
+                return_vals['idx_of_closest_vessel'] = idx_of_closest_vessel
 
     plt.show(block=False)
+
+    if save_file:
+        np.savez(str(Path(filename).parent / Path(f"vessel_neurons_analysis_{Path(filename).name[:-4]}.npz")),
+                **return_vals)
     return return_vals
 
 
@@ -128,7 +147,7 @@ def determine_manual_or_auto(filename: Path, time_per_frame: float,
         img_neuron, time_vec, fluo_trace, rois = parse_npz_from_caiman(filename=corresponding_npz,
                                                                        time_per_frame=time_per_frame)
     except StopIteration:
-        img_neuron, time_vec, fluo_trace, rois = draw_rois_and_find_fluo(filename=filename,
+        img_neuron, time_vec, fluo_trace, rois = draw_rois_and_find_fluo(filename=str(filename),
                                                                          time_per_frame=time_per_frame,
                                                                          num_of_rois=num_of_rois, colors=colors,
                                                                          num_of_channels=num_of_channels,
@@ -145,7 +164,7 @@ def parse_npz_from_caiman(filename: Path, time_per_frame: float):
     full_dict = np.load(str(filename), encoding='bytes')
     fig = plt.figure()
     r = lambda: random.randint(0, 255)
-    colors = ['#%02X%02X%02X' % (r(),r(),r()) for idx in range(100)]
+    colors = ['#%02X%02X%02X' % (r(),r(),r()) for idx in range(200)]
 
     # Get image and plot it
     img_neuron = full_dict['Cn']
@@ -354,7 +373,7 @@ def plot_neuron_with_vessel(rois: List[np.ndarray], vessels: List, closest: np.a
     fig_comp.suptitle("Neurons With Their Closest Vessel")
     gs2 = GridSpec(len(rois) * 2, 2)
     r = lambda: random.randint(0, 255)
-    colors = ['#%02X%02X%02X' % (r(), r(), r()) for idx in range(100)]
+    colors = ['#%02X%02X%02X' % (r(), r(), r()) for idx in range(200)]
 
     # Show image with contours on one side
     ax_img = plt.subplot(gs2[:, 0])
@@ -385,5 +404,5 @@ def plot_neuron_with_vessel(rois: List[np.ndarray], vessels: List, closest: np.a
 
 
 if __name__ == '__main__':
-    vals = main()
-    # np.save(f'vals_{vals["cells_filename"]}.npy', vals)
+    # vals = main(save_file=True)
+    batch_process()
