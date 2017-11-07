@@ -20,21 +20,23 @@ import h5py
 import attr
 
 
-def batch_process(close_figs=True):
+def batch_process(foldername, close_figs=True):
     """
     Run analysis on all files in folder
     :return:
     """
     # foldername = Path(r'X:\David\THY_1_GCaMP_BEFOREAFTER_TAC_290517')
     # all_files = foldername.rglob('*DAY*EXP_STIM*FOV*.tif')
-    foldername = Path(r'X:\David\rat_#919_280917')
-    all_files = foldername.rglob('*collaterales*.tif')
+    all_files = Path(foldername).rglob('*vessels_only*.mat')
     do_calcium = False
     for file in all_files:
-        print(f"Starting {str(file)}...")
-        main(filename=str(file), save_file=True, run_gui=False, do_calcium=do_calcium)
-        if close_figs:
-            plt.close('all')
+        if 'oldana' in str(file) or 'Oldana' in str(file):
+            pass
+        else:
+            print(f"Starting {str(file)}...")
+            main(filename=str(file), save_file=False, run_gui=False, do_calcium=do_calcium)
+            if close_figs:
+                plt.close('all')
 
 def main(filename=None, save_file=False, run_gui=True,
          do_calcium=True, do_vessels=True) -> Dict:
@@ -114,12 +116,14 @@ def main(filename=None, save_file=False, run_gui=True,
         bloodflow_analysis = do_vessels
     if bloodflow_analysis:
         basename = Path(filename).name[:-4]
-        patrick = Path(filename).parent.glob("*" + basename + "*vessels*.mat")
-        try:
-            patrick_mat = str(next(patrick))
-        except StopIteration:
-            warnings.warn(f"File {filename} has no Patrick .mat file.")
-        else:
+        patrick_mat = filename
+        # patrick = Path(filename).parent.glob("*" + basename + "*vessels*.mat")  # COMMENTED BY HAGAI FOR RAT ANALYSIS
+        # try:
+        #     patrick_mat = str(next(patrick))
+        # except StopIteration:
+        #     warnings.warn(f"File {filename} has no Patrick .mat file.")
+        # else:
+        if True:
             struct_name = "mv_mpP"
             vessel_lines, diameter_data, img_vessels = import_andy_and_plot(filename=patrick_mat,
                                                                             struct_name=struct_name,
@@ -403,6 +407,7 @@ def import_andy_and_plot(filename: str, struct_name: str, colors: List):
                         [vessel_lines[idx].y1, vessel_lines[idx].y2],
                         color=colors[idx])
 
+    plt.savefig(filename[:-4] + '.png')
     return vessel_lines, diameter_data, img
 
 
@@ -514,8 +519,9 @@ def display_data(fname):
 
 
 if __name__ == '__main__':
-    vals = main(save_file=True)
-    # batch_process(False)
+    # vals = main(save_file=True)
+    foldername = Path(r'X:\David\rat_#919_280917')
+    batch_process(foldername, close_figs=True)
     # Iterate over cells
     #INDICES_FROM_SI = [0, 7, 14, 22, 32, 37, 38, 43]
     # display_data(fname=r'X:\David\THY_1_GCaMP_BEFOREAFTER_TAC_290517\029_HYPER_DAY_0__EXP_STIM\vessel_neurons_analysis_029_HYPER_DAY_0__EXP_STIM__FOV_2_00001.npz')

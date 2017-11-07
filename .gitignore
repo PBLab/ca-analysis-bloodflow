@@ -2,3 +2,5 @@
 *.mat
 *.tif
 *.npy
+*.xml
+*.xlsx
