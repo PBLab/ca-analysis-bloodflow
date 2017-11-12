@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from collections import namedtuple
 from enum import Enum
-from typing import List
+from typing import List, Union
 from itertools import chain
 import peakutils
 import scipy.spatial as spatial
@@ -26,13 +26,14 @@ class IterateOverCells(object):
     "runtype='merge'" and with the two arrays that are the result of the actions in CalciumData.merge_components().
      Press m if you wish to merge the two components shown.
     """
-    def __init__(self, filename, fps, ax_img=None, ax_fluo=None):
+    def __init__(self, filename, fps, ax_img=None, ax_fluo=None, idx=slice(None)):
         self.filename = filename
         self.fig = plt.figure()
         if ax_img is None:
             self.ax_img = self.fig.add_subplot(121)
         if ax_fluo is None:
             self.ax_fluo = self.fig.add_subplot(122)
+        self.idx_of_items_to_parse = idx
         self.ax_fluo2 = None
         self.fps = fps
         self.Soma = namedtuple('Soma', ('x', 'y', 'idx'))
@@ -43,8 +44,8 @@ class IterateOverCells(object):
         self.global_idx = 0
         self.global_idx2 = 0
 
-    def run(self, crdnts: np.ndarray, axis0: np.ndarray,
-            axis1: np.ndarray, runtype: str='cells'):
+    def run(self, crdnts: np.ndarray=np.empty(()), axis0: np.ndarray=np.empty(()),
+            axis1: np.ndarray=np.empty(()), runtype: str='cells'):
         self.unpack_dict()
         if runtype == 'cells':
             self.iterate_over_cells_soma_dend()
@@ -98,7 +99,7 @@ class IterateOverCells(object):
         self.fig.canvas.mpl_connect('key_press_event', key_callback)
         self.ax_img.imshow(self.img_neuron, cmap='gray')
         self.ax_img.set_axis_off()
-        for self.global_idx, item in enumerate(self.full_dict['crd']):
+        for self.global_idx, item in enumerate(self.full_dict['crd'][self.idx_of_items_to_parse]):
             self.redraw_soma_dend(item)
             fig_manager = plt.get_current_fig_manager()
             fig_manager.window.showMaximized()
@@ -150,7 +151,7 @@ class IterateOverCells(object):
     def redraw_soma_dend(self, item):
         cur_coor = item[b'coordinates']
         cur_coor = cur_coor[~np.isnan(cur_coor)].reshape((-1, 2))
-        self.ax_img.plot(cur_coor[:, 0], cur_coor[:, 1])
+        self.ax_img.plot(cur_coor[:, 0].T, cur_coor[:, 1].T)
         cur_trace = self.fluo_trace[self.global_idx, :]
         self.ax_fluo.plot(self.time_vec.T, cur_trace.T)
         self.ax_fluo.set_title(f"Index: {self.global_idx}")
@@ -180,7 +181,7 @@ class AcquisitionType(Enum):
 
 class CalciumData(object):
     def __init__(self, filename: str, cell_type: CalciumSource, acq_type: AcquisitionType,
-                 idx: List, fps: float=15.24):
+                 idx: Union[List, slice], fps: float=15.24):
         self.filename = filename
         self.cell_type = cell_type
         self.acq_type = acq_type
@@ -209,6 +210,8 @@ class CalciumData(object):
         :return: np.array of traces, each row being a different CalciumSource
         """
         cur_traces = np.array([row_data for row_data in self.all_data['Cdf'][self.idx, :]])
+        if type(self.idx) is slice:
+            self.idx = list(range(cur_traces.shape[0]))
         assert cur_traces.shape[0] == len(self.idx)
         return cur_traces
 
@@ -219,6 +222,8 @@ class CalciumData(object):
         """
         THRESHOLD = 20
         crdnts = self.all_data['crd'][self.idx]
+        if type(self.idx) is slice:
+            self.idx = list(range(crdnts.shape[0]))
         crdnts = np.array([item[b'CoM'] for item in crdnts])
         distances = spatial.distance.cdist(crdnts, crdnts, 'euclidean')
         triang = np.tril(distances)
@@ -249,10 +254,10 @@ class CalciumData(object):
         Find components that are too close by and removes them
         """
         pairs = self.merge_components()
-        max_idx_to_remove = set([max(item) for item in pairs])
+        max_idx_to_remove = list(set([max(item) for item in pairs]))
         all_idx = np.array(self.idx)
         self.idx = list(np.delete(all_idx, max_idx_to_remove))
-        print(f"Unmerged indices:\n{self.idx}")
+        print(f"Remaining indices:\n{self.idx}")
 
 
 class AnalyzeCalciumTraces(object):
@@ -282,9 +287,14 @@ class AnalyzeCalciumTraces(object):
         colors = [f"C{idx}" for idx in range(10)] * 10
         self.spike_amp_distrib()
         plt.figure()
-        for idx, (cur_peaks, cur_trace) in enumerate(zip(self.peaks[indices], self.traces[indices, :])):
-            plt.plot(cur_trace, colors[idx])
-            plt.scatter(cur_peaks, cur_trace[cur_peaks], edgecolors=colors[idx])
+        for idx, (cur_peaks, cur_trace) in enumerate(zip(self.peaks[indices], self.traces[indices])):
+            try:
+                plt.scatter(cur_peaks, cur_trace[cur_peaks], edgecolors=colors[idx])
+            except IndexError:
+                pass
+            else:
+                plt.plot(cur_trace, colors[idx])
+
 
     def histogram_peaks(self):
         """
@@ -294,21 +304,37 @@ class AnalyzeCalciumTraces(object):
         self.spike_amp_distrib()
         vals = []
         for cur_peaks, cur_trace in zip(self.peaks, self.traces):
-            vals.append(cur_trace[cur_peaks])
+            try:
+                vals.append(cur_trace[cur_peaks])
+            except IndexError:  # no peaks found
+                pass
         vals_flat = list(chain.from_iterable(vals))
         plt.hist(vals_flat, bins=30)
         return vals_flat
 
 
 if __name__ == '__main__':
-    fps = 7.62
-    fname = r'X:\Hagai\Multiscaler\27-9-17\For article\Calcium\FOV1_fromSI0000_d1_1024_d2_1024_d3_1_order_C_frames_1000_.results_analysis.npz'
-    # iter = IterateOverCells(fname, fps)
-    # iter.run()
-    idx_soma_si = [4, 5, 6, 7, 12, 14, 15, 16, 24, 25, 30, 32, 33, 34, 44, 45, 46, 47, 51, 52, 54, 55, 56, 57, 58, 59, 62, 64, 65, 66, 67, 68, 69, 70, 71, 73, 79, 80, 82, 83, 85, 86, 87, 88, 91, 92, 94, 96, 99, 103, 105, 107, 108, 110, 112, 113, 115, 117, 118, 119, 120]
-    cur_data = CalciumData(filename=fname, cell_type=CalciumSource.SOMA,
-                           acq_type=AcquisitionType.ANALOG, idx=idx_soma_si,
-                           fps=fps)
-    cur_data.discard_double_components()
-    # analyzed_data = AnalyzeCalciumTraces(cur_data)
-    # peak_values = analyzed_data.histogram_peaks()
+    fps = 15.24
+    fname = r'X:\Hagai\Multiscaler\26-10-17\FOV3\FOV3_850gain_x4_000010000_d1_1024_d2_1024_d3_1_order_C_frames_1000_.results_analysis.npz'
+
+    # Discard doubles
+    # cur_data = CalciumData(filename=fname, cell_type=CalciumSource.SOMA,
+    #                        acq_type=AcquisitionType.ANALOG, idx=slice(None),
+    #                        fps=fps)
+    # cur_data.discard_double_components()
+
+    # Separate cells and dendrites
+    # idx = [0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25]
+    # iter = IterateOverCells(fname, fps, idx=idx)
+    # iter.run(runtype='cells')
+    # print("Somas:", iter.soma_list)
+    # print("Dendrites:", iter.dend_list)
+
+    # Calculate statistics on cells
+    idx_somas = [2, 7, 8, 12, 13, 15, 16, 18, 19, 20, 21]
+    only_one_type = CalciumData(filename=fname, cell_type=CalciumSource.SOMA,
+                                acq_type=AcquisitionType.ANALOG, idx=idx_somas,
+                                fps=fps)
+    analyzed_data = AnalyzeCalciumTraces(only_one_type)
+    peak_values = analyzed_data.histogram_peaks()
+    analyzed_data.visualize_peaks()
