@@ -14,10 +14,8 @@ from pathlib import Path
 from h5py import File
 from os.path import splitext
 import random
-import warnings
 import matplotlib.pyplot as plt
 import h5py
-import attr
 
 
 def batch_process(foldername, close_figs=True):
@@ -332,7 +330,10 @@ def compute_final_trace(trace: np.array) -> np.array:
     num_of_rois = trace.shape[0]
     num_of_slices = trace.shape[1]
 
-    median_f0 = np.mean(trace, 1).reshape((num_of_rois, 1))  # CHANGED FROM MEDIAN TO MEAN
+    mins = np.min(trace, axis=1).reshape((num_of_rois, 1))
+    mins = np.tile(mins, num_of_slices)
+    positive_trace = trace - mins
+    median_f0 = np.median(positive_trace, 1).reshape((num_of_rois, 1))
     median_f0 = np.tile(median_f0, num_of_slices)
     assert median_f0.shape == trace.shape
     df = trace - median_f0
@@ -519,9 +520,9 @@ def display_data(fname):
 
 
 if __name__ == '__main__':
-    # vals = main(save_file=True)
-    foldername = Path(r'X:\David\rat_#919_280917')
-    batch_process(foldername, close_figs=True)
+    vals = main(save_file=True)
+    # foldername = Path(r'X:\David\rat_#919_280917')
+    # batch_process(foldername, close_figs=True)
     # Iterate over cells
     #INDICES_FROM_SI = [0, 7, 14, 22, 32, 37, 38, 43]
     # display_data(fname=r'X:\David\THY_1_GCaMP_BEFOREAFTER_TAC_290517\029_HYPER_DAY_0__EXP_STIM\vessel_neurons_analysis_029_HYPER_DAY_0__EXP_STIM__FOV_2_00001.npz')
