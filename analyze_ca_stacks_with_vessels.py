@@ -16,7 +16,8 @@ from os.path import splitext
 import random
 import matplotlib.pyplot as plt
 import h5py
-
+from scipy.stats import mode
+from trace_converter import ConversionMethod, RawTraceConverter
 
 def batch_process(foldername, close_figs=True):
     """
@@ -53,10 +54,10 @@ def main(filename=None, save_file=False, run_gui=True,
         style.theme_use("clam")
 
         ca_analysis = BooleanVar(value=True)
-        bloodflow_analysis = BooleanVar(value=True)
-        frame_rate = StringVar(value="30.03")  # Hz
+        bloodflow_analysis = BooleanVar(value=False)
+        frame_rate = StringVar(value="15.24")  # Hz
         num_of_rois = StringVar(value="1")
-        num_of_chans = IntVar(value=2)
+        num_of_chans = IntVar(value=1)
         chan_of_neurons = IntVar(value=1)
 
         check_cells = ttk.Checkbutton(frame, text="Analyze calcium?", variable=ca_analysis)
@@ -88,7 +89,8 @@ def main(filename=None, save_file=False, run_gui=True,
         root1.withdraw()
         filename = filedialog.askopenfilename(title="Choose a stack for cell ROIs",
                                               filetypes=[("Tiff Stack", "*.tif"), ("HDF5 Stack", "*.h5"),
-                                                         ("HDF5 Stack", "*.hdf5")])
+                                                         ("HDF5 Stack", "*.hdf5")],
+                                              initialdir=r'/data/Hagai/Multiscaler/27-9-17/For article/Calcium')
     try:
         ca_analysis = ca_analysis.get()
     except UnboundLocalError:
@@ -164,8 +166,8 @@ def determine_manual_or_auto(filename: Path, time_per_frame: float,
     name = splitext(filename.name)[0]
     parent_folder = filename.parent
     try:
-        # corresponding_npz = next(parent_folder.glob(name + "*analysis.npz"))
-        corresponding_npz = next(parent_folder.glob("results_onACID_" + name + "*.npz"))
+        corresponding_npz = next(parent_folder.glob(name + "*analysis.npz"))
+        # corresponding_npz = next(parent_folder.glob("results_onACID_" + name + "*.npz"))
         img_neuron, time_vec, fluo_trace, rois = parse_npz_from_caiman(filename=corresponding_npz,
                                                                        time_per_frame=time_per_frame)
     except StopIteration:
@@ -212,8 +214,8 @@ def parse_npz_from_caiman(filename: Path, time_per_frame: float):
 
     # Plot the fluorescent traces
     ax_fluo = fig.add_subplot(122)
-    # fluo_trace = full_dict['Cdf'][indices_to_sample, :]  # offline pipeline
-    fluo_trace = full_dict['Cf'][indices_to_sample, :]  # onACID
+    fluo_trace = full_dict['Cdf'][indices_to_sample, :]  # offline pipeline
+    # fluo_trace = full_dict['Cf'][indices_to_sample, :]  # onACID
     num_of_rois, num_of_slices = MAX_PLOT_NUM, fluo_trace.shape[1]  # No more than 10 ROIs to plot
     offset_vec = np.arange(num_of_rois).reshape((num_of_rois, 1))
     offset_vec = np.tile(offset_vec, num_of_slices)
@@ -289,27 +291,25 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
         fluorescent_trace[idx, :] = np.mean(data[:, cur_mask], axis=-1)
         roi.displayROI()
 
-    fluorescent_trace_normed = compute_final_trace(fluorescent_trace)
+    con_method = ConversionMethod.RAW  # What to do with the data
+    final_fluo = RawTraceConverter(conversion_method=con_method,
+                                   raw_data=fluorescent_trace)\
+        .convert()
 
-    offset_vec = np.arange(num_of_rois).reshape((num_of_rois, 1))
-    offset_vec = np.tile(offset_vec, num_of_slices)
-    assert offset_vec.shape == fluorescent_trace_normed.shape
-
-    fluorescent_trace_normed_off = fluorescent_trace_normed + offset_vec
     time_vec = np.linspace(start=0, stop=max_time, num=num_of_slices).reshape((1, num_of_slices))
     time_vec = np.tile(time_vec, (num_of_rois, 1))
-    assert time_vec.shape == fluorescent_trace_normed_off.shape
+    assert time_vec.shape == final_fluo.shape
 
     # Plot fluorescence results
     ax = fig_cells.add_subplot(122)
-    ax.plot(time_vec.T, fluorescent_trace_normed_off.T)
+    ax.plot(time_vec.T, final_fluo.T)
     ax.set_xlabel("Time [sec]")
     ax.set_ylabel("Cell ID")
     ax.set_yticks(np.arange(num_of_rois) + 0.5)
     ax.set_yticklabels(np.arange(1, num_of_rois + 1))
     ax.set_title("Fluorescence Trace")
 
-    return mean_image, time_vec, fluorescent_trace_normed, rois
+    return mean_image, time_vec, final_fluo, rois
 
 
 def resize_image(data: np.array) -> np.array:
@@ -319,28 +319,6 @@ def resize_image(data: np.array) -> np.array:
     resized = im.resize(size, Image.BICUBIC)
     data = resized.getdata()
     return data
-
-
-def compute_final_trace(trace: np.array) -> np.array:
-    """
-    Take a fluorescent trace and normalize it for display purposes.
-    :param trace: Raw trace
-    :return: np.array of the normalized trace, a row per ROI.
-    """
-    num_of_rois = trace.shape[0]
-    num_of_slices = trace.shape[1]
-
-    mins = np.min(trace, axis=1).reshape((num_of_rois, 1))
-    mins = np.tile(mins, num_of_slices)
-    positive_trace = trace - mins
-    median_f0 = np.median(positive_trace, 1).reshape((num_of_rois, 1))
-    median_f0 = np.tile(median_f0, num_of_slices)
-    assert median_f0.shape == trace.shape
-    df = trace - median_f0
-    df_over_f = df / median_f0
-
-    return df_over_f
-
 
 def import_andy_and_plot(filename: str, struct_name: str, colors: List):
     """
