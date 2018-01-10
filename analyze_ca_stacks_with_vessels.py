@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 from roipoly import roipoly
 import tifffile
 import numpy as np
@@ -42,7 +41,7 @@ def main(filename=None, save_file=False, run_gui=True,
     """ Analyze calcium traces and compare them to vessel diameter """
 
     # Parameters
-    colors = [f"C{idx}" for idx in range(10)]  # use default matplotlib colormap
+    colors = [f"C{idx}" for idx in range(10)] * 3 # use default matplotlib colormap
     return_vals = {}
     if run_gui:
         # Main GUI
@@ -90,7 +89,7 @@ def main(filename=None, save_file=False, run_gui=True,
         filename = filedialog.askopenfilename(title="Choose a stack for cell ROIs",
                                               filetypes=[("Tiff Stack", "*.tif"), ("HDF5 Stack", "*.h5"),
                                                          ("HDF5 Stack", "*.hdf5")],
-                                              initialdir=r'/data/Hagai/Multiscaler/27-9-17/For article/Calcium')
+                                              initialdir=r'X:/Hagai/Multiscaler/27-9-17/For article/Calcium')
     try:
         ca_analysis = ca_analysis.get()
     except UnboundLocalError:
@@ -106,8 +105,8 @@ def main(filename=None, save_file=False, run_gui=True,
         return_vals['time_vec'] = time_vec
         return_vals['img_neuron'] = img_neuron
         return_vals['cells_filename'] = Path(filename).name[:-4]
-        if type(rois[0]) == roipoly:  # extract CoM
-            rois = [np.array([np.mean(roi.allxpoints), np.mean(roi.allypoints)]) for roi in rois]
+        if type(rois[0]) == roipoly:  # extract coords
+            rois = [np.array([roi.allxpoints, roi.allypoints]) for roi in rois]
         return_vals['rois'] = rois
 
     try:
@@ -146,7 +145,7 @@ def main(filename=None, save_file=False, run_gui=True,
 
     if save_file:
         np.savez(str(Path(filename).parent / Path(f"vessel_neurons_analysis_{Path(filename).name[:-4]}.npz")),
-                **return_vals)
+                 **return_vals)
     return return_vals
 
 
@@ -214,14 +213,14 @@ def parse_npz_from_caiman(filename: Path, time_per_frame: float):
 
     # Plot the fluorescent traces
     ax_fluo = fig.add_subplot(122)
-    fluo_trace = full_dict['Cdf'][indices_to_sample, :]  # offline pipeline
-    # fluo_trace = full_dict['Cf'][indices_to_sample, :]  # onACID
+    # fluo_trace = full_dict['Cdf'][indices_to_sample, :]  # offline pipeline
+    fluo_trace = full_dict['Cf'][indices_to_sample, :]  # onACID
     num_of_rois, num_of_slices = MAX_PLOT_NUM, fluo_trace.shape[1]  # No more than 10 ROIs to plot
     offset_vec = np.arange(num_of_rois).reshape((num_of_rois, 1))
     offset_vec = np.tile(offset_vec, num_of_slices)
     try:
         fps = full_dict['metadata'][0][b'SI.hRoiManager.scanFrameRate']
-    except KeyError:
+    except (KeyError, TypeError):
         fps = 7.68  # Defaults FPS
     time_vec = np.arange(start=0, stop=1/fps*(fluo_trace.shape[1]), step=1/fps)
     time_vec = np.tile(time_vec, (num_of_rois, 1))
@@ -291,7 +290,7 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
         fluorescent_trace[idx, :] = np.mean(data[:, cur_mask], axis=-1)
         roi.displayROI()
 
-    con_method = ConversionMethod.RAW  # What to do with the data
+    con_method = ConversionMethod.RAW_SUBTRACT  # what to do with the data
     final_fluo = RawTraceConverter(conversion_method=con_method,
                                    raw_data=fluorescent_trace)\
         .convert()
@@ -330,7 +329,7 @@ def import_andy_and_plot(filename: str, struct_name: str, colors: List):
     print(filename)
     try:
         andy = loadmat(filename)
-    except NotImplementedError:
+    except (NotImplementedError, ValueError):
         with h5py.File(filename, driver='core') as f:
             andy = f[struct_name]
             img = np.array(f[andy['first_frame'][0][0]]).T
@@ -498,7 +497,7 @@ def display_data(fname):
 
 
 if __name__ == '__main__':
-    vals = main(save_file=True)
+    vals = main(save_file=False, do_vessels=False)
     # foldername = Path(r'X:\David\rat_#919_280917')
     # batch_process(foldername, close_figs=True)
     # Iterate over cells

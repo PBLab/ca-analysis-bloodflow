@@ -10,6 +10,7 @@ class ConversionMethod(enum.Enum):
     """
     RAW = 1
     MODE = 2
+    RAW_SUBTRACT = 3
 
 @attr.s(slots=True)
 class RawTraceConverter:
@@ -32,6 +33,9 @@ class RawTraceConverter:
         if self.conversion_method is ConversionMethod.RAW:
             self.__convert_raw()
 
+        elif self.conversion_method is ConversionMethod.RAW_SUBTRACT:
+            self.__convert_raw_subtract()
+
         elif self.conversion_method is ConversionMethod.MODE:
             self.__convert_mode()
 
@@ -52,6 +56,20 @@ class RawTraceConverter:
 
         self.data_before_offset = self.raw_data / maxes
 
+    def __convert_raw_subtract(self):
+        """
+        Subtract the minimal value from the stack and then normalize it.
+        :return: None
+        """
+        mins = np.min(self.raw_data, axis=1).reshape((self.num_of_rois, 1))
+        mins = np.tile(mins, self.num_of_slices)
+        zeroed_data = self.raw_data - mins
+
+        maxes = np.max(zeroed_data, axis=1).reshape((self.num_of_rois, 1))
+        maxes = np.tile(maxes, self.num_of_slices)
+
+        self.data_before_offset = zeroed_data / maxes
+
     def __convert_mode(self):
         """
         Subtract the minimal value and divide by the mode to receive a DF/F estimate.
@@ -71,6 +89,6 @@ class RawTraceConverter:
         :return:
         """
         offsets = np.arange(self.num_of_rois).reshape((self.num_of_rois, 1))
-        offsets.np.tile(offsets, self.num_of_slices)
+        offsets = np.tile(offsets, self.num_of_slices)
 
         self.converted_data = self.data_before_offset + offsets
