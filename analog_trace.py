@@ -26,6 +26,7 @@ class AnalogTraceAnalyzer:
     juxta_vec = attr.ib(init=False)
     spont_vec = attr.ib(init=False)
     run_vec = attr.ib(init=False)
+    stand_vec = attr.ib(init=False)
     timestamps = attr.ib(init=False)
     framerate = attr.ib(init=False)
     num_of_channels = attr.ib(init=False)
@@ -113,14 +114,20 @@ class AnalogTraceAnalyzer:
         self.juxta_vec = pd.Series(self.juxta_vec)
         self.run_vec = pd.Series(self.run_vec)
         self.spont_vec = pd.Series(self.spont_vec)
+        self.stand_vec = pd.Series(self.stand_vec)
 
     def __extract_time_series(self):
         with TiffFile(self.tif_filename) as f:
             d = f.scanimage_metadata
             ser = f.series[0]
 
-        self.framerate = d['SI.hRoiManager.scanFrameRate']
-        self.num_of_channels = len(d['SI.hChannels.channelsActive'])
+        try:
+            self.framerate = d['SI.hRoiManager.scanFrameRate']
+            self.num_of_channels = len(d['SI.hChannels.channelsActive'])
+        except NameError:
+            self.framerate = 30
+            self.num_of_channels = 1
+
         regex = re.compile(r'frameTimestamps_sec = ([\d.]+)')
         timestamps = []
         for page in ser.pages[::self.num_of_channels]:  # assuming that channel 1 contains the data
@@ -133,6 +140,7 @@ class AnalogTraceAnalyzer:
         self.juxta_vec = np.zeros_like(self.timestamps, dtype=np.uint8)
         self.run_vec = np.zeros_like(self.timestamps, dtype=np.uint8)
         self.spont_vec = np.zeros_like(self.timestamps, dtype=np.uint8)
+        self.stand_vec = np.zeros_like(self.timestamps, dtype=np.uint8)
 
     def __fit_frames_to_analog(self, stim_vec: np.ndarray, juxta_vec: np.ndarray,
                                run_vec: np.ndarray, spont_vec: np.ndarray):
@@ -146,10 +154,12 @@ class AnalogTraceAnalyzer:
             self.run_vec[frame_idx] = 1 if run_vec[start:end].mean() > 0.5 else 0
             self.spont_vec[frame_idx] = 1 if spont_vec[start:end].mean() > 0.5 else 0
 
+        self.stand_vec = np.logical_not(self.run_vec).astype(np.uint8)
+
     def __mul__(self, other: np.ndarray) -> xr.DataArray:
         """
         Multiplying an AnalogTrace with a numpy array containing the fluorescent trace results
-        in an xarray containing the sliced data
+        in an xarray containing the sliced data. The numpy array will start from zero.
         :param other: np.ndarray
         :return:
         """
@@ -157,16 +167,16 @@ class AnalogTraceAnalyzer:
 
         coords_of_neurons = np.arange(other.shape[0])
         dims = ['sig_type', 'neuron', 'time']
-        sig_type_coor = ['stim', 'juxta', 'run', 'spont']
-        helper_list = [self.stim_vec, self.juxta_vec, self.run_vec, self.spont_vec]
+        sig_type_coor = ['stim', 'juxta', 'run', 'spont', 'stand']
+        helper_list = [self.stim_vec, self.juxta_vec, self.run_vec, self.spont_vec, self.stand_vec]
         da = xr.DataArray(np.zeros((len(sig_type_coor), other.shape[0], other.shape[1])),
                           coords=[('sig_type', sig_type_coor), ('neuron', coords_of_neurons),
                                   ('time', self.timestamps)],
                           dims=dims)
 
         for dim, vec in zip(sig_type_coor, helper_list):
-            res = other * np.atleast_2d(vec)
-            da.loc[dim] = res
+            pos_data = other - np.atleast_2d(other.min(axis=1)).T
+            da.loc[dim] = pos_data * np.atleast_2d(vec)
 
         da.attrs['fps'] = self.framerate
         return da

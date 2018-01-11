@@ -118,12 +118,13 @@ def main(filename=None, save_file=False, run_gui=True,
 
     if gui.analog_trace.get():
         analog_data_fname = next(Path(filename).parent.glob('*analog.txt'))
-        analog_data = pd.read_csv(analog_data_fname, sep=r'\t', header=None,
-                                  names=['stimulus', 'run'])
+        analog_data = pd.read_table(analog_data_fname, header=None,
+                                    names=['stimulus', 'run'], index_col=False)
         an_trace = AnalogTraceAnalyzer(filename, analog_data)
         an_trace.run()
         sliced_fluo: xr.DataArray = an_trace * return_vals['fluo_trace']  # Overloaded __mul__
-        json.dump(sliced_fluo.to_dict(), fpath + 'sliced_fluo_traces.json')
+        with open(fpath + 'sliced_fluo_traces.json', 'w') as f:
+            json.dump(sliced_fluo.to_dict(), f)
 
         # Further analysis of sliced calcium traces follows
         analyzed_data = CalciumAnalyzer(sliced_fluo)
@@ -191,6 +192,8 @@ def parse_npz_from_caiman(filename: Path, time_per_frame: float):
         cur_coor = cur_coor[~np.isnan(cur_coor)].reshape((-1, 2))
         rois.append(item[b'CoM'])
         ax_img.plot(cur_coor[:, 0], cur_coor[:, 1], colors[idx % 10])
+        min_c, max_c = cur_coor[:, 0].max(), cur_coor[:, 1].max()
+        ax_img.text(min_c, max_c, str(idx+1), color='w')
 
 
     # Plot the fluorescent traces
@@ -203,7 +206,7 @@ def parse_npz_from_caiman(filename: Path, time_per_frame: float):
     try:
         fps = full_dict['metadata'][0][b'SI.hRoiManager.scanFrameRate']
     except (KeyError, TypeError):
-        fps = 30  # default FPS
+        fps = 15.24  # default FPS
     time_vec = np.arange(start=0, stop=1/fps*(fluo_trace.shape[1]), step=1/fps)
     time_vec = np.tile(time_vec, (num_of_rois, 1))
     converted_trace = RawTraceConverter(conversion_method=ConversionMethod.RAW,
@@ -213,9 +216,11 @@ def parse_npz_from_caiman(filename: Path, time_per_frame: float):
     ax_fluo.plot(time_vec.T, fluorescent_trace_normed_off.T)
     ax_fluo.set_xlabel("Time [sec]")
     ax_fluo.set_ylabel("Cell ID")
-    ax_fluo.set_yticks(np.arange(num_of_rois) + 0.5)
+    ax_fluo.set_yticks(np.arange(num_of_rois*2, step=2) + 0.5)
     ax_fluo.set_yticklabels(np.arange(1, num_of_rois + 1))
     ax_fluo.set_title("Fluorescence trace")
+    ax_fluo.spines['top'].set_visible(False)
+    ax_fluo.spines['right'].set_visible(False)
     return img_neuron, time_vec, fluo_trace, rois
 
 
