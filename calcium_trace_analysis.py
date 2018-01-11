@@ -27,3 +27,7 @@ class CalciumAnalyzer:
         Plot the average value of each neuron in an experiment
         :return:
         """
+        fig_means, ax_means = plt.subplots()
+
+        for arr in self.data:
+            print(1)

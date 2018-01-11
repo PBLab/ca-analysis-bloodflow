@@ -22,6 +22,7 @@ from analog_trace import AnalogTraceAnalyzer
 import pandas as pd
 import xarray as xr
 import json
+from calcium_trace_analysis import CalciumAnalyzer
 
 
 def batch_process(foldername, close_figs=True):
@@ -51,6 +52,7 @@ def main(filename=None, save_file=False, run_gui=True,
     return_vals = {}
     if run_gui:
         gui = AnalysisGui()
+        gui.root.mainloop()
     else:
         pass
 
@@ -124,7 +126,8 @@ def main(filename=None, save_file=False, run_gui=True,
         json.dump(sliced_fluo.to_dict(), fpath + 'sliced_fluo_traces.json')
 
         # Further analysis of sliced calcium traces follows
-        analyzed_data = CalciumAnalyer(sliced_fluo)
+        analyzed_data = CalciumAnalyzer(sliced_fluo)
+        analyzed_data.run_analysis()
     plt.show(block=False)
 
     if save_file:

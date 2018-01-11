@@ -53,4 +53,5 @@ class AnalysisGui:
         label_chan_of_neurons.pack()
         chan_of_neurons_entry = ttk.Entry(frame, textvariable=self.chan_of_neurons)
         chan_of_neurons_entry.pack()
-        self.root.mainloop()
+
+        self.root.wait_window()
