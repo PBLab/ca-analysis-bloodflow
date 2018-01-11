@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('TkAgg')
 from roipoly import roipoly
 import tifffile
 import numpy as np
@@ -5,7 +7,6 @@ from scipy.io import loadmat
 from matplotlib.gridspec import GridSpec
 from typing import List, Dict
 from collections import namedtuple
-from tkinter import ttk
 from tkinter import filedialog
 from tkinter import *
 from PIL import Image
@@ -15,8 +16,13 @@ from os.path import splitext
 import random
 import matplotlib.pyplot as plt
 import h5py
-from scipy.stats import mode
 from trace_converter import ConversionMethod, RawTraceConverter
+from analysis_gui import AnalysisGui
+from analog_trace import AnalogTraceAnalyzer
+import pandas as pd
+import xarray as xr
+import json
+
 
 def batch_process(foldername, close_figs=True):
     """
@@ -44,42 +50,7 @@ def main(filename=None, save_file=False, run_gui=True,
     colors = [f"C{idx}" for idx in range(10)] * 3 # use default matplotlib colormap
     return_vals = {}
     if run_gui:
-        # Main GUI
-        root = Tk()
-        root.title("Choose what you'd like to analyze")
-        frame = ttk.Frame(root)
-        frame.pack()
-        style = ttk.Style()
-        style.theme_use("clam")
-
-        ca_analysis = BooleanVar(value=True)
-        bloodflow_analysis = BooleanVar(value=False)
-        frame_rate = StringVar(value="15.24")  # Hz
-        num_of_rois = StringVar(value="1")
-        num_of_chans = IntVar(value=1)
-        chan_of_neurons = IntVar(value=1)
-
-        check_cells = ttk.Checkbutton(frame, text="Analyze calcium?", variable=ca_analysis)
-        check_cells.pack()
-        check_bloodflow = ttk.Checkbutton(frame, text="Analyze bloodflow?", variable=bloodflow_analysis)
-        check_bloodflow.pack()
-        label_rois = ttk.Label(frame, text="Number of cell ROIs: ")
-        label_rois.pack()
-        rois_entry = ttk.Entry(frame, textvariable=num_of_rois)
-        rois_entry.pack()
-        label_time_per_frame = ttk.Label(frame, text="Frame rate [Hz]: ")
-        label_time_per_frame.pack()
-        time_per_frame_entry = ttk.Entry(frame, textvariable=frame_rate)
-        time_per_frame_entry.pack()
-        label_num_of_chans = ttk.Label(frame, text="Number of channels: ")
-        label_num_of_chans.pack()
-        num_of_chans_entry = ttk.Entry(frame, textvariable=num_of_chans)
-        num_of_chans_entry.pack()
-        label_chan_of_neurons = ttk.Label(frame, text="Channel of neurons: ")
-        label_chan_of_neurons.pack()
-        chan_of_neurons_entry = ttk.Entry(frame, textvariable=chan_of_neurons)
-        chan_of_neurons_entry.pack()
-        root.mainloop()
+        gui = AnalysisGui()
     else:
         pass
 
@@ -89,18 +60,20 @@ def main(filename=None, save_file=False, run_gui=True,
         filename = filedialog.askopenfilename(title="Choose a stack for cell ROIs",
                                               filetypes=[("Tiff Stack", "*.tif"), ("HDF5 Stack", "*.h5"),
                                                          ("HDF5 Stack", "*.hdf5")],
-                                              initialdir=r'X:/Hagai/Multiscaler/27-9-17/For article/Calcium')
+                                              initialdir=r'/data/David/')
+    fpath = str(Path(filename).parent / Path(f"vessel_neurons_analysis_{Path(filename).name[:-4]}"))
+
     try:
-        ca_analysis = ca_analysis.get()
-    except UnboundLocalError:
+        ca_analysis = gui.ca_analysis.get()
+    except (UnboundLocalError, NameError):
         ca_analysis = do_calcium
     if ca_analysis:
         img_neuron, time_vec, fluo_trace, rois = determine_manual_or_auto(filename=Path(filename),
-                                                                          time_per_frame=1/float(frame_rate.get()),
-                                                                          num_of_rois=int(num_of_rois.get()),
+                                                                          time_per_frame=1/float(gui.frame_rate.get()),
+                                                                          num_of_rois=int(gui.num_of_rois.get()),
                                                                           colors=colors,
-                                                                          num_of_channels=num_of_chans.get(),
-                                                                          channel_to_keep=chan_of_neurons.get())
+                                                                          num_of_channels=gui.num_of_chans.get(),
+                                                                          channel_to_keep=gui.chan_of_neurons.get())
         return_vals['fluo_trace'] = fluo_trace
         return_vals['time_vec'] = time_vec
         return_vals['img_neuron'] = img_neuron
@@ -110,8 +83,8 @@ def main(filename=None, save_file=False, run_gui=True,
         return_vals['rois'] = rois
 
     try:
-        bloodflow_analysis = bloodflow_analysis.get()
-    except UnboundLocalError:
+        bloodflow_analysis = gui.bloodflow_analysis.get()
+    except (UnboundLocalError, NameError):
         bloodflow_analysis = do_vessels
     if bloodflow_analysis:
         basename = Path(filename).name[:-4]
@@ -141,11 +114,21 @@ def main(filename=None, save_file=False, run_gui=True,
                                         diameter_data=diameter_data, img_neuron=img_neuron)
                 return_vals['idx_of_closest_vessel'] = idx_of_closest_vessel
 
+    if gui.analog_trace.get():
+        analog_data_fname = next(Path(filename).parent.glob('*analog.txt'))
+        analog_data = pd.read_csv(analog_data_fname, sep=r'\t', header=None,
+                                  names=['stimulus', 'run'])
+        an_trace = AnalogTraceAnalyzer(filename, analog_data)
+        an_trace.run()
+        sliced_fluo: xr.DataArray = an_trace * return_vals['fluo_trace']  # Overloaded __mul__
+        json.dump(sliced_fluo.to_dict(), fpath + 'sliced_fluo_traces.json')
+
+        # Further analysis of sliced calcium traces follows
+        analyzed_data = CalciumAnalyer(sliced_fluo)
     plt.show(block=False)
 
     if save_file:
-        np.savez(str(Path(filename).parent / Path(f"vessel_neurons_analysis_{Path(filename).name[:-4]}.npz")),
-                 **return_vals)
+        np.savez(fpath + '.npz', **return_vals)
     return return_vals
 
 
@@ -165,7 +148,7 @@ def determine_manual_or_auto(filename: Path, time_per_frame: float,
     name = splitext(filename.name)[0]
     parent_folder = filename.parent
     try:
-        corresponding_npz = next(parent_folder.glob(name + "*analysis.npz"))
+        corresponding_npz = next(parent_folder.glob(name + "*results.npz"))
         # corresponding_npz = next(parent_folder.glob("results_onACID_" + name + "*.npz"))
         img_neuron, time_vec, fluo_trace, rois = parse_npz_from_caiman(filename=corresponding_npz,
                                                                        time_per_frame=time_per_frame)
@@ -184,13 +167,11 @@ def determine_manual_or_auto(filename: Path, time_per_frame: float,
 def parse_npz_from_caiman(filename: Path, time_per_frame: float):
 
     # Setup - load file and create figure
-    MAX_PLOT_NUM = 3
+
     full_dict = np.load(str(filename), encoding='bytes')
-    indices_to_sample = np.random.randint(full_dict['crd'].shape[0], size=(MAX_PLOT_NUM,),
-                                          dtype='uint16')
     fig = plt.figure()
     r = lambda: random.randint(0, 255)
-    colors = [f"C{idx}" for idx in range(MAX_PLOT_NUM)]
+    colors = [f"C{idx}" for idx in range(10)]
 
     # Get image and plot it
     img_neuron = full_dict['Cn']
@@ -201,31 +182,30 @@ def parse_npz_from_caiman(filename: Path, time_per_frame: float):
 
     # Generate ROIs and plot them
     rois = []
-    count = 0
-    rel_crds = full_dict['crd'][indices_to_sample]
+    rel_crds = full_dict['crd_good']
     for idx, item in enumerate(rel_crds):
         cur_coor = item[b'coordinates']
         cur_coor = cur_coor[~np.isnan(cur_coor)].reshape((-1, 2))
         rois.append(item[b'CoM'])
-        ax_img.plot(cur_coor[:, 0], cur_coor[:, 1], colors[count])
-        count += 1
+        ax_img.plot(cur_coor[:, 0], cur_coor[:, 1], colors[idx % 10])
 
 
     # Plot the fluorescent traces
     ax_fluo = fig.add_subplot(122)
-    # fluo_trace = full_dict['Cdf'][indices_to_sample, :]  # offline pipeline
-    fluo_trace = full_dict['Cf'][indices_to_sample, :]  # onACID
-    num_of_rois, num_of_slices = MAX_PLOT_NUM, fluo_trace.shape[1]  # No more than 10 ROIs to plot
+    fluo_trace = full_dict['C']  # offline pipeline
+    # fluo_trace = full_dict['Cf'][indices_to_sample, :]  # onACID
+    num_of_rois, num_of_slices = fluo_trace.shape[0], fluo_trace.shape[1]  # No more than 10 ROIs to plot
     offset_vec = np.arange(num_of_rois).reshape((num_of_rois, 1))
     offset_vec = np.tile(offset_vec, num_of_slices)
     try:
         fps = full_dict['metadata'][0][b'SI.hRoiManager.scanFrameRate']
     except (KeyError, TypeError):
-        fps = 7.68  # Defaults FPS
+        fps = 30  # default FPS
     time_vec = np.arange(start=0, stop=1/fps*(fluo_trace.shape[1]), step=1/fps)
     time_vec = np.tile(time_vec, (num_of_rois, 1))
-
-    fluorescent_trace_normed_off = fluo_trace + offset_vec
+    converted_trace = RawTraceConverter(conversion_method=ConversionMethod.RAW,
+                                        raw_data=fluo_trace).convert()
+    fluorescent_trace_normed_off = converted_trace + offset_vec
 
     ax_fluo.plot(time_vec.T, fluorescent_trace_normed_off.T)
     ax_fluo.set_xlabel("Time [sec]")

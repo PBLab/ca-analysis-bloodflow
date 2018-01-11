@@ -5,6 +5,7 @@ from attr.validators import instance_of
 import re
 from typing import Tuple
 from tifffile import TiffFile
+import xarray as xr
 
 
 @attr.s(slots=True)
@@ -144,6 +145,31 @@ class AnalogTraceAnalyzer:
             self.juxta_vec[frame_idx] = 1 if juxta_vec[start:end].mean() > 0.5 else 0
             self.run_vec[frame_idx] = 1 if run_vec[start:end].mean() > 0.5 else 0
             self.spont_vec[frame_idx] = 1 if spont_vec[start:end].mean() > 0.5 else 0
+
+    def __mul__(self, other: np.ndarray) -> xr.DataArray:
+        """
+        Multiplying an AnalogTrace with a numpy array containing the fluorescent trace results
+        in an xarray containing the sliced data
+        :param other: np.ndarray
+        :return:
+        """
+        assert isinstance(other, np.ndarray)
+
+        coords_of_neurons = np.arange(other.shape[0])
+        dims = ['sig_type', 'neuron', 'time']
+        sig_type_coor = ['stim', 'juxta', 'run', 'spont']
+        helper_list = [self.stim_vec, self.juxta_vec, self.run_vec, self.spont_vec]
+        da = xr.DataArray(np.zeros((len(sig_type_coor), other.shape[0], other.shape[1])),
+                          coords=[('sig_type', sig_type_coor), ('neuron', coords_of_neurons),
+                                  ('time', self.timestamps)],
+                          dims=dims)
+
+        for dim, vec in zip(sig_type_coor, helper_list):
+            res = other * np.atleast_2d(vec)
+            da.loc[dim] = res
+
+        da.attrs['fps'] = self.framerate
+        return da
 
 
 if __name__ == '__main__':
