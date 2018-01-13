@@ -43,7 +43,6 @@ class CalciumAnalyzer:
             self.__fig_manipulation(fig, ax, title=f'Fluorescent Trace in Epoch {cur_tag}',
                                     xlabel='Time', ylabel='Normalized Fluorescence')
 
-
     def __calc_mean_trace(self):
         """
         Plot the average value of each neuron in an experiment

@@ -9,8 +9,9 @@ class ConversionMethod(enum.Enum):
     Types of conversion
     """
     RAW = 1
-    MODE = 2
+    DFF = 2
     RAW_SUBTRACT = 3
+    NONE = 4
 
 @attr.s(slots=True)
 class RawTraceConverter:
@@ -36,8 +37,11 @@ class RawTraceConverter:
         elif self.conversion_method is ConversionMethod.RAW_SUBTRACT:
             self.__convert_raw_subtract()
 
-        elif self.conversion_method is ConversionMethod.MODE:
-            self.__convert_mode()
+        elif self.conversion_method is ConversionMethod.DFF:
+            self.__convert_dff()
+
+        elif self.conversion_method is ConversionMethod.NONE:
+            self.__convert_none()
 
         self.__add_offset()
         return self.converted_data
@@ -70,18 +74,21 @@ class RawTraceConverter:
 
         self.data_before_offset = zeroed_data / maxes
 
-    def __convert_mode(self):
+    def __convert_dff(self):
         """
         Subtract the minimal value and divide by the mode to receive a DF/F estimate.
         :return: None
         """
         mins = np.min(self.raw_data, axis=1).reshape((self.num_of_rois, 1))
         mins = np.tile(mins, self.num_of_slices)
-        zeroed_trace = self.raw_data - mins
+        zeroed_trace = self.raw_data - mins + 1
         mods = mode(zeroed_trace, axis=1)[0].reshape((self.num_of_rois, 1))
         mods = np.tile(mods, self.num_of_slices)
 
-        self.data_before_offset = self.raw_data / mods
+        self.data_before_offset = (self.raw_data-mods) / mods
+
+    def __convert_none(self):
+        self.data_before_offset = self.raw_data / 4
 
     def __add_offset(self):
         """

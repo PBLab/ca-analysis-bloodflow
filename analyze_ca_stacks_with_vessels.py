@@ -198,27 +198,23 @@ def parse_npz_from_caiman(filename: Path, time_per_frame: float):
 
     # Plot the fluorescent traces
     ax_fluo = fig.add_subplot(122)
-    fluo_trace = full_dict['C']  # offline pipeline
-    # fluo_trace = full_dict['Cf'][indices_to_sample, :]  # onACID
-    num_of_rois, num_of_slices = fluo_trace.shape[0], fluo_trace.shape[1]  # No more than 10 ROIs to plot
-    offset_vec = np.arange(num_of_rois).reshape((num_of_rois, 1))
-    offset_vec = np.tile(offset_vec, num_of_slices)
+    fluo_trace = full_dict['F_dff']  # offline pipeline
+    num_of_rois, num_of_slices = fluo_trace.shape[0], fluo_trace.shape[1]
     try:
         fps = full_dict['metadata'][0][b'SI.hRoiManager.scanFrameRate']
     except (KeyError, TypeError):
         fps = 15.24  # default FPS
     time_vec = np.arange(start=0, stop=1/fps*(fluo_trace.shape[1]), step=1/fps)
     time_vec = np.tile(time_vec, (num_of_rois, 1))
-    converted_trace = RawTraceConverter(conversion_method=ConversionMethod.RAW,
+    converted_trace = RawTraceConverter(conversion_method=ConversionMethod.NONE,
                                         raw_data=fluo_trace).convert()
-    fluorescent_trace_normed_off = converted_trace + offset_vec
 
-    ax_fluo.plot(time_vec.T, fluorescent_trace_normed_off.T)
+    ax_fluo.plot(time_vec.T, converted_trace.T)
     ax_fluo.set_xlabel("Time [sec]")
     ax_fluo.set_ylabel("Cell ID")
-    ax_fluo.set_yticks(np.arange(num_of_rois*2, step=2) + 0.5)
+    ax_fluo.set_yticks(np.arange(num_of_rois) + 0.5)
     ax_fluo.set_yticklabels(np.arange(1, num_of_rois + 1))
-    ax_fluo.set_title("Fluorescence trace")
+    ax_fluo.set_title(r'$\frac{\Delta F}{F} $')
     ax_fluo.spines['top'].set_visible(False)
     ax_fluo.spines['right'].set_visible(False)
     return img_neuron, time_vec, fluo_trace, rois
@@ -278,7 +274,7 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
         fluorescent_trace[idx, :] = np.mean(data[:, cur_mask], axis=-1)
         roi.displayROI()
 
-    con_method = ConversionMethod.RAW_SUBTRACT  # what to do with the data
+    con_method = ConversionMethod.DFF  # what to do with the data
     final_fluo = RawTraceConverter(conversion_method=con_method,
                                    raw_data=fluorescent_trace)\
         .convert()
@@ -294,7 +290,7 @@ def draw_rois_and_find_fluo(filename: str, time_per_frame: float,
     ax.set_ylabel("Cell ID")
     ax.set_yticks(np.arange(num_of_rois) + 0.5)
     ax.set_yticklabels(np.arange(1, num_of_rois + 1))
-    ax.set_title("Fluorescence Trace")
+    ax.set_title(r"$\Delta F / F")
 
     return mean_image, time_vec, final_fluo, rois
 

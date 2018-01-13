@@ -6,6 +6,7 @@ import re
 from typing import Tuple
 from tifffile import TiffFile
 import xarray as xr
+from itertools import product
 
 
 @attr.s(slots=True)
@@ -27,6 +28,7 @@ class AnalogTraceAnalyzer:
     spont_vec = attr.ib(init=False)
     run_vec = attr.ib(init=False)
     stand_vec = attr.ib(init=False)
+
     timestamps = attr.ib(init=False)
     framerate = attr.ib(init=False)
     num_of_channels = attr.ib(init=False)
@@ -166,17 +168,36 @@ class AnalogTraceAnalyzer:
         assert isinstance(other, np.ndarray)
 
         coords_of_neurons = np.arange(other.shape[0])
+
+        # To find all possible combinations of running and stimulus we run a Cartesian product
         dims = ['sig_type', 'neuron', 'time']
-        sig_type_coor = ['stim', 'juxta', 'run', 'spont', 'stand']
-        helper_list = [self.stim_vec, self.juxta_vec, self.run_vec, self.spont_vec, self.stand_vec]
-        da = xr.DataArray(np.zeros((len(sig_type_coor), other.shape[0], other.shape[1])),
-                          coords=[('sig_type', sig_type_coor), ('neuron', coords_of_neurons),
+        movement = ['run', 'stand', None]
+        puff = ['stim', 'juxta', 'spont', None]
+        move_data = [self.run_vec, self.stand_vec, None]
+        puff_data = [self.stim_vec, self.juxta_vec, self.spont_vec, None]
+        all_coords = []
+        all_data = []
+        for coord, data in zip(product(movement, puff), product(move_data, puff_data)):
+            try:
+                all_coords.append('_'.join((filter(None.__ne__, coord))))
+            except IndexError:
+                pass
+            try:
+                all_data.append(data[0] * data[1])
+            except TypeError:
+                all_data.append(data[0] if data[1] is None else data[1])
+
+        all_coords = all_coords[:-1]  # last item is ''
+        all_data = all_data[:-1]  # last item is None
+
+        da = xr.DataArray(np.zeros((len(all_coords), other.shape[0], other.shape[1])),
+                          coords=[('sig_type', all_coords), ('neuron', coords_of_neurons),
                                   ('time', self.timestamps)],
                           dims=dims)
 
-        for dim, vec in zip(sig_type_coor, helper_list):
+        for coor, vec in zip(all_coords, all_data):
             pos_data = other - np.atleast_2d(other.min(axis=1)).T
-            da.loc[dim] = pos_data * np.atleast_2d(vec)
+            da.loc[coor] = pos_data * np.atleast_2d(vec)
 
         da.attrs['fps'] = self.framerate
         return da
