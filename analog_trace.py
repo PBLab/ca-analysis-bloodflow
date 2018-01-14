@@ -7,6 +7,8 @@ from typing import Tuple
 from tifffile import TiffFile
 import xarray as xr
 from itertools import product
+import os
+from datetime import datetime
 
 
 @attr.s(slots=True)
@@ -20,7 +22,7 @@ class AnalogTraceAnalyzer:
     tif_filename = attr.ib(validator=instance_of(str))  # Timelapse (doesn't need to be separated)
     analog_trace = attr.ib(validator=instance_of(pd.DataFrame))  # .txt file from ScanImage
     response_window = attr.ib(default=0.5, validator=instance_of(float))  # sec
-    stim_total_time = attr.ib(default=1., validator=instance_of(float))  # sec
+    buffer_after_stim = attr.ib(default=1., validator=instance_of(float))  # sec
     move_thresh = attr.ib(default=0.25, validator=instance_of(float))  # V
     sample_rate = attr.ib(default=1000, validator=instance_of(int))  # Hz
     stim_vec = attr.ib(init=False)
@@ -32,6 +34,7 @@ class AnalogTraceAnalyzer:
     timestamps = attr.ib(init=False)
     framerate = attr.ib(init=False)
     num_of_channels = attr.ib(init=False)
+    start_time = attr.ib(init=False)
 
     def run(self):
         # Analog peak detection
@@ -84,11 +87,11 @@ class AnalogTraceAnalyzer:
         stim_vec = np.zeros(self.analog_trace.shape[0], dtype=np.uint8)
         juxta_vec = np.zeros(self.analog_trace.shape[0], dtype=np.uint8)
         for idx in true_stim:
-            last_idx = int(idx+(self.response_window + self.stim_total_time) * self.sample_rate)
+            last_idx = int(idx + (self.response_window + self.buffer_after_stim) * self.sample_rate)
             stim_vec[idx:last_idx] = 1
 
         for idx in juxta:
-            last_idx = int(idx + (self.response_window + self.stim_total_time) * self.sample_rate)
+            last_idx = int(idx + (self.response_window + self.buffer_after_stim) * self.sample_rate)
             juxta_vec[idx:last_idx] = 1
 
         return stim_vec, juxta_vec
@@ -129,6 +132,8 @@ class AnalogTraceAnalyzer:
         except NameError:
             self.framerate = 30
             self.num_of_channels = 1
+        finally:
+            self.start_time = str(datetime.fromtimestamp(os.path.getmtime(self.tif_filename)))
 
         regex = re.compile(r'frameTimestamps_sec = ([\d.]+)')
         timestamps = []
@@ -170,7 +175,7 @@ class AnalogTraceAnalyzer:
         coords_of_neurons = np.arange(other.shape[0])
 
         # To find all possible combinations of running and stimulus we run a Cartesian product
-        dims = ['sig_type', 'neuron', 'time']
+        dims = ['epoch', 'neuron', 'time']
         movement = ['run', 'stand', None]
         puff = ['stim', 'juxta', 'spont', None]
         move_data = [self.run_vec, self.stand_vec, None]
@@ -191,8 +196,8 @@ class AnalogTraceAnalyzer:
         all_data = all_data[:-1]  # last item is None
 
         da = xr.DataArray(np.zeros((len(all_coords), other.shape[0], other.shape[1])),
-                          coords=[('sig_type', all_coords), ('neuron', coords_of_neurons),
-                                  ('time', self.timestamps)],
+                          coords=[('epoch', all_coords), ('neuron', coords_of_neurons),
+                                  ('time', self.timestamps, {'units': f'seconds since {self.start_time}'})],
                           dims=dims)
 
         for coor, vec in zip(all_coords, all_data):
@@ -200,6 +205,8 @@ class AnalogTraceAnalyzer:
             da.loc[coor] = pos_data * np.atleast_2d(vec)
 
         da.attrs['fps'] = self.framerate
+        da.attrs['stim_window'] = self.response_window + self.buffer_after_stim
+        da.attrs['units'] = f'seconds since {self.start_time}'
         return da
 
 
