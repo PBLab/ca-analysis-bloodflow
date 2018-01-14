@@ -56,24 +56,30 @@ class AnalogTraceAnalyzer:
         :return: Two numpy arrays with the stimulus and juxta peak indices
         """
         diffs_stim = np.where(self.analog_trace.stimulus > 4.9)[0]
-        diffs_stim_con = np.concatenate((np.atleast_1d(diffs_stim[0]), diffs_stim))
-        idx_true_stim = np.concatenate((np.atleast_1d(diffs_stim[0]),
-                                        diffs_stim[np.diff(diffs_stim_con) > self.sample_rate * 10]))
+        if len(diffs_stim) > 0:
+            diffs_stim_con = np.concatenate((np.atleast_1d(diffs_stim[0]), diffs_stim))
+            idx_true_stim = np.concatenate((np.atleast_1d(diffs_stim[0]),
+                                            diffs_stim[np.diff(diffs_stim_con) > self.sample_rate * 10]))
 
+        else:
+            idx_true_stim = np.array([])
         diffs_juxta = np.where(self.analog_trace.stimulus > 2.2)[0]
-        diffs_juxta_con = np.concatenate((np.atleast_1d(diffs_juxta[0]), diffs_juxta))
-        idx_juxta_full = np.concatenate((np.atleast_1d(diffs_juxta[0]),
-                                         diffs_juxta[np.diff(diffs_juxta_con) > self.sample_rate * 10]))
+        if len(diffs_juxta) > 0:
+            diffs_juxta_con = np.concatenate((np.atleast_1d(diffs_juxta[0]), diffs_juxta))
+            idx_juxta_full = np.concatenate((np.atleast_1d(diffs_juxta[0]),
+                                             diffs_juxta[np.diff(diffs_juxta_con) > self.sample_rate * 10]))
 
-        # Separate between stimulus and juxta pulses
-        idx_juxta = []
-        for val in idx_juxta_full:
-            diff = np.abs(idx_true_stim - val)
-            idx = np.where(diff < self.sample_rate)[0]
-            if idx.size > 0:
-                continue
-            else:
-                idx_juxta.append(val)
+            # Separate between stimulus and juxta pulses
+            idx_juxta = []
+            for val in idx_juxta_full:
+                diff = np.abs(idx_true_stim - val)
+                idx = np.where(diff < self.sample_rate)[0]
+                if idx.size > 0:
+                    continue
+                else:
+                    idx_juxta.append(val)
+        else:
+            idx_juxta =[]
         return idx_true_stim, np.array(idx_juxta)
 
     def __populate_stims(self, true_stim: np.ndarray, juxta: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -197,8 +203,8 @@ class AnalogTraceAnalyzer:
 
         da = xr.DataArray(np.zeros((len(all_coords), other.shape[0], other.shape[1])),
                           coords=[('epoch', all_coords), ('neuron', coords_of_neurons),
-                                  ('time', self.timestamps, {'units': f'seconds since {self.start_time}'})],
-                          dims=dims)
+                                  ('time', np.arange(len(self.timestamps)))],
+                          dims=dims)  # self.timestamples
 
         for coor, vec in zip(all_coords, all_data):
             pos_data = other - np.atleast_2d(other.min(axis=1)).T
@@ -206,7 +212,6 @@ class AnalogTraceAnalyzer:
 
         da.attrs['fps'] = self.framerate
         da.attrs['stim_window'] = self.response_window + self.buffer_after_stim
-        da.attrs['units'] = f'seconds since {self.start_time}'
         return da
 
 

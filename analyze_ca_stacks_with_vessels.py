@@ -23,6 +23,74 @@ import pandas as pd
 import xarray as xr
 import json
 from calcium_trace_analysis import CalciumAnalyzer
+import attr
+from attr.validators import instance_of
+from pathlib import Path
+
+
+@attr.s(slots=True)
+class AnalyzeCalciumOverTime:
+    foldername = attr.ib(validator=instance_of(Path))
+    fps = attr.ib(init=False)
+    colors = attr.ib(init=False)
+
+    def __attrs_post_init__(self):
+        self.colors = [f"C{idx}" for idx in range(10)] * 3  # use default matplotlib colormap
+
+    def run_batch_of_timepoint(self):
+        """
+        Pool all neurons from all FOVs of a single timepoint together and analyze them
+        :return:
+        """
+        all_files_hyper = self.foldername.glob(r'*_HYPER_DAY_0__EXP_STIM__FOV_[0-9]_00001.tif')
+        all_files_hypo = self.foldername.glob(r'*_HYPO_DAY_0__EXP_STIM__FOV_[0-9]_00001.tif')
+
+        print("Found the following files:\nHyper:")
+        for file in all_files_hyper:
+            print(file)
+        all_files_hyper = self.foldername.glob(r'*_HYPER_DAY_0__EXP_STIM__FOV_[0-9]_00001.tif')
+        print("Hypo:")
+        for file in all_files_hypo:
+            print(file)
+        all_files_hypo = self.foldername.glob(r'*_HYPO_DAY_0__EXP_STIM__FOV_[0-9]_00001.tif')
+
+        # Ger params
+        with tifffile.TiffFile(str(file)) as f:
+            self.fps = f.scanimage_metadata['SI.hRoiManager.scanFrameRate']
+
+        sliced_fluo_hyper, hyper_data = self.__run_analysis_batch(all_files_hyper, cond='hyper')
+        sliced_fluo_hypo, hypo_data = self.__run_analysis_batch(all_files_hypo, cond='hypo')
+        with open(str(file.parent) + '\HYPO_DataArray.json', 'w') as f:
+            json.dump(sliced_fluo_hypo, f)
+        with open(str(file.parent) + '\HYPER_DataArray.json', 'w') as f:
+            json.dump(sliced_fluo_hyper, f)
+        return {'hyper': (sliced_fluo_hyper, hyper_data),
+                'hypo': (sliced_fluo_hypo, hypo_data)}
+
+    def __run_analysis_batch(self, files, cond: str):
+        all_data = []
+        all_analog = []
+        for file in files:
+            print(f'\nRunning {file}')
+            img_neuron, time_vec, fluo_trace, rois = determine_manual_or_auto(filename=file,
+                                                                              time_per_frame=self.fps,
+                                                                              num_of_rois=1,
+                                                                              colors=self.colors,
+                                                                              num_of_channels=1,
+                                                                              channel_to_keep=1)
+            all_data.append(fluo_trace)
+            analog_data_fname = next(file.parent.glob(f'{str(file.name)[:-4]}*analog.txt'))
+            analog_data = pd.read_table(analog_data_fname, header=None,
+                                        names=['stimulus', 'run'], index_col=False)
+            an_trace = AnalogTraceAnalyzer(str(file), analog_data)
+            an_trace.run()
+            all_analog.append(an_trace * fluo_trace)  # Overloaded __mul__
+
+        # Further analysis of sliced calcium traces follows
+        sliced_fluo = xr.concat((all_analog), dim='neuron')
+        analyzed_data = CalciumAnalyzer(sliced_fluo, cond=cond)
+        analyzed_data.run_analysis()
+        return sliced_fluo, analyzed_data
 
 
 def batch_process(foldername, close_figs=True):
@@ -481,10 +549,11 @@ def display_data(fname):
 
 
 if __name__ == '__main__':
-    vals = main(save_file=False, do_vessels=False)
+    # vals = main(save_file=False, do_vessels=False)
     # foldername = Path(r'X:\David\rat_#919_280917')
     # batch_process(foldername, close_figs=True)
     # Iterate over cells
     #INDICES_FROM_SI = [0, 7, 14, 22, 32, 37, 38, 43]
     # display_data(fname=r'X:\David\THY_1_GCaMP_BEFOREAFTER_TAC_290517\029_HYPER_DAY_0__EXP_STIM\vessel_neurons_analysis_029_HYPER_DAY_0__EXP_STIM__FOV_2_00001.npz')
+    result = AnalyzeCalciumOverTime(Path(r'X:\David\602_new_baseline_imaging_201217\602_thy1_gcamp_1day_after_221217')).run_batch_of_timepoint()
 
