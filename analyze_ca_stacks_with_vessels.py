@@ -5,7 +5,7 @@ import tifffile
 import numpy as np
 from scipy.io import loadmat
 from matplotlib.gridspec import GridSpec
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from collections import namedtuple
 from tkinter import filedialog
 from tkinter import *
@@ -26,6 +26,8 @@ from calcium_trace_analysis import CalciumAnalyzer
 import attr
 from attr.validators import instance_of
 from pathlib import Path
+from scipy.ndimage.morphology import binary_fill_holes
+from scipy import stats
 
 
 @attr.s(slots=True)
@@ -56,7 +58,7 @@ class AnalyzeCalciumOverTime:
             print(file)
         all_files_hypo = self.foldername.glob(hypo_glob)
 
-        # Ger params
+        # Get params
         try:
             with tifffile.TiffFile(str(file)) as f:
                 self.fps = f.scanimage_metadata['SI.hRoiManager.scanFrameRate']
@@ -78,6 +80,13 @@ class AnalyzeCalciumOverTime:
                 'hypo': (sliced_fluo_hypo, hypo_data)}
 
     def __run_analysis_batch(self, files, cond: str):
+        """
+        For data over several timepoints after analysis with CaImAn - run the analog analysis and the summation of
+        neural data for all timepoints.
+        :param files:
+        :param cond: 'HYPER', 'HYPO'
+        :return:
+        """
         all_data = []
         all_analog = []
         for file in files:
@@ -144,6 +153,54 @@ class AnalyzeCalciumOverTime:
                 days_hypo[cur_day] = np.nanmean(da.loc[epoch].values, axis=1)
 
         return days_hypo, days_hyper
+
+    def calc_df_f_over_time(self, filename):
+        fig, ax = self.__calculate_mean_dff_after_caiman_segmentation(filename)
+
+    def __calculate_mean_dff_after_caiman_segmentation(self, tif_filename):
+        """
+        Since the dF/F calculation of CaImAn isn't trustworthy, we calcluate the dF/F values ourselves
+        according to the ROIs that CaImAn found.
+        :return:
+        """
+        name = splitext(tif_filename.name)[0]
+        parent_folder = tif_filename.parent
+        try:
+            corresponding_npz = next(parent_folder.glob(name + "*results.npz"))
+        except StopIteration:
+            raise UserWarning(f"File {tif_filename} doesn't have a corresponding .npz file.")
+
+
+        neurons = self.__gen_masked_image(corresponding_npz, tif_filename)
+        df_f_mat = RawTraceConverter(conversion_method=ConversionMethod.DFF,
+                                        raw_data=neurons).convert()
+        time_vec = np.arange(len(df_f_mat))
+        time_vec = np.tile(time_vec, (1, df_f_mat.shape[1]))
+
+        fig, ax = plt.subplots()
+        ax.plot(time_vec, df_f_mat)
+        return fig, ax
+
+    def __gen_masked_image(self, file, tif_filename) -> np.ndarray:
+        """
+        With the list of coordinates create a masked image, labeled with integers
+        :param file:
+        :return:
+        """
+        data = tifffile.imread(str(tif_filename))
+        dims = data.shape[1:]
+        data_crd = np.load(str(file), encoding='bytes')['crd_good']
+        neurons = np.zeros((data.shape[0], len(data_crd)))  # frames x num_of_neurons
+
+        for idx, cell in enumerate(data_crd):
+            mask = np.zeros(dims)
+            mask[cell[b'coordinates'][1:-1, 0], cell[b'coordinates'][1:-1, 1]] = 1
+            mask = binary_fill_holes(mask)
+            neurons[:, idx] = ((data * mask).mean(axis=-1))
+
+        return neurons
+
+
 
 
 def batch_process(foldername, close_figs=True):
@@ -609,4 +666,6 @@ if __name__ == '__main__':
     #INDICES_FROM_SI = [0, 7, 14, 22, 32, 37, 38, 43]
     # display_data(fname=r'X:\David\THY_1_GCaMP_BEFOREAFTER_TAC_290517\029_HYPER_DAY_0__EXP_STIM\vessel_neurons_analysis_029_HYPER_DAY_0__EXP_STIM__FOV_2_00001.npz')
     # result = AnalyzeCalciumOverTime(Path(r'X:\David\602_new_baseline_imaging_201217')).run_batch_of_timepoint()
-    res = AnalyzeCalciumOverTime(Path(r'X:\David\602_new_baseline_imaging_201217')).read_dataarrays_over_time('spont')
+    # res = AnalyzeCalciumOverTime(Path(r'X:\David\602_new_baseline_imaging_201217')).read_dataarrays_over_time('spont')
+    res = AnalyzeCalciumOverTime(Path(r'X:\David\602_new_baseline_imaging_201217')).\
+    calc_df_f_over_time(Path(r'X:\David\602_new_baseline_imaging_201217\602_HYPER_DAY_0__EXP_STIM__FOV_3_00001.tif'))
