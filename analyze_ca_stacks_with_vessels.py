@@ -42,28 +42,38 @@ class AnalyzeCalciumOverTime:
         Pool all neurons from all FOVs of a single timepoint together and analyze them
         :return:
         """
-        all_files_hyper = self.foldername.glob(r'*_HYPER_DAY_0__EXP_STIM__FOV_[0-9]_00001.tif')
-        all_files_hypo = self.foldername.glob(r'*_HYPO_DAY_0__EXP_STIM__FOV_[0-9]_00001.tif')
+        hyper_glob = r'*_HYPER_DAY_*[0-9]__EXP_STIM__FOV_[0-9]_0000[0-9].tif'
+        hypo_glob = r'*_HYPO_DAY_*[0-9]__EXP_STIM__FOV_[0-9]_0000[0-9].tif'
+        all_files_hyper = self.foldername.glob(hyper_glob)
+        all_files_hypo = self.foldername.glob(hypo_glob)
 
         print("Found the following files:\nHyper:")
         for file in all_files_hyper:
             print(file)
-        all_files_hyper = self.foldername.glob(r'*_HYPER_DAY_0__EXP_STIM__FOV_[0-9]_00001.tif')
+        all_files_hyper = self.foldername.glob(hyper_glob)
         print("Hypo:")
         for file in all_files_hypo:
             print(file)
-        all_files_hypo = self.foldername.glob(r'*_HYPO_DAY_0__EXP_STIM__FOV_[0-9]_00001.tif')
+        all_files_hypo = self.foldername.glob(hypo_glob)
 
         # Ger params
-        with tifffile.TiffFile(str(file)) as f:
-            self.fps = f.scanimage_metadata['SI.hRoiManager.scanFrameRate']
+        try:
+            with tifffile.TiffFile(str(file)) as f:
+                self.fps = f.scanimage_metadata['SI.hRoiManager.scanFrameRate']
+        except TypeError:
+            self.fps = 15.24
 
         sliced_fluo_hyper, hyper_data = self.__run_analysis_batch(all_files_hyper, cond='hyper')
         sliced_fluo_hypo, hypo_data = self.__run_analysis_batch(all_files_hypo, cond='hypo')
+
+        # Saving
+        print("Saving data as JSON...")
         with open(str(file.parent) + '\HYPO_DataArray.json', 'w') as f:
-            json.dump(sliced_fluo_hypo, f)
+            json.dump(sliced_fluo_hypo.to_dict(), f)
         with open(str(file.parent) + '\HYPER_DataArray.json', 'w') as f:
-            json.dump(sliced_fluo_hyper, f)
+            json.dump(sliced_fluo_hyper.to_dict(), f)
+
+        plt.show()
         return {'hyper': (sliced_fluo_hyper, hyper_data),
                 'hypo': (sliced_fluo_hypo, hypo_data)}
 
@@ -91,6 +101,49 @@ class AnalyzeCalciumOverTime:
         analyzed_data = CalciumAnalyzer(sliced_fluo, cond=cond)
         analyzed_data.run_analysis()
         return sliced_fluo, analyzed_data
+
+    def read_dataarrays_over_time(self, epoch):
+        """
+        Read and parse DataArrays saved as .json files and display their data
+        :return:
+        """
+        days = ['DAY_0', 'DAY_1', 'DAY_7', 'DAY_14']
+        hypo, hyper = self.__gen_dict_with_epoch_data(epoch=epoch)
+        offsets = np.arange(len(hypo))
+        data_hypo = [hypo[day][np.isfinite(hypo[day])] for day in days]
+        data_hyper = [hyper[day][np.isfinite(hyper[day])] for day in days]
+        fig, ax = plt.subplots()
+        ax.violinplot(data_hypo, positions=offsets+0.25, points=100, showmeans=True)
+        parts = ax.violinplot(data_hyper, positions=offsets-0.25, points=100, showmeans=True)
+        [pc.set_facecolor('orange') for pc in parts['bodies']]
+        ax.set_xticks(offsets)
+        ax.set_xticklabels(days)
+        plt.legend(['Hypo (blue)', 'Hyper (orange)'])
+        ax.set_title('Hypo-Hyper average dF/F in SPONT')
+        ax.set_yscale('log')
+
+        return hypo, hyper
+
+    def __gen_dict_with_epoch_data(self, epoch: str):
+
+        all_jsons = self.foldername.rglob(r'*_DataArray.json')
+        days_hyper = {}
+        days_hypo = days_hyper.copy()
+        for file in all_jsons:
+            reg = re.compile(r'(DAY_\d+)_')
+            try:
+                cur_day = reg.findall(str(file))[0]
+            except IndexError:  # Base folder currently has no DAY
+                cur_day = 'DAY_0'
+            with open(file, 'r') as f:
+                dict_of_data = json.load(f)
+            da = xr.DataArray.from_dict(dict_of_data)
+            if 'HYPER' in str(file):
+                days_hyper[cur_day] = np.nanmean(da.loc[epoch].values, axis=1)
+            elif 'HYPO' in str(file):
+                days_hypo[cur_day] = np.nanmean(da.loc[epoch].values, axis=1)
+
+        return days_hypo, days_hyper
 
 
 def batch_process(foldername, close_figs=True):
@@ -555,5 +608,5 @@ if __name__ == '__main__':
     # Iterate over cells
     #INDICES_FROM_SI = [0, 7, 14, 22, 32, 37, 38, 43]
     # display_data(fname=r'X:\David\THY_1_GCaMP_BEFOREAFTER_TAC_290517\029_HYPER_DAY_0__EXP_STIM\vessel_neurons_analysis_029_HYPER_DAY_0__EXP_STIM__FOV_2_00001.npz')
-    result = AnalyzeCalciumOverTime(Path(r'X:\David\602_new_baseline_imaging_201217\602_thy1_gcamp_1day_after_221217')).run_batch_of_timepoint()
-
+    # result = AnalyzeCalciumOverTime(Path(r'X:\David\602_new_baseline_imaging_201217')).run_batch_of_timepoint()
+    res = AnalyzeCalciumOverTime(Path(r'X:\David\602_new_baseline_imaging_201217')).read_dataarrays_over_time('spont')

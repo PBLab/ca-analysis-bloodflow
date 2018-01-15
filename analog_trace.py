@@ -130,22 +130,24 @@ class AnalogTraceAnalyzer:
     def __extract_time_series(self):
         with TiffFile(self.tif_filename) as f:
             d = f.scanimage_metadata
-            ser = f.series[0]
+            # ser = f.series[0]
+            num_frames = len(f.pages)//2
 
         try:
             self.framerate = d['SI.hRoiManager.scanFrameRate']
             self.num_of_channels = len(d['SI.hChannels.channelsActive'])
-        except NameError:
-            self.framerate = 30
+        except (NameError, TypeError):
+            self.framerate = 15.24
             self.num_of_channels = 1
         finally:
             self.start_time = str(datetime.fromtimestamp(os.path.getmtime(self.tif_filename)))
 
-        regex = re.compile(r'frameTimestamps_sec = ([\d.]+)')
-        timestamps = []
-        for page in ser.pages[::self.num_of_channels]:  # assuming that channel 1 contains the data
-            desc = page.image_description.decode()
-            timestamps.append(float(regex.findall(desc)[0]))
+        # regex = re.compile(r'frameTimestamps_sec = ([\d.]+)')
+        # timestamps = []
+        # # for page in ser.pages[::self.num_of_channels]:  # assuming that channel 1 contains the data
+        # #     desc = page.image_description.decode()
+        # #     timestamps.append(float(regex.findall(desc)[0]))
+        timestamps = np.arange(num_frames)
         self.timestamps = np.array(timestamps)
 
     def __init_vecs(self):
@@ -203,7 +205,7 @@ class AnalogTraceAnalyzer:
 
         da = xr.DataArray(np.zeros((len(all_coords), other.shape[0], other.shape[1])),
                           coords=[('epoch', all_coords), ('neuron', coords_of_neurons),
-                                  ('time', np.arange(len(self.timestamps)))],
+                                  ('time', np.arange(other.shape[1]))],
                           dims=dims)  # self.timestamples
 
         for coor, vec in zip(all_coords, all_data):

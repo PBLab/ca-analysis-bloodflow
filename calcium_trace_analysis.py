@@ -77,7 +77,7 @@ class CalciumAnalyzer:
                           points=100, showmeans=True)
         ax_all.set_xticks(np.arange(1, len(self.data)+1))
         ax_all.set_xticklabels(x_axis)
-        self.__fig_manipulation(fig_all, ax_all, title=f'All Cells dF/F in {self.cond} Under All Epochs',
+        self.__fig_manipulation(fig_all, ax_all, title=f'All Cells dF_F in {self.cond} Under All Epochs',
                                 xlabel='Epoch', ylabel='Mean dF/F')
 
     def __find_min_entries(self) -> Tuple[int, Dict[str, Tuple]]:
