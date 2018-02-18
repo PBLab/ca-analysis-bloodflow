@@ -28,6 +28,7 @@ from attr.validators import instance_of
 from pathlib import Path
 from scipy.ndimage.morphology import binary_fill_holes
 from scipy import stats
+from guis_for_analysis import PrelimGui, verify_prelim_gui_inputs
 
 
 @attr.s(slots=True)
@@ -657,6 +658,26 @@ def display_data(fname):
             circ = plt.Circle((data['rois'][loc][0], data['rois'][loc][1]), edgecolor=colors[idx], fill=False)
             ax_img.add_artist(circ)
 
+
+def run():
+    pre_gui = PrelimGui()
+    pre_gui.root.mainloop()
+    verify_prelim_gui_inputs(pre_gui)
+
+    if pre_gui.calcium_over_days.get():
+        # start folder choosing
+        foldername = filedialog.askdirectory(title='Choose the base directory containing all files',
+                                             initialdir=r'/data/David')
+        result = AnalyzeCalciumOverTime(foldername, pre_gui.analog.get())
+    else:
+        filename = filedialog.askopenfilename(title="Choose a stack for analysis",
+                                              filetypes=[("Tiff Stack", "*.tif"), ("HDF5 Stack", "*.h5"),
+                                                         ("HDF5 Stack", "*.hdf5")],
+                                              initialdir=r'/data/David/')
+
+        result = Analyze(filename, pre_gui.calcium_after_caiman.get(),
+                         pre_gui.vasculature.get(),
+                         pre_gui.analog.get())
 
 if __name__ == '__main__':
     # vals = main(save_file=False, do_vessels=False)
