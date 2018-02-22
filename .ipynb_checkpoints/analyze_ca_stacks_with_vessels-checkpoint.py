@@ -10,6 +10,7 @@ from collections import namedtuple
 from tkinter import filedialog
 from tkinter import *
 from PIL import Image
+from pathlib import Path
 from h5py import File
 from os.path import splitext
 import random
@@ -22,8 +23,14 @@ import pandas as pd
 import xarray as xr
 import json
 from calcium_trace_analysis import CalciumAnalyzer
+import attr
+
 from pathlib import Path
 from guis_for_analysis import PrelimGui, verify_prelim_gui_inputs
+
+
+
+
 
 
 def batch_process(foldername, close_figs=True):
@@ -502,7 +509,7 @@ def run():
                          pre_gui.analog.get())
 
 if __name__ == '__main__':
-    vals = main(save_file=False, do_vessels=False)
+    # vals = main(save_file=False, do_vessels=False)
     # foldername = Path(r'X:\David\rat_#919_280917')
     # batch_process(foldername, close_figs=True)
     # Iterate over cells
@@ -510,5 +517,5 @@ if __name__ == '__main__':
     # display_data(fname=r'X:\David\THY_1_GCaMP_BEFOREAFTER_TAC_290517\029_HYPER_DAY_0__EXP_STIM\vessel_neurons_analysis_029_HYPER_DAY_0__EXP_STIM__FOV_2_00001.npz')
     # result = AnalyzeCalciumOverTime(Path(r'X:\David\602_new_baseline_imaging_201217')).run_batch_of_timepoint()
     # res = AnalyzeCalciumOverTime(Path(r'X:\David\602_new_baseline_imaging_201217')).read_dataarrays_over_time('spont')
-    # res = AnalyzeCalciumOverTime(Path(r'X:\David\602_new_baseline_imaging_201217')).\
-    # calc_df_f_over_time(Path(r'X:\David\602_new_baseline_imaging_201217\602_HYPER_DAY_0__EXP_STIM__FOV_3_00001.tif'))
+    res = AnalyzeCalciumOverTime(Path(r'X:\David\602_new_baseline_imaging_201217')).\
+    calc_df_f_over_time(Path(r'X:\David\602_new_baseline_imaging_201217\602_HYPER_DAY_0__EXP_STIM__FOV_3_00001.tif'))
