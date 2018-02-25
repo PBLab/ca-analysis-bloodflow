@@ -10,12 +10,13 @@ import xarray as xr
 from scipy.ndimage.morphology import binary_fill_holes
 from attr.validators import instance_of
 from pathlib import Path
-from analyze_ca_stacks_with_vessels import CalciumAnalyzer, determine_manual_or_auto
+from analyze_ca_stacks_with_vessels import *
 import pandas as pd
 from analog_trace import AnalogTraceAnalyzer
 from trace_converter import RawTraceConverter, ConversionMethod
 import os
 import re
+from datetime import datetime
 
 
 
@@ -24,6 +25,9 @@ class AnalyzeCalciumOverTime:
     foldername = attr.ib(validator=instance_of(Path))
     fps = attr.ib(init=False)
     colors = attr.ib(init=False)
+    num_of_channels = attr.ib(init=False)
+    start_time = attr.ib(init=False)
+    timestamps = attr.ib(init=False)
 
     def __attrs_post_init__(self):
         self.colors = [f"C{idx}" for idx in range(10)] * 3  # use default matplotlib colormap
@@ -50,7 +54,10 @@ class AnalyzeCalciumOverTime:
         # Get params
         try:
             with tifffile.TiffFile(str(file)) as f:
-                self.fps = f.scanimage_metadata['SI.hRoiManager.scanFrameRate']
+                self.fps = f.scanimage_metadata['FrameData']['SI.hRoiManager.scanFrameRate']
+                self.num_of_channels = len(f.scanimage_metadata['FrameData']['SI.hChannels.channelsActive'])
+                self.start_time = str(datetime.fromtimestamp(os.path.getmtime(str(file))))
+                self.timestamps = np.arange(len(f.pages)//2)
         except TypeError:
             self.fps = 15.24
 
@@ -58,13 +65,16 @@ class AnalyzeCalciumOverTime:
         sliced_fluo_hypo, hypo_data = self.__run_analysis_batch(all_files_hypo, cond='hypo')
 
         # Saving
-        print("Saving data as JSON...")
-        with open(str(file.parent) + '\HYPO_DataArray.json', 'w') as f:
-            json.dump(sliced_fluo_hypo.to_dict(), f)
-        with open(str(file.parent) + '\HYPER_DataArray.json', 'w') as f:
-            json.dump(sliced_fluo_hyper.to_dict(), f)
-
-        plt.show()
+        print("Saving data as NetCDF...")
+        try:
+            sliced_fluo_hypo.to_netcdf(str(file.parent) + '/HYPO_DataArray.nc')
+        except AttributeError:  # NoneType
+            pass
+        try:
+            sliced_fluo_hyper.to_netcdf(str(file.parent) + '/HYPER_DataArray.nc')
+        except AttributeError: # NoneType
+            pass
+        # plt.show()
         return {'hyper': (sliced_fluo_hyper, hyper_data),
                 'hypo': (sliced_fluo_hypo, hypo_data)}
 
@@ -81,7 +91,7 @@ class AnalyzeCalciumOverTime:
         for file in files:
             print(f'\nRunning {file}')
             img_neuron, time_vec, fluo_trace, rois = determine_manual_or_auto(filename=file,
-                                                                              time_per_frame=self.fps,
+                                                                              fps=self.fps,
                                                                               num_of_rois=1,
                                                                               colors=self.colors,
                                                                               num_of_channels=1,
@@ -90,52 +100,53 @@ class AnalyzeCalciumOverTime:
             analog_data_fname = next(file.parent.glob(f'{str(file.name)[:-4]}*analog.txt'))
             analog_data = pd.read_table(analog_data_fname, header=None,
                                         names=['stimulus', 'run'], index_col=False)
-            an_trace = AnalogTraceAnalyzer(str(file), analog_data)
+            an_trace = AnalogTraceAnalyzer(str(file), analog_data, framerate=self.fps,
+                                           num_of_channels=self.num_of_channels,
+                                           start_time=self.start_time,
+                                           timestamps=self.timestamps)
             an_trace.run()
             all_analog.append(an_trace * fluo_trace)  # Overloaded __mul__
 
         # Further analysis of sliced calcium traces follows
-        sliced_fluo = xr.concat((all_analog), dim='neuron')
-        analyzed_data = CalciumAnalyzer(sliced_fluo, cond=cond)
-        analyzed_data.run_analysis()
-        return sliced_fluo, analyzed_data
+        if len(all_analog) > 0:
+            sliced_fluo = xr.concat((all_analog), dim='neuron')
+            analyzed_data = CalciumAnalyzer(sliced_fluo, cond=cond, plot=False)
+            analyzed_data.run_analysis()
+            return sliced_fluo, analyzed_data
+        else:
+            return None, None
 
     def read_dataarrays_over_time(self, epoch):
         """
-        Read and parse DataArrays saved as .json files and display their data
+        Read and parse DataArrays saved as .nc files and display their data
         :return:
         """
-        days = ['DAY_0', 'DAY_1', 'DAY_7', 'DAY_14']
+        # days = ['DAY_0', 'DAY_1', 'DAY_7', 'DAY_14']
+        days = ['DAY_0', 'DAY_1']
         hypo, hyper = self.__gen_dict_with_epoch_data(epoch=epoch)
         offsets = np.arange(len(hypo))
         data_hypo = [hypo[day][np.isfinite(hypo[day])] for day in days]
-        data_hyper = [hyper[day][np.isfinite(hyper[day])] for day in days]
+        # data_hyper = [hyper[day][np.isfinite(hyper[day])] for day in days]
         fig, ax = plt.subplots()
         ax.violinplot(data_hypo, positions=offsets+0.25, points=100, showmeans=True)
-        parts = ax.violinplot(data_hyper, positions=offsets-0.25, points=100, showmeans=True)
-        [pc.set_facecolor('orange') for pc in parts['bodies']]
+        # parts = ax.violinplot(data_hyper, positions=offsets-0.25, points=100, showmeans=True)
+        # [pc.set_facecolor('orange') for pc in parts['bodies']]
         ax.set_xticks(offsets)
         ax.set_xticklabels(days)
         plt.legend(['Hypo (blue)', 'Hyper (orange)'])
-        ax.set_title('Hypo-Hyper average dF/F in SPONT')
-        ax.set_yscale('log')
+        ax.set_title(f'Hypo-Hyper average dF/F in {epoch}')
 
         return hypo, hyper
 
     def __gen_dict_with_epoch_data(self, epoch: str):
 
-        all_jsons = self.foldername.rglob(r'*_DataArray.json')
+        all_files = self.foldername.rglob(r'*_DataArray.nc')
         days_hyper = {}
         days_hypo = days_hyper.copy()
-        for file in all_jsons:
+        for file in all_files:
             reg = re.compile(r'(DAY_\d+)_')
-            try:
-                cur_day = reg.findall(str(file))[0]
-            except IndexError:  # Base folder currently has no DAY
-                cur_day = 'DAY_0'
-            with open(file, 'r') as f:
-                dict_of_data = json.load(f)
-            da = xr.DataArray.from_dict(dict_of_data)
+            cur_day = reg.findall(str(file))[0]
+            da = xr.open_dataarray(file)
             if 'HYPER' in str(file):
                 days_hyper[cur_day] = np.nanmean(da.loc[epoch].values, axis=1)
             elif 'HYPO' in str(file):
@@ -188,3 +199,14 @@ class AnalyzeCalciumOverTime:
             neurons[:, idx] = ((data * mask).mean(axis=-1))
 
         return neurons
+
+if __name__ == '__main__':
+    base_folder = r'/data/David/THY_1_GCaMP_BEFOREAFTER_TAC_290517/'
+    new_folders = ['028_HYPO_DAY_0__EXP_STIM',
+                   '030_HYPO_DAY_0__EXP_STIM',
+                   '261_HYPO_DAY_0__EXP_STIM',
+                   '261_HYPO_DAY_1__EXP_STIM',
+                   '720_HYPO_DAY_0_EXP_STIM']
+    for folder in new_folders:
+        result = AnalyzeCalciumOverTime(Path(base_folder + folder)).run_batch_of_timepoint()
+    # res = AnalyzeCalciumOverTime(Path(r'/data/David/THY_1_GCaMP_BEFOREAFTER_TAC_290517')).read_dataarrays_over_time(epoch='stand')

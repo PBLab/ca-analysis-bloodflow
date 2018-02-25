@@ -17,6 +17,7 @@ class CalciumAnalyzer:
     """
     data = attr.ib(validator=instance_of(xr.DataArray))
     cond = attr.ib(default='hyper', validator=instance_of(str))
+    plot = attr.ib(default=True)
     colors = attr.ib(init=False)
     num_of_neurons = attr.ib(init=False)
 
@@ -31,8 +32,9 @@ class CalciumAnalyzer:
         Run all possible analysis steps on the fluorescence data
         :return:
         """
-        self.__show_spikes()
-        self.__calc_mean_trace()
+        if self.plot == True:
+            self.__show_spikes()
+            self.__calc_mean_trace()
 
     def __show_spikes(self):
         """

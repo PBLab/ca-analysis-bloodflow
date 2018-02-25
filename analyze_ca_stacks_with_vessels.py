@@ -22,8 +22,10 @@ import pandas as pd
 import xarray as xr
 import json
 from calcium_trace_analysis import CalciumAnalyzer
+from calcium_over_time import AnalyzeCalciumOverTime
 from pathlib import Path
 from guis_for_analysis import PrelimGui, verify_prelim_gui_inputs
+import sys
 
 
 def batch_process(foldername, close_figs=True):
@@ -137,7 +139,7 @@ def main(filename=None, save_file=False, run_gui=True,
     return return_vals
 
 
-def determine_manual_or_auto(filename: Path, time_per_frame: float,
+def determine_manual_or_auto(filename: Path, fps: float,
                             num_of_rois: int, colors: List, num_of_channels: int,
                             channel_to_keep: int):
     """
@@ -156,10 +158,10 @@ def determine_manual_or_auto(filename: Path, time_per_frame: float,
         corresponding_npz = next(parent_folder.glob(name + "*results.npz"))
         # corresponding_npz = next(parent_folder.glob("results_onACID_" + name + "*.npz"))
         img_neuron, time_vec, fluo_trace, rois = parse_npz_from_caiman(filename=corresponding_npz,
-                                                                       time_per_frame=time_per_frame)
+                                                                       fps=fps)
     except StopIteration:
         img_neuron, time_vec, fluo_trace, rois = draw_rois_and_find_fluo(filename=str(filename),
-                                                                         time_per_frame=time_per_frame,
+                                                                         time_per_frame=1/fps,
                                                                          num_of_rois=num_of_rois, colors=colors,
                                                                          num_of_channels=num_of_channels,
                                                                          channel_to_keep=channel_to_keep)
@@ -169,11 +171,15 @@ def determine_manual_or_auto(filename: Path, time_per_frame: float,
     return img_neuron, time_vec, fluo_trace, rois
 
 
-def parse_npz_from_caiman(filename: Path, time_per_frame: float):
+def parse_npz_from_caiman(filename: Path, fps=15.24):
 
     # Setup - load file and create figure
 
-    full_dict = np.load(str(filename), encoding='bytes')
+    sys.path.append(r'/data/Hagai/Multiscaler/code_for_analysis')
+    import caiman_funcs_for_comparison
+
+
+    full_dict = np.load(str(filename))
     fig = plt.figure()
     r = lambda: random.randint(0, 255)
     colors = [f"C{idx}" for idx in range(10)]
@@ -189,9 +195,9 @@ def parse_npz_from_caiman(filename: Path, time_per_frame: float):
     rois = []
     rel_crds = full_dict['crd_good']
     for idx, item in enumerate(rel_crds):
-        cur_coor = item[b'coordinates']
+        cur_coor = item['coordinates']
         cur_coor = cur_coor[~np.isnan(cur_coor)].reshape((-1, 2))
-        rois.append(item[b'CoM'])
+        rois.append(item['CoM'])
         ax_img.plot(cur_coor[:, 0], cur_coor[:, 1], colors[idx % 10])
         min_c, max_c = cur_coor[:, 0].max(), cur_coor[:, 1].max()
         ax_img.text(min_c, max_c, str(idx+1), color='w')
@@ -199,12 +205,10 @@ def parse_npz_from_caiman(filename: Path, time_per_frame: float):
 
     # Plot the fluorescent traces
     ax_fluo = fig.add_subplot(122)
-    fluo_trace = full_dict['F_dff']  # offline pipeline
+
+    fluo_trace = caiman_funcs_for_comparison.detrend_df_f_auto(full_dict['A'], full_dict['b'], full_dict['C'],
+                                                               full_dict['f'], full_dict['YrA'])  # offline pipeline
     num_of_rois, num_of_slices = fluo_trace.shape[0], fluo_trace.shape[1]
-    try:
-        fps = full_dict['metadata'][0][b'SI.hRoiManager.scanFrameRate']
-    except (KeyError, TypeError):
-        fps = 15.24  # default FPS
     time_vec = np.arange(start=0, stop=1/fps*(fluo_trace.shape[1]), step=1/fps)
     time_vec = np.tile(time_vec, (num_of_rois, 1))
     converted_trace = RawTraceConverter(conversion_method=ConversionMethod.NONE,
@@ -502,13 +506,13 @@ def run():
                          pre_gui.analog.get())
 
 if __name__ == '__main__':
-    vals = main(save_file=False, do_vessels=False)
+    # vals = main(save_file=False, do_vessels=False)
     # foldername = Path(r'X:\David\rat_#919_280917')
     # batch_process(foldername, close_figs=True)
     # Iterate over cells
     #INDICES_FROM_SI = [0, 7, 14, 22, 32, 37, 38, 43]
     # display_data(fname=r'X:\David\THY_1_GCaMP_BEFOREAFTER_TAC_290517\029_HYPER_DAY_0__EXP_STIM\vessel_neurons_analysis_029_HYPER_DAY_0__EXP_STIM__FOV_2_00001.npz')
-    # result = AnalyzeCalciumOverTime(Path(r'X:\David\602_new_baseline_imaging_201217')).run_batch_of_timepoint()
+    result = AnalyzeCalciumOverTime(Path(r'/data/David/THY_1_GCaMP_BEFOREAFTER_TAC_290517')).run_batch_of_timepoint()
     # res = AnalyzeCalciumOverTime(Path(r'X:\David\602_new_baseline_imaging_201217')).read_dataarrays_over_time('spont')
     # res = AnalyzeCalciumOverTime(Path(r'X:\David\602_new_baseline_imaging_201217')).\
     # calc_df_f_over_time(Path(r'X:\David\602_new_baseline_imaging_201217\602_HYPER_DAY_0__EXP_STIM__FOV_3_00001.tif'))

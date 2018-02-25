@@ -21,20 +21,23 @@ class AnalogTraceAnalyzer:
     """
     tif_filename = attr.ib(validator=instance_of(str))  # Timelapse (doesn't need to be separated)
     analog_trace = attr.ib(validator=instance_of(pd.DataFrame))  # .txt file from ScanImage
+
+    timestamps = attr.ib(validator=instance_of(np.ndarray))
+    framerate = attr.ib(validator=instance_of(float))
+    num_of_channels = attr.ib(validator=instance_of(int))
+    start_time = attr.ib(validator=instance_of(str))
+
     response_window = attr.ib(default=0.5, validator=instance_of(float))  # sec
     buffer_after_stim = attr.ib(default=1., validator=instance_of(float))  # sec
     move_thresh = attr.ib(default=0.25, validator=instance_of(float))  # V
     sample_rate = attr.ib(default=1000, validator=instance_of(int))  # Hz
+
     stim_vec = attr.ib(init=False)
     juxta_vec = attr.ib(init=False)
     spont_vec = attr.ib(init=False)
     run_vec = attr.ib(init=False)
     stand_vec = attr.ib(init=False)
 
-    timestamps = attr.ib(init=False)
-    framerate = attr.ib(init=False)
-    num_of_channels = attr.ib(init=False)
-    start_time = attr.ib(init=False)
 
     def run(self):
         # Analog peak detection
@@ -44,7 +47,7 @@ class AnalogTraceAnalyzer:
         spont_vec = self.__populate_spont(stim_vec, juxta_vec)
 
         # Fit the analog vector to frame vector
-        self.__extract_time_series()
+        # self.__extract_time_series()
         self.__init_vecs()
         self.__fit_frames_to_analog(stim_vec, juxta_vec, run_vec, spont_vec)
         self.__convert_to_series()
@@ -134,8 +137,8 @@ class AnalogTraceAnalyzer:
             num_frames = len(f.pages)//2
 
         try:
-            self.framerate = d['SI.hRoiManager.scanFrameRate']
-            self.num_of_channels = len(d['SI.hChannels.channelsActive'])
+            self.framerate = d['FrameData']['SI.hRoiManager.scanFrameRate']
+            self.num_of_channels = len(d['FrameData']['SI.hChannels.channelsActive'])
         except (NameError, TypeError):
             self.framerate = 15.24
             self.num_of_channels = 1
