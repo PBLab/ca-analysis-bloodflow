@@ -61,7 +61,7 @@ class VascOccAnalysis:
         idx_section1 = []
         idx_section2 = []
         idx_section3 = []
-        thresh = 0.55
+        thresh = 0.35
         min_dist = 3
         self.all_spikes = np.zeros_like(self.dff)
 
@@ -77,7 +77,13 @@ class VascOccAnalysis:
                                    idx2 + self.len_of_epoch_in_frames,
                                    idx3 + (2*self.len_of_epoch_in_frames)))
             self.all_spikes[row, idxs] = 1
-
+            # idx = peakutils.indexes(cell, thres=thresh, min_dist=min_dist)
+            # self.all_spikes[row, idx] = 1
+            #
+            # idx_section1.append(idx[idx < self.len_of_epoch_in_frames])
+            # idx_section2.append(idx[(idx >= self.len_of_epoch_in_frames) & (idx < (2 * self.len_of_epoch_in_frames))]\
+            #     - self.len_of_epoch_in_frames)
+            # idx_section3.append(idx[idx >= (2 * self.len_of_epoch_in_frames)] - (2 * self.len_of_epoch_in_frames))
         return idx_section1, idx_section2, idx_section3,
 
     def __calc_firing_rate(self, idx_section1, idx_section2, idx_section3):
@@ -109,17 +115,26 @@ class VascOccAnalysis:
         """
         x, y = np.nonzero(self.all_spikes)
         fig, ax = plt.subplots()
-        ax.scatter(y, x, s=0.1)
+        ax.scatter(y/self.fps, x, s=0.03)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
+        ax.set_xlabel('Time (sec)')
+        ax.set_ylabel('Cell ID')
+        plt.savefig('spike_scatter.pdf', transparent=True)
 
     def __rolling_window(self):
-        summed = pd.Series(self.all_spikes.sum(axis=0))
-        plt.figure()
-        df = pd.Series(self.dff.sum(axis=0))
-        summed.rolling(window=int(self.fps)).mean().plot()
+        mean_spike = pd.DataFrame(self.all_spikes.mean(axis=0))
+        fig = plt.figure()
+        mean_spike['x'] = np.arange(mean_spike.shape[0])/self.fps
+        ax = mean_spike.rolling(window=int(self.fps)).mean().plot(x='x')
+        ax.set_xlabel('Time (sec)')
+        ax.set_ylabel('Mean Spike Rate')
+        ax.set_title('Rolling mean (0.91 sec window length)')
+        ax.plot(np.arange(1000, 2000)/self.fps, np.full(1000, 0.06), 'r')
+        plt.savefig('mean_spike_rate.pdf', transparent=True)
 
 
 if __name__ == '__main__':
     vasc = VascOccAnalysis(r'/data/David/Vas_occ_new_200218', glob=r'LH*results.npz')
     vasc.run()
+    plt.show(block=False)

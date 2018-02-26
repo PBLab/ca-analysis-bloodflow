@@ -2,11 +2,7 @@
 __author__ = Hagai Hargil
 """
 import attr
-import tifffile
-import json
-import matplotlib.pyplot as plt
-import numpy as np
-import xarray as xr
+from enum import Enum
 from scipy.ndimage.morphology import binary_fill_holes
 from attr.validators import instance_of
 from pathlib import Path
@@ -18,6 +14,23 @@ import os
 import re
 from datetime import datetime
 
+
+class Epoch(Enum):
+    """
+    All possible TAC epoch combinations
+    """
+    ALL = 'all'
+    RUN = 'run'
+    STAND = 'stand'
+    STIM = 'stim'
+    JUXTA = 'juxta'
+    SPONT = 'spont'
+    RUN_STIM = 'run_stim'
+    RUN_JUXTA = 'run_juxta'
+    RUN_SPONT = 'run_spont'
+    STAND_STIM = 'stand_stim'
+    STAND_JUXTA = 'stand_juxta'
+    STAND_SPONT = 'stand_spont'
 
 
 @attr.s(slots=True)
@@ -37,8 +50,8 @@ class AnalyzeCalciumOverTime:
         Pool all neurons from all FOVs of a single timepoint together and analyze them
         :return:
         """
-        hyper_glob = r'*_HYPER_DAY_*[0-9]__EXP_STIM__FOV_[0-9]_0000[0-9].tif'
-        hypo_glob = r'*_HYPO_DAY_*[0-9]__EXP_STIM__FOV_[0-9]_0000[0-9].tif'
+        hyper_glob = r'*_HYPER_DAY_*[0-9]__EXP_STIM_*FOV_[0-9]_0000[0-9].tif'
+        hypo_glob = r'*_HYPO_DAY_*[0-9]__EXP_STIM_*FOV_[0-9]_0000[0-9].tif'
         all_files_hyper = self.foldername.glob(hyper_glob)
         all_files_hypo = self.foldername.glob(hypo_glob)
 
@@ -116,29 +129,46 @@ class AnalyzeCalciumOverTime:
         else:
             return None, None
 
-    def read_dataarrays_over_time(self, epoch):
+    def read_dataarrays_over_time(self, epoch: Epoch):
         """
         Read and parse DataArrays saved as .nc files and display their data
         :return:
         """
-        # days = ['DAY_0', 'DAY_1', 'DAY_7', 'DAY_14']
-        days = ['DAY_0', 'DAY_1']
+        days = ['DAY_0', 'DAY_1', 'DAY_7', 'DAY_14', 'DAY_21']
         hypo, hyper = self.__gen_dict_with_epoch_data(epoch=epoch)
-        offsets = np.arange(len(hypo))
-        data_hypo = [hypo[day][np.isfinite(hypo[day])] for day in days]
-        # data_hyper = [hyper[day][np.isfinite(hyper[day])] for day in days]
+        offsets_hypo = np.arange(len(hypo)*2, step=2)
+        offsets_hyper = np.arange(len(hyper)*2, step=2)
+        if len(hypo) > len(hyper):
+            tick_labels = list(hypo.keys())
+            ticks = offsets_hypo
+        else:
+            tick_labels = list(hyper.keys())
+            ticks = offsets_hyper
+
+        data_hypo = [hypo[day][np.isfinite(hypo[day])] for day in hypo.keys()]
+        data_hyper = [hyper[day][np.isfinite(hyper[day])] for day in hyper.keys()]
+
         fig, ax = plt.subplots()
-        ax.violinplot(data_hypo, positions=offsets+0.25, points=100, showmeans=True)
-        # parts = ax.violinplot(data_hyper, positions=offsets-0.25, points=100, showmeans=True)
-        # [pc.set_facecolor('orange') for pc in parts['bodies']]
-        ax.set_xticks(offsets)
-        ax.set_xticklabels(days)
+        try:
+            ax.violinplot(data_hypo, positions=offsets_hypo+0.25, points=100, showmeans=True)
+        except NameError:
+            pass
+        try:
+            parts = ax.violinplot(data_hyper, positions=offsets_hyper-0.25, points=100, showmeans=True)
+            [pc.set_facecolor('orange') for pc in parts['bodies']]
+        except NameError:
+            pass
+
+        ax.set_xticks(ticks)
+        ax.set_xticklabels(tick_labels)
         plt.legend(['Hypo (blue)', 'Hyper (orange)'])
-        ax.set_title(f'Hypo-Hyper average dF/F in {epoch}')
+        ax.set_title(f'Hypo-Hyper average dF/F in {epoch.value}')
+        ax.set_ylabel('Mean dF/F')
+        plt.savefig(f'TAC_{epoch.value}.pdf', transparent=True)
 
         return hypo, hyper
 
-    def __gen_dict_with_epoch_data(self, epoch: str):
+    def __gen_dict_with_epoch_data(self, epoch: Epoch):
 
         all_files = self.foldername.rglob(r'*_DataArray.nc')
         days_hyper = {}
@@ -147,10 +177,16 @@ class AnalyzeCalciumOverTime:
             reg = re.compile(r'(DAY_\d+)_')
             cur_day = reg.findall(str(file))[0]
             da = xr.open_dataarray(file)
-            if 'HYPER' in str(file):
-                days_hyper[cur_day] = np.nanmean(da.loc[epoch].values, axis=1)
-            elif 'HYPO' in str(file):
-                days_hypo[cur_day] = np.nanmean(da.loc[epoch].values, axis=1)
+            if epoch is not Epoch.ALL:
+                if 'HYPER' in str(file):
+                    days_hyper[cur_day] = np.nanmean(da.loc[epoch.value].values, axis=1)
+                elif 'HYPO' in str(file):
+                    days_hypo[cur_day] = np.nanmean(da.loc[epoch.value].values, axis=1)
+            else:
+                if 'HYPER' in str(file):
+                    days_hyper[cur_day] = np.nanmean(da.values, axis=1)
+                elif 'HYPO' in str(file):
+                    days_hypo[cur_day] = np.nanmean(da.values, axis=1)
 
         return days_hypo, days_hyper
 
@@ -201,12 +237,13 @@ class AnalyzeCalciumOverTime:
         return neurons
 
 if __name__ == '__main__':
-    base_folder = r'/data/David/THY_1_GCaMP_BEFOREAFTER_TAC_290517/'
-    new_folders = ['028_HYPO_DAY_0__EXP_STIM',
-                   '030_HYPO_DAY_0__EXP_STIM',
-                   '261_HYPO_DAY_0__EXP_STIM',
-                   '261_HYPO_DAY_1__EXP_STIM',
-                   '720_HYPO_DAY_0_EXP_STIM']
-    for folder in new_folders:
-        result = AnalyzeCalciumOverTime(Path(base_folder + folder)).run_batch_of_timepoint()
-    # res = AnalyzeCalciumOverTime(Path(r'/data/David/THY_1_GCaMP_BEFOREAFTER_TAC_290517')).read_dataarrays_over_time(epoch='stand')
+    # base_folder = r'/data/David/THY_1_GCaMP_BEFOREAFTER_TAC_290517/'
+    # new_folders = [
+    #                '747_HYPER_DAY_1__EXP_STIM',
+    #                '747_HYPER_DAY_7__EXP_STIM',
+    #                '747_HYPER_DAY_14__EXP_STIM']
+    # for folder in new_folders:
+    #     result = AnalyzeCalciumOverTime(Path(base_folder + folder)).run_batch_of_timepoint()
+    res = AnalyzeCalciumOverTime(Path(r'/data/David/THY_1_GCaMP_BEFOREAFTER_TAC_290517'))\
+        .read_dataarrays_over_time(epoch=Epoch.ALL)
+    plt.show(block=False)

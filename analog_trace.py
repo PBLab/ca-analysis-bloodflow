@@ -58,7 +58,7 @@ class AnalogTraceAnalyzer:
         that were real stimuli and juxta peaks
         :return: Two numpy arrays with the stimulus and juxta peak indices
         """
-        diffs_stim = np.where(self.analog_trace.stimulus > 4.9)[0]
+        diffs_stim = np.where(self.analog_trace.stimulus > 4.8)[0]
         if len(diffs_stim) > 0:
             diffs_stim_con = np.concatenate((np.atleast_1d(diffs_stim[0]), diffs_stim))
             idx_true_stim = np.concatenate((np.atleast_1d(diffs_stim[0]),
@@ -209,7 +209,7 @@ class AnalogTraceAnalyzer:
         da = xr.DataArray(np.zeros((len(all_coords), other.shape[0], other.shape[1])),
                           coords=[('epoch', all_coords), ('neuron', coords_of_neurons),
                                   ('time', np.arange(other.shape[1]))],
-                          dims=dims)  # self.timestamples
+                          dims=dims)  # self.timestampes
 
         for coor, vec in zip(all_coords, all_data):
             pos_data = other - np.atleast_2d(other.min(axis=1)).T
