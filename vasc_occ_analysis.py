@@ -9,13 +9,15 @@ from statsmodels.stats.multicomp import MultiComparison
 from statsmodels.stats.libqsturng import psturng
 import scipy.stats
 import matplotlib.pyplot as plt
+from matplotlib import patches
 
 
 @attr.s(slots=True)
 class VascOccAnalysis:
     foldername = attr.ib(validator=instance_of(str))
     glob = attr.ib(default='*results.npz', validator=instance_of(str))
-    fps = attr.ib(default=7.68, validator=instance_of(float))
+    fps = attr.ib(default=15.24, validator=instance_of(float))
+    frames_before_stim = attr.ib(default=1000)
     len_of_epoch_in_frames = attr.ib(default=1000)
     dff = attr.ib(init=False)
     all_mice = attr.ib(init=False)
@@ -45,7 +47,7 @@ class VascOccAnalysis:
         return files
 
     def __calc_dff(self, files):
-        sys.path.append(r'/data/Hagai/Multiscaler/code_for_analysis')
+        # sys.path.append(r'/data/Hagai/Multiscaler/code_for_analysis')
         import caiman_funcs_for_comparison
 
         coords = {'mouse': self.all_mice, }
@@ -61,29 +63,28 @@ class VascOccAnalysis:
         idx_section1 = []
         idx_section2 = []
         idx_section3 = []
-        thresh = 0.35
-        min_dist = 3
+        thresh = 0.65
+        min_dist = 7
         self.all_spikes = np.zeros_like(self.dff)
 
         for row, cell in enumerate(self.dff):
-            idx1 = peakutils.indexes(cell[:self.len_of_epoch_in_frames], thres=thresh, min_dist=min_dist)
-            idx2 = peakutils.indexes(cell[self.len_of_epoch_in_frames:2*self.len_of_epoch_in_frames],
-                                     thres=thresh, min_dist=min_dist)
-            idx3 = peakutils.indexes(cell[2*self.len_of_epoch_in_frames:], thres=thresh, min_dist=min_dist)
-            idx_section1.append(idx1)
-            idx_section2.append(idx2)
-            idx_section3.append(idx3)
-            idxs = np.concatenate((idx1,
-                                   idx2 + self.len_of_epoch_in_frames,
-                                   idx3 + (2*self.len_of_epoch_in_frames)))
-            self.all_spikes[row, idxs] = 1
-            # idx = peakutils.indexes(cell, thres=thresh, min_dist=min_dist)
-            # self.all_spikes[row, idx] = 1
-            #
-            # idx_section1.append(idx[idx < self.len_of_epoch_in_frames])
-            # idx_section2.append(idx[(idx >= self.len_of_epoch_in_frames) & (idx < (2 * self.len_of_epoch_in_frames))]\
-            #     - self.len_of_epoch_in_frames)
-            # idx_section3.append(idx[idx >= (2 * self.len_of_epoch_in_frames)] - (2 * self.len_of_epoch_in_frames))
+            # idx1 = peakutils.indexes(cell[:self.len_of_epoch_in_frames], thres=thresh, min_dist=min_dist)
+            # idx2 = peakutils.indexes(cell[self.len_of_epoch_in_frames:2*self.len_of_epoch_in_frames],
+            #                          thres=thresh, min_dist=min_dist)
+            # idx3 = peakutils.indexes(cell[2*self.len_of_epoch_in_frames:], thres=thresh, min_dist=min_dist)
+            # idx_section1.append(idx1)
+            # idx_section2.append(idx2)
+            # idx_section3.append(idx3)
+            # idxs = np.concatenate((idx1,
+            #                        idx2 + self.len_of_epoch_in_frames,
+            #                        idx3 + (2*self.len_of_epoch_in_frames)))
+            # self.all_spikes[row, idxs] = 1
+            idx = peakutils.indexes(cell, thres=thresh, min_dist=min_dist)
+            self.all_spikes[row, idx] = 1
+            after_stim = self.frames_before_stim + self.len_of_epoch_in_frames
+            idx_section1.append(idx[idx < self.frames_before_stim])
+            idx_section2.append(idx[(idx >= self.frames_before_stim) & (idx < (after_stim))])
+            idx_section3.append(idx[idx >= (after_stim)])
         return idx_section1, idx_section2, idx_section3,
 
     def __calc_firing_rate(self, idx_section1, idx_section2, idx_section3):
@@ -115,26 +116,33 @@ class VascOccAnalysis:
         """
         x, y = np.nonzero(self.all_spikes)
         fig, ax = plt.subplots()
-        ax.scatter(y/self.fps, x, s=0.03)
+        ax.plot((self.dff + np.arange(self.dff.shape[0])[:, np.newaxis]).T)
+        peakvals = self.dff * self.all_spikes
+        peakvals[peakvals == 0] = np.nan
+        ax.plot((peakvals + np.arange(self.dff.shape[0])[:, np.newaxis]).T, 'r.')
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        ax.set_xlabel('Time (sec)')
+        ax.set_xlabel('Time (frames)')
         ax.set_ylabel('Cell ID')
+        p = patches.Rectangle((self.frames_before_stim, 0), width=self.len_of_epoch_in_frames,
+                              height=self.dff.shape[0], color='red', alpha=0.3, edgecolor='None')
+        ax.add_artist(p)
         plt.savefig('spike_scatter.pdf', transparent=True)
 
     def __rolling_window(self):
         mean_spike = pd.DataFrame(self.all_spikes.mean(axis=0))
-        fig = plt.figure()
         mean_spike['x'] = np.arange(mean_spike.shape[0])/self.fps
         ax = mean_spike.rolling(window=int(self.fps)).mean().plot(x='x')
         ax.set_xlabel('Time (sec)')
         ax.set_ylabel('Mean Spike Rate')
         ax.set_title('Rolling mean (0.91 sec window length)')
-        ax.plot(np.arange(1000, 2000)/self.fps, np.full(1000, 0.06), 'r')
+        ax.plot(np.arange(self.frames_before_stim, self.frames_before_stim + self.len_of_epoch_in_frames)/self.fps,
+                np.full(self.len_of_epoch_in_frames, 0.06), 'r')
         plt.savefig('mean_spike_rate.pdf', transparent=True)
 
 
 if __name__ == '__main__':
-    vasc = VascOccAnalysis(r'/data/David/Vas_occ_new_200218', glob=r'LH*results.npz')
+    vasc = VascOccAnalysis(r'/data/David/vasc_occluder_190318_cca_right_cca_left_fully_close',
+                           glob=r'fov_*_1000fr*results.npz', len_of_epoch_in_frames=1000)
     vasc.run()
     plt.show(block=False)
