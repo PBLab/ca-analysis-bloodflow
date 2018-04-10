@@ -19,6 +19,7 @@ class VascOccAnalysis:
     fps = attr.ib(default=15.24, validator=instance_of(float))
     frames_before_stim = attr.ib(default=1000)
     len_of_epoch_in_frames = attr.ib(default=1000)
+    invalid_cells = attr.ib(default=[], validator=instance_of(list))
     dff = attr.ib(init=False)
     all_mice = attr.ib(init=False)
     split_data = attr.ib(init=False)
@@ -99,11 +100,14 @@ class VascOccAnalysis:
         df['before'] = [len(cell) for cell in idx_section1]
         df['during'] = [len(cell) for cell in idx_section2]
         df['after'] = [len(cell) for cell in idx_section3]
+
+        # Remove silent cells from comparison
+        df.drop(self.invalid_cells, inplace=True)
         self.split_data = df.stack()
         mc = MultiComparison(self.split_data.values, self.split_data.index.get_level_values(1).values)
         res = mc.tukeyhsd()
         print(res)
-        print(psturng(np.abs(res.meandiffs / res.std_pairs), len(res.groupsunique), res.df_total))
+        print("P-values:", psturng(np.abs(res.meandiffs / res.std_pairs), len(res.groupsunique), res.df_total))
         print(self.split_data.mean(level=1))
 
     def __scatter_spikes(self):
@@ -119,7 +123,7 @@ class VascOccAnalysis:
         ax.plot((self.dff + np.arange(self.dff.shape[0])[:, np.newaxis]).T)
         peakvals = self.dff * self.all_spikes
         peakvals[peakvals == 0] = np.nan
-        ax.plot((peakvals + np.arange(self.dff.shape[0])[:, np.newaxis]).T, 'r.')
+        ax.plot((peakvals + np.arange(self.dff.shape[0])[:, np.newaxis]).T, 'r.', linewidth=0.1)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.set_xlabel('Time (frames)')
@@ -137,12 +141,14 @@ class VascOccAnalysis:
         ax.set_ylabel('Mean Spike Rate')
         ax.set_title('Rolling mean (0.91 sec window length)')
         ax.plot(np.arange(self.frames_before_stim, self.frames_before_stim + self.len_of_epoch_in_frames)/self.fps,
-                np.full(self.len_of_epoch_in_frames, 0.06), 'r')
+                np.full(self.len_of_epoch_in_frames, 0.01), 'r')
         plt.savefig('mean_spike_rate.pdf', transparent=True)
 
 
 if __name__ == '__main__':
-    vasc = VascOccAnalysis(r'/data/David/vasc_occluder_190318_cca_right_cca_left_fully_close',
-                           glob=r'fov_*_1000fr*results.npz', len_of_epoch_in_frames=1000)
+    vasc = VascOccAnalysis(foldername=r'/data/David/vasc_occ_air_puff_010418',
+                           glob=r'fov*_2000fr*results.npz', frames_before_stim=2000,
+                           len_of_epoch_in_frames=2000, fps=15.24,
+                           invalid_cells=[77, 76, 91, 83, 87, 95, 7])
     vasc.run()
     plt.show(block=False)
