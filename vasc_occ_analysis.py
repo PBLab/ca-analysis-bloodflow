@@ -120,16 +120,23 @@ class VascOccAnalysis:
         """
         x, y = np.nonzero(self.all_spikes)
         fig, ax = plt.subplots()
-        ax.plot((self.dff + np.arange(self.dff.shape[0])[:, np.newaxis]).T)
+        downsample_display = 10
+        num_displayed_cells = self.dff.shape[0] // downsample_display
+        time = np.linspace(0, self.dff.shape[1]/self.fps, num=self.dff.shape[1], dtype=np.int32)
+        ax.plot(time,
+                (self.dff[:-10:downsample_display] + np.arange(num_displayed_cells)[:, np.newaxis]).T)
         peakvals = self.dff * self.all_spikes
         peakvals[peakvals == 0] = np.nan
-        ax.plot((peakvals + np.arange(self.dff.shape[0])[:, np.newaxis]).T, 'r.', linewidth=0.1)
+        ax.plot(time,
+                (peakvals[:-10:downsample_display] + np.arange(num_displayed_cells)[:, np.newaxis]).T,
+                'r.', linewidth=0.1)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        ax.set_xlabel('Time (frames)')
+        ax.set_xlabel('Time (seconds)')
         ax.set_ylabel('Cell ID')
-        p = patches.Rectangle((self.frames_before_stim, 0), width=self.len_of_epoch_in_frames,
-                              height=self.dff.shape[0], color='red', alpha=0.3, edgecolor='None')
+        p = patches.Rectangle((self.frames_before_stim / self.fps, 0), width=self.len_of_epoch_in_frames / self.fps,
+                              height=num_displayed_cells,
+                              facecolor='red', alpha=0.3, edgecolor='None')
         ax.add_artist(p)
         plt.savefig('spike_scatter.pdf', transparent=True)
 
@@ -144,11 +151,23 @@ class VascOccAnalysis:
                 np.full(self.len_of_epoch_in_frames, 0.01), 'r')
         plt.savefig('mean_spike_rate.pdf', transparent=True)
 
+        mean_dff = pd.DataFrame(self.dff.mean(axis=0))
+        mean_dff['x'] = mean_spike['x']
+        ax = mean_dff.rolling(window=int(self.fps)).mean().plot(x='x')
+        ax.set_xlabel('Time (sec)')
+        ax.set_ylabel('Mean dF/F')
+        ax.set_title('Rolling mean over dF/F (0.91 sec window length)')
+        ax.plot(np.arange(self.frames_before_stim, self.frames_before_stim + self.len_of_epoch_in_frames)/self.fps,
+                np.full(self.len_of_epoch_in_frames, 0.01), 'r')
+        plt.savefig('mean_dff.pdf', transparent=True)
+
+
+
 
 if __name__ == '__main__':
-    vasc = VascOccAnalysis(foldername=r'/data/David/vasc_occ_air_puff_010418',
-                           glob=r'fov*_2000fr*results.npz', frames_before_stim=2000,
+    vasc = VascOccAnalysis(foldername=r'/data/Amos/occluder/4th_July18_VIP_Td_SynGCaMP_Occluder/',
+                           glob=r'*results.npz', frames_before_stim=2000,
                            len_of_epoch_in_frames=2000, fps=15.24,
-                           invalid_cells=[77, 76, 91, 83, 87, 95, 7])
+                           invalid_cells=[])
     vasc.run()
     plt.show(block=False)
