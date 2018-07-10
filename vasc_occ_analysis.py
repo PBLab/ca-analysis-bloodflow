@@ -10,6 +10,7 @@ from statsmodels.stats.libqsturng import psturng
 import scipy.stats
 import matplotlib.pyplot as plt
 from matplotlib import patches
+import mne
 
 
 @attr.s(slots=True)
@@ -24,14 +25,17 @@ class VascOccAnalysis:
     all_mice = attr.ib(init=False)
     split_data = attr.ib(init=False)
     all_spikes = attr.ib(init=False)
+    frames_after_stim = attr.ib(init=False)
+    dff_filtered = attr.ib(init=False)
 
     def run(self):
         files = self.__find_all_files()
-        self.__calc_dff(files)
-        before, during, after = self.__find_spikes()
-        self.__calc_firing_rate(before, during, after)
+        self.dff = self.__calc_dff(files)
+        num_peaks = self.__find_spikes()
+        self.__calc_firing_rate(num_peaks)
         self.__scatter_spikes()
         self.__rolling_window()
+        # self.__per_cell_analysis(num_peaks)
         return self.dff
 
     def __find_all_files(self):
@@ -51,59 +55,50 @@ class VascOccAnalysis:
         # sys.path.append(r'/data/Hagai/Multiscaler/code_for_analysis')
         import caiman_funcs_for_comparison
 
-        coords = {'mouse': self.all_mice, }
         all_data = []
         for file in files:
             data = np.load(file)
             print(f"Analyzing {file}...")
-            all_data.append(caiman_funcs_for_comparison.detrend_df_f_auto(data['A'], data['b'], data['C'],
+            try:
+                all_data.append(data['F_dff'])
+            except KeyError:
+                all_data.append(caiman_funcs_for_comparison.detrend_df_f_auto(data['A'], data['b'], data['C'],
                                                                           data['f'], data['YrA']))
-        self.dff = np.concatenate(all_data)
+        return np.concatenate(all_data)
 
     def __find_spikes(self):
+        """ Calculates a dataframe, each row being a cell, with three columns - before, during and after
+        the occlusion. The numbers for each cell are normalized for the length of the epoch."""
         idx_section1 = []
         idx_section2 = []
         idx_section3 = []
         thresh = 0.65
-        min_dist = 7
+        min_dist = int(self.fps)
         self.all_spikes = np.zeros_like(self.dff)
-
+        after_stim = self.frames_before_stim + self.len_of_epoch_in_frames
+        norm_factor_during = self.frames_before_stim / self.len_of_epoch_in_frames
+        self.frames_after_stim = self.dff.shape[1] - (self.frames_before_stim + self.len_of_epoch_in_frames)
+        norm_factor_after = self.frames_before_stim / self.frames_after_stim
         for row, cell in enumerate(self.dff):
-            # idx1 = peakutils.indexes(cell[:self.len_of_epoch_in_frames], thres=thresh, min_dist=min_dist)
-            # idx2 = peakutils.indexes(cell[self.len_of_epoch_in_frames:2*self.len_of_epoch_in_frames],
-            #                          thres=thresh, min_dist=min_dist)
-            # idx3 = peakutils.indexes(cell[2*self.len_of_epoch_in_frames:], thres=thresh, min_dist=min_dist)
-            # idx_section1.append(idx1)
-            # idx_section2.append(idx2)
-            # idx_section3.append(idx3)
-            # idxs = np.concatenate((idx1,
-            #                        idx2 + self.len_of_epoch_in_frames,
-            #                        idx3 + (2*self.len_of_epoch_in_frames)))
-            # self.all_spikes[row, idxs] = 1
             idx = peakutils.indexes(cell, thres=thresh, min_dist=min_dist)
             self.all_spikes[row, idx] = 1
-            after_stim = self.frames_before_stim + self.len_of_epoch_in_frames
-            idx_section1.append(idx[idx < self.frames_before_stim])
-            idx_section2.append(idx[(idx >= self.frames_before_stim) & (idx < (after_stim))])
-            idx_section3.append(idx[idx >= (after_stim)])
-        return idx_section1, idx_section2, idx_section3,
+            idx_section1.append(len(idx[idx < self.frames_before_stim]))
+            idx_section2.append(len(idx[(idx >= self.frames_before_stim) &
+                                        (idx < after_stim)]) * norm_factor_during)
+            idx_section3.append(len(idx[idx >= after_stim]) * norm_factor_after)
 
-    def __calc_firing_rate(self, idx_section1, idx_section2, idx_section3):
+        df = pd.DataFrame({'before': idx_section1, 'during': idx_section2, 'after': idx_section3},
+                          index=np.arange(len(idx_section1)))
+        return df
+
+    def __calc_firing_rate(self, num_peaks: pd.DataFrame):
         """
         Sum all indices of peaks to find the average firing rate of cells in the three epochs
-        :param idx_section1:
-        :param idx_section2:
-        :param idx_section3:
         :return:
         """
-        df = pd.DataFrame(columns=['before', 'during', 'after'], index=np.arange(len(idx_section1)))
-        df['before'] = [len(cell) for cell in idx_section1]
-        df['during'] = [len(cell) for cell in idx_section2]
-        df['after'] = [len(cell) for cell in idx_section3]
-
         # Remove silent cells from comparison
-        df.drop(self.invalid_cells, inplace=True)
-        self.split_data = df.stack()
+        num_peaks.drop(self.invalid_cells, inplace=True)
+        self.split_data = num_peaks.stack()
         mc = MultiComparison(self.split_data.values, self.split_data.index.get_level_values(1).values)
         res = mc.tukeyhsd()
         print(res)
@@ -161,13 +156,28 @@ class VascOccAnalysis:
                 np.full(self.len_of_epoch_in_frames, 0.01), 'r')
         plt.savefig('mean_dff.pdf', transparent=True)
 
+    def __per_cell_analysis(self, spike_freq_df):
+        """ Obtain a mean firing rate of each cell before, during and after the occlusion. Find
+        the cells that have a large variance between these epochs. """
+        # Normalization
+        spike_freq_df['before_normed'] = 1
+        spike_freq_df['during_normed'] = spike_freq_df['during'] / spike_freq_df['before']
+        spike_freq_df['after_normed'] = spike_freq_df['after'] / spike_freq_df['before']
 
+        spike_freq_df['variance'] = spike_freq_df.loc[:, 'before':'after'].var(axis=1)
+        spike_freq_df['var_normed'] = spike_freq_df.loc[:, 'before_normed':'after_normed'].var(axis=1)
+
+        repeat = spike_freq_df.loc[:, 'before':'after'].replace([np.inf, -np.inf], np.nan).dropna().values
+        result = mne.stats.f_mway_rm(repeat, [3])
+
+        fig, ax = plt.subplots()
+        ax.plot(spike_freq_df.loc[:, 'before':'after'].T, '-o')
 
 
 if __name__ == '__main__':
-    vasc = VascOccAnalysis(foldername=r'/data/Amos/occluder/4th_July18_VIP_Td_SynGCaMP_Occluder/',
-                           glob=r'*results.npz', frames_before_stim=2000,
-                           len_of_epoch_in_frames=2000, fps=15.24,
+    vasc = VascOccAnalysis(foldername=r'/data/Amos/occluder/',
+                           glob=r'*results.npz', frames_before_stim=17484,
+                           len_of_epoch_in_frames=7000, fps=58.28,
                            invalid_cells=[])
     vasc.run()
     plt.show(block=False)
