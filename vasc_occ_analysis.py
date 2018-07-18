@@ -15,6 +15,14 @@ import mne
 
 @attr.s(slots=True)
 class VascOccAnalysis:
+    """
+    A class that provides the analysis pipeline for stacks with vascular occluder. Meaning,
+    Data acquired in a before-during-after scheme, where "during" is the perturbation done
+    to the system, occlusion of an artery in this case. The class needs to know how many frames
+    were acquired before the perturbation and how many were acquired during. It also needs 
+    other metadata, such as the framerate, and the IDs of cells that the CaImAn pipeline
+    accidently labeled as active components.
+    """
     foldername = attr.ib(validator=instance_of(str))
     glob = attr.ib(default='*results.npz', validator=instance_of(str))
     fps = attr.ib(default=15.24, validator=instance_of(float))

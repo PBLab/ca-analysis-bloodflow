@@ -3,15 +3,17 @@ __author__ = Hagai Hargil
 """
 import attr
 from enum import Enum
+import tifffile
 from scipy.ndimage.morphology import binary_fill_holes
 from attr.validators import instance_of
 from pathlib import Path
-from analyze_ca_stacks_with_vessels import *
+# from analyze_ca_stacks_with_vessels import *
 import pandas as pd
 from analog_trace import AnalogTraceAnalyzer
 from trace_converter import RawTraceConverter, ConversionMethod
 import os
 import re
+import numpy as np
 from datetime import datetime
 
 
