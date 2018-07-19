@@ -9,6 +9,7 @@ import xarray as xr
 from itertools import product
 import os
 from datetime import datetime
+from collections import namedtuple
 
 
 @attr.s(slots=True)
@@ -31,13 +32,16 @@ class AnalogTraceAnalyzer:
     buffer_after_stim = attr.ib(default=1., validator=instance_of(float))  # sec
     move_thresh = attr.ib(default=0.25, validator=instance_of(float))  # V
     sample_rate = attr.ib(default=1000, validator=instance_of(int))  # Hz
-
+    occluder = attr.ib(default=False, validator=instance_of(bool))
+    occ_metadata = attr.ib(factory=namedtuple)
     stim_vec = attr.ib(init=False)
     juxta_vec = attr.ib(init=False)
     spont_vec = attr.ib(init=False)
     run_vec = attr.ib(init=False)
     stand_vec = attr.ib(init=False)
-
+    occluder_vec = attr.ib(init=False)
+    before_occ_vec = attr.ib(init=False)
+    after_occ_vec = attr.ib(init=False)    
 
     def run(self):
         # Analog peak detection
@@ -45,6 +49,8 @@ class AnalogTraceAnalyzer:
         stim_vec, juxta_vec = self.__populate_stims(true_stim, juxta)
         run_vec = self.__populate_run()
         spont_vec = self.__populate_spont(stim_vec, juxta_vec)
+        if self.occluder:
+            self.__populate_occluder()
 
         # Fit the analog vector to frame vector
         # self.__extract_time_series()
@@ -104,6 +110,16 @@ class AnalogTraceAnalyzer:
             juxta_vec[idx:last_idx] = 1
 
         return stim_vec, juxta_vec
+    
+    def __populate_occluder(self):
+        self.before_occ_vec = np.zeros_like(self.timestamps, dtype=np.uint8)
+        self.occluder_vec = np.zeros_like(self.timestamps, dtype=np.uint8)
+        self.after_occ_vec = np.zeros_like(self.timestamps, dtype=np.uint8)
+        
+        tot_len_during = self.occ_metadata.before + self.occ_metadata.during
+        self.before_occ_vec[:self.occ_metadata.before] = np.uint8(1)
+        self.occluder_vec[self.occ_metadata.before:tot_len_during] = np.uint8(1)
+        self.after_occ_vec[tot_len_during:] = np.uint8(1)
 
     def __populate_run(self) -> np.ndarray:
         """
@@ -129,6 +145,9 @@ class AnalogTraceAnalyzer:
         self.run_vec = pd.Series(self.run_vec)
         self.spont_vec = pd.Series(self.spont_vec)
         self.stand_vec = pd.Series(self.stand_vec)
+        self.before_occ_vec = pd.Series(self.before_occ_vec)
+        self.occluder_vec = pd.Series(self.occluder_vec)
+        self.after_occ_vec = pd.Series(self.after_occ_vec)
 
     def __extract_time_series(self):
         with TiffFile(self.tif_filename) as f:
@@ -189,19 +208,24 @@ class AnalogTraceAnalyzer:
         dims = ['epoch', 'neuron', 'time']
         movement = ['run', 'stand', None]
         puff = ['stim', 'juxta', 'spont', None]
-        move_data = [self.run_vec, self.stand_vec, None]
-        puff_data = [self.stim_vec, self.juxta_vec, self.spont_vec, None]
+        ones = np.ones_like(self.timestamps, dtype=np.uint8)
+        move_data = [self.run_vec, self.stand_vec, ones]
+        puff_data = [self.stim_vec, self.juxta_vec, self.spont_vec, ones]
+        coords = [movement, puff]
+        data = [move_data, puff_data]
+        if self.occluder:
+            occluder = ['before_occ', 'during_occ', 'after_occ', None]
+            coords.append(occluder)
+            occ_data = [self.before_occ_vec, self.occluder_vec, self.after_occ_vec, ones]
+            data.append(occ_data)
         all_coords = []
         all_data = []
-        for coord, data in zip(product(movement, puff), product(move_data, puff_data)):
+        for coord, datum in zip(product(*coords), product(*data)):
             try:
                 all_coords.append('_'.join((filter(None.__ne__, coord))))
             except IndexError:
                 pass
-            try:
-                all_data.append(data[0] * data[1])
-            except TypeError:
-                all_data.append(data[0] if data[1] is None else data[1])
+            all_data.append(datum[0] * datum[1] * datum[2])
 
         all_coords = all_coords[:-1]  # last item is ''
         all_data = all_data[:-1]  # last item is None

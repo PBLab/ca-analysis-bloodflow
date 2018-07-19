@@ -11,6 +11,13 @@ import scipy.stats
 import matplotlib.pyplot as plt
 from matplotlib import patches
 import mne
+import caiman_funcs_for_comparison
+import tifffile
+import os
+from analog_trace import AnalogTraceAnalyzer
+import xarray as xr
+from collections import namedtuple
+from datetime import datetime
 
 
 @attr.s(slots=True)
@@ -21,57 +28,123 @@ class VascOccAnalysis:
     to the system, occlusion of an artery in this case. The class needs to know how many frames
     were acquired before the perturbation and how many were acquired during. It also needs 
     other metadata, such as the framerate, and the IDs of cells that the CaImAn pipeline
-    accidently labeled as active components.
+    accidently labeled as active components. If the data contains analog recordings as well,
+    of the mouse's movements and air puffs, they will be integrated into the analysis as well.
     """
     foldername = attr.ib(validator=instance_of(str))
     glob = attr.ib(default='*results.npz', validator=instance_of(str))
     fps = attr.ib(default=15.24, validator=instance_of(float))
     frames_before_stim = attr.ib(default=1000)
     len_of_epoch_in_frames = attr.ib(default=1000)
-    invalid_cells = attr.ib(default=[], validator=instance_of(list))
+    invalid_cells = attr.ib(factory=list, validator=instance_of(list))
+    with_analog = attr.ib(default=False, validator=instance_of(bool))
+    num_of_channels = attr.ib(default=2, validator=instance_of(int))
     dff = attr.ib(init=False)
-    all_mice = attr.ib(init=False)
     split_data = attr.ib(init=False)
     all_spikes = attr.ib(init=False)
     frames_after_stim = attr.ib(init=False)
     dff_filtered = attr.ib(init=False)
+    start_time = attr.ib(init=False)
+    timestamps = attr.ib(init=False)
+    sliced_fluo = attr.ib(init=False)
+    OccMetadata = attr.ib(init=False)
+    data_files = attr.ib(init=False)
+
+    def __attrs_post_init__(self):
+        self.OccMetadata = namedtuple('OccMetadata', ['before', 'during', 'after'])
 
     def run(self):
-        files = self.__find_all_files()
-        self.dff = self.__calc_dff(files)
-        num_peaks = self.__find_spikes()
-        self.__calc_firing_rate(num_peaks)
-        self.__scatter_spikes()
-        self.__rolling_window()
-        # self.__per_cell_analysis(num_peaks)
+        self.__find_all_files()
+        self.__get_params()
+        if self.with_analog:
+            self.__run_with_analog()
+            self.dff = None
+        else:
+            self.dff = self.__calc_dff_batch(self.data_files['caiman'])
+            num_peaks = self.__find_spikes()
+            self.__calc_firing_rate(num_peaks)
+            self.__scatter_spikes()
+            self.__rolling_window()
+            # self.__per_cell_analysis(num_peaks)
         return self.dff
+
+    def __run_with_analog(self):
+        """ Helper function to run sequentially all needed analysis of dF/F + Analog data """
+        self.sliced_fluo = []  # we have to compare each file with its analog data, individually
+        for idx, row in self.data_files.iterrows():
+            dff = self.__calc_dff(row['caiman'])
+            analog_data = pd.read_table(row['analog'], header=None, 
+                                        names=['stimulus', 'run'], index_col=False)
+            occ_metadata = self.OccMetadata(self.frames_before_stim, self.len_of_epoch_in_frames,
+                                            self.frames_after_stim)
+            analog_trace = AnalogTraceAnalyzer(row['caiman'], analog_data, framerate=self.fps,
+                                                num_of_channels=self.num_of_channels,
+                                                start_time=self.start_time,
+                                                timestamps=self.timestamps,
+                                                occluder=True, occ_metadata=occ_metadata)
+            analog_trace.run()
+            self.sliced_fluo.append(analog_trace * dff)  # overloaded __mul__
+        self.sliced_fluo = xr.concat(self.sliced_fluo, dim='neuron')
 
     def __find_all_files(self):
         """
         Locate all fitting files in the folder
         """
-        self.all_mice = []
-        files = pathlib.Path(self.foldername).rglob(self.glob)
+        self.data_files = pd.DataFrame([], columns=['caiman', 'tif', 'analog'])
+        folder = pathlib.Path(self.foldername)
+        files = folder.rglob(self.glob)
         print("Found the following files:")
-        for file in files:
+        for idx, file in enumerate(files):
             print(file)
-            self.all_mice.append(str(file))
-        files = pathlib.Path(self.foldername).rglob(self.glob)
-        return files
+            cur_file = os.path.splitext(str(file.name))[0][:-18]  # no "_CHANNEL_X_results"
+            try:
+                raw_tif = next(folder.glob(cur_file + '.tif'))
+            except StopIteration:
+                print(f"No corresponding Tiff found for file {cur_file}.")
+                raw_tiff = ''
+            
+            try:
+                analog_file = next(folder.glob(cur_file + '_analog.txt'))  # no 
+            except StopIteration:
+                print(f"No corresponding analog data found for file {cur_file}.")
+                analog_file = ''
 
-    def __calc_dff(self, files):
-        # sys.path.append(r'/data/Hagai/Multiscaler/code_for_analysis')
-        import caiman_funcs_for_comparison
+            self.data_files = self.data_files.append(pd.DataFrame([[str(file), raw_tif, analog_file]],
+                                                                  columns=['caiman', 'tif', 'analog'],
+                                                                  index=[idx]))
+        print(self.data_files)
 
+    def __get_params(self):
+        """ Get general stack parameters from the TiffFile object """
+        try:
+            with tifffile.TiffFile(self.data_files['tif'][0]) as f:
+                si_meta = f.scanimage_metadata
+                self.fps = si_meta['FrameData']['SI.hRoiManager.scanFrameRate']
+                self.num_of_channels = len(si_meta['FrameData']['SI.hChannels.channelsActive'])
+                num_of_frames = len(f.pages) // self.num_of_channels
+                self.frames_after_stim = num_of_frames - (self.frames_before_stim + self.len_of_epoch_in_frames)
+                self.start_time = str(datetime.fromtimestamp(os.path.getmtime(self.data_files['tif'][0])))
+                self.timestamps = np.arange(num_of_frames)
+        except TypeError:
+            self.start_time = None
+            self.timestamps = None
+            self.frames_after_stim = 1000
+
+    def __calc_dff(self, file):
+        data = np.load(file)
+        print(f"Analyzing {file}...")
+        try:
+            dff =  data['F_dff']
+        except KeyError:
+            dff =  caiman_funcs_for_comparison.detrend_df_f_auto(data['A'], data['b'], data['C'],
+                                                                 data['f'], data['YrA'])
+        return dff
+
+    def __calc_dff_batch(self, files):
+        """ Read data from all files """
         all_data = []
         for file in files:
-            data = np.load(file)
-            print(f"Analyzing {file}...")
-            try:
-                all_data.append(data['F_dff'])
-            except KeyError:
-                all_data.append(caiman_funcs_for_comparison.detrend_df_f_auto(data['A'], data['b'], data['C'],
-                                                                          data['f'], data['YrA']))
+            all_data.append(self.__calc_dff(file))
         return np.concatenate(all_data)
 
     def __find_spikes(self):
@@ -85,7 +158,6 @@ class VascOccAnalysis:
         self.all_spikes = np.zeros_like(self.dff)
         after_stim = self.frames_before_stim + self.len_of_epoch_in_frames
         norm_factor_during = self.frames_before_stim / self.len_of_epoch_in_frames
-        self.frames_after_stim = self.dff.shape[1] - (self.frames_before_stim + self.len_of_epoch_in_frames)
         norm_factor_after = self.frames_before_stim / self.frames_after_stim
         for row, cell in enumerate(self.dff):
             idx = peakutils.indexes(cell, thres=thresh, min_dist=min_dist)
@@ -183,9 +255,9 @@ class VascOccAnalysis:
 
 
 if __name__ == '__main__':
-    vasc = VascOccAnalysis(foldername=r'/data/Amos/occluder/',
+    vasc = VascOccAnalysis(foldername=r'/data/Amos/occluder/8th_July18_VIP_Td_SynGCaMP_Occluder',
                            glob=r'*results.npz', frames_before_stim=17484,
                            len_of_epoch_in_frames=7000, fps=58.28,
-                           invalid_cells=[])
+                           invalid_cells=[], with_analog=True)
     vasc.run()
     plt.show(block=False)

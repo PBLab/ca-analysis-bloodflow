@@ -15,6 +15,9 @@ import os
 import re
 import numpy as np
 from datetime import datetime
+from os import splitext
+import caiman_funcs_for_comparison
+
 
 
 class Epoch(Enum):
@@ -36,13 +39,18 @@ class Epoch(Enum):
 
 
 @attr.s(slots=True)
-class AnalyzeCalciumOverTime:
+class CalciumAnalysisOverTime:
+    """ A replacement\refactoring for AnalyzeCalciumOverTime """
     foldername = attr.ib(validator=instance_of(Path))
+    hyper_glob = attr.ib(default=r'*_HYPER_DAY_*[0-9]__EXP_STIM_*FOV_[0-9]_0000[0-9].tif')
+    hypo_glob = attr.ib(default=r'*_HYPO_DAY_*[0-9]__EXP_STIM_*FOV_[0-9]_0000[0-9].tif')
     fps = attr.ib(init=False)
     colors = attr.ib(init=False)
     num_of_channels = attr.ib(init=False)
     start_time = attr.ib(init=False)
     timestamps = attr.ib(init=False)
+    fluo_data = attr.ib(init=False, factory=list)
+    all_analog = attr.ib(init=False, factory=list)
 
     def __attrs_post_init__(self):
         self.colors = [f"C{idx}" for idx in range(10)] * 3  # use default matplotlib colormap
@@ -52,46 +60,127 @@ class AnalyzeCalciumOverTime:
         Pool all neurons from all FOVs of a single timepoint together and analyze them
         :return:
         """
-        hyper_glob = r'*_HYPER_DAY_*[0-9]__EXP_STIM_*FOV_[0-9]_0000[0-9].tif'
-        hypo_glob = r'*_HYPO_DAY_*[0-9]__EXP_STIM_*FOV_[0-9]_0000[0-9].tif'
-        all_files_hyper = self.foldername.glob(hyper_glob)
-        all_files_hypo = self.foldername.glob(hypo_glob)
+        all_files_hyper, file = self.__find_files(self.hyper_glob, 'Hyper')
+        all_files_hypo, _ = self.__find_files(self.hypo_glob, 'Hypo')
+        self.__get_params()
+        foldername = file.parent
 
-        print("Found the following files:\nHyper:")
         for file in all_files_hyper:
+            self.fluo_data.append(self.__parse_caiman_result(file, foldername))
+            analog_data_fname = next(file.parent.glob(f'{str(file.name)[:-4]}*analog.txt'))
+            analog_data = pd.read_table(analog_data_fname, header=None,
+                                        names=['stimulus', 'run'], index_col=False)
+            an_trace = AnalogTraceAnalyzer(str(file), analog_data, framerate=self.fps,
+                                           num_of_channels=self.num_of_channels,
+                                           start_time=self.start_time,
+                                           timestamps=self.timestamps)
+            an_trace.run()
+        self.__save(hyper_data, foldername, 'Hyper')
+        self.__save(hypo_data, foldername, 'Hypo')
+        return {'hyper': (sliced_fluo_hyper, hyper_data),
+                'hypo': (sliced_fluo_hypo, hypo_data)}
+
+
+    def __parse_caiman_result(file, foldername):
+        name = splitext(file.name)[0]
+        try:
+            corresponding_npz = next(foldername.glob(name + "*results.npz"))
+        except StopIteration:
+            raise FileNotFoundError("CaImAn results file not found in folder {}.")
+        caiman_res = np.load(corresponding_npz)
+        # Currently only fetches dF/F data. Can do more.
+        return caiman_res['F_dff']        
+
+
+    def __get_params(self, file):
+        """ Get TIFF parameters from file """
+        # Get params
+        try:
+            with tifffile.TiffFile(str(file)) as f:
+                si_meta = f.scanimage_metadata
+                self.fps = si_meta['FrameData']['SI.hRoiManager.scanFrameRate']
+                self.num_of_channels = len(si_meta['FrameData']['SI.hChannels.channelsActive'])
+                self.start_time = str(datetime.fromtimestamp(os.path.getmtime(str(file))))
+                self.timestamps = np.arange(len(f.pages)//self.num_of_channels)
+        except TypeError:
+            self.fps = 15.24
+
+    def __find_files(self, glob: str, name: str):
+        """ 
+        Detect all files in a folder recursively according to glob.
+        name lets the function know what is it looking for - HYPER\HYPO.
+        Returns a generator with all files found, and the name of
+        the last file in that list. 
+        """
+        files = self.foldername.glob(glob)
+        print(f"Found the following {name} files:")
+        for file in files:
             print(file)
-        all_files_hyper = self.foldername.glob(hyper_glob)
-        print("Hypo:")
-        for file in all_files_hypo:
+        return self.foldername.glob(glob), file
+
+
+    def __save(self, data: xr.DataArray, foldername: Path, name: str):
+            
+        print(f"Saving {name} data as NetCDF...")
+        try:
+            data.to_netcdf(str(foldername) + '/{name}_DataArray.nc')
+        except AttributeError:  # NoneType
+            pass
+
+
+
+
+@attr.s(slots=True)
+class AnalyzeCalciumOverTime:
+    """ OLD """
+    foldername = attr.ib(validator=instance_of(Path))
+    hyper_glob = attr.ib(default=r'*_HYPER_DAY_*[0-9]__EXP_STIM_*FOV_[0-9]_0000[0-9].tif')
+    hypo_glob = attr.ib(default=r'*_HYPO_DAY_*[0-9]__EXP_STIM_*FOV_[0-9]_0000[0-9].tif')
+    fps = attr.ib(init=False)
+    colors = attr.ib(init=False)
+    num_of_channels = attr.ib(init=False)
+    start_time = attr.ib(init=False)
+    timestamps = attr.ib(init=False)
+
+    def __attrs_post_init__(self):
+        self.colors = [f"C{idx}" for idx in range(10)] * 3  # use default matplotlib colormap
+
+    def __find_files(self, glob: str, name: str):
+        """ 
+        Detect all files in a folder recursively according to glob.
+        name lets the function know what is it looking for - HYPER\HYPO.
+        Returns a generator with all files found, and the name of
+        the last file in that list. 
+        """
+        files = self.foldername.glob(glob)
+        print(f"Found the following {name} files:")
+        for file in files:
             print(file)
-        all_files_hypo = self.foldername.glob(hypo_glob)
+        return self.foldername.glob(glob), file
+
+    def run_batch_of_timepoint(self):
+        """
+        Pool all neurons from all FOVs of a single timepoint together and analyze them
+        :return:
+        """
+        all_files_hyper, file = self.__find_files(self.hyper_glob, 'Hyper')
+        all_files_hypo, _ = self.__find_files(self.hypo_glob, 'Hypo')
 
         # Get params
         try:
             with tifffile.TiffFile(str(file)) as f:
-                self.fps = f.scanimage_metadata['FrameData']['SI.hRoiManager.scanFrameRate']
-                self.num_of_channels = len(f.scanimage_metadata['FrameData']['SI.hChannels.channelsActive'])
+                si_meta = f.scanimage_metadata
+                self.fps = si_meta['FrameData']['SI.hRoiManager.scanFrameRate']
+                self.num_of_channels = len(si_meta['FrameData']['SI.hChannels.channelsActive'])
                 self.start_time = str(datetime.fromtimestamp(os.path.getmtime(str(file))))
-                self.timestamps = np.arange(len(f.pages)//2)
+                self.timestamps = np.arange(len(f.pages)//self.num_of_channels)
         except TypeError:
             self.fps = 15.24
 
         sliced_fluo_hyper, hyper_data = self.__run_analysis_batch(all_files_hyper, cond='hyper')
         sliced_fluo_hypo, hypo_data = self.__run_analysis_batch(all_files_hypo, cond='hypo')
 
-        # Saving
-        print("Saving data as NetCDF...")
-        try:
-            sliced_fluo_hypo.to_netcdf(str(file.parent) + '/HYPO_DataArray.nc')
-        except AttributeError:  # NoneType
-            pass
-        try:
-            sliced_fluo_hyper.to_netcdf(str(file.parent) + '/HYPER_DataArray.nc')
-        except AttributeError: # NoneType
-            pass
-        # plt.show()
-        return {'hyper': (sliced_fluo_hyper, hyper_data),
-                'hypo': (sliced_fluo_hypo, hypo_data)}
+
 
     def __run_analysis_batch(self, files, cond: str):
         """
