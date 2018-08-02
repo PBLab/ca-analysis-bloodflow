@@ -99,7 +99,7 @@ class ManualRoiDrawing:
         max_time = num_of_frames / self.fps
 
         plt.sca(ax_trace)
-        time_vec = np.arange(start=0, stop=max_time, step=1/self.fps).reshape((1, num_of_frames))
+        time_vec = np.arange(start=0, stop=max_time, step=1/self.fps)[:num_of_frames].reshape((1, num_of_frames))
         time_vec = np.tile(time_vec, (self.num_rois, 1))
         assert time_vec.shape == self.dff.shape
 
@@ -119,8 +119,14 @@ class ManualRoiDrawing:
 
 
 if __name__ == '__main__':
-    fname_analog = r'/data/Hagai/Multiscaler/27-9-17/For article/Calcium/FOV1_fromSI.tif'
-    fname_digital = r'/data/Hagai/Multiscaler/27-9-17/For article/Calcium/stop1_pmt1_stop2_lines_unidir_power_48p5_gain_850_008.tif'
-    draw = ManualRoiDrawing(fname=fname_analog, num_rois=10, fps=15.24, scale=0.2)
-    dff = draw.run()
+    manual_rois = []
+    dffs = []
+    fps = [30.03, 15.24]
+    files = [r'/data/Hagai/Multiscaler/27-9-17/For article/Calcium/si_500_frames.tif',
+             r'/data/Hagai/Multiscaler/27-9-17/For article/Calcium/pysight_500_frames.tif']
+    for file, fr in zip(files, fps):
+        manroi = ManualRoiDrawing(fname=file, num_rois=10, fps=fr, scale=0.2)
+        dffs.append(manroi.run())
+        manual_rois.append(manroi)
+
     plt.show(block=False)

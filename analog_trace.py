@@ -227,8 +227,8 @@ class AnalogTraceAnalyzer:
                 pass
             all_data.append(datum[0] * datum[1] * datum[2])
 
-        all_coords = all_coords[:-1]  # last item is ''
-        all_data = all_data[:-1]  # last item is None
+        all_coords[-1] = 'all'  # last item is ''
+        # all_data = all_data[:-1]  # last item is None
 
         da = xr.DataArray(np.zeros((len(all_coords), other.shape[0], other.shape[1])),
                           coords=[('epoch', all_coords), ('neuron', coords_of_neurons),
@@ -236,8 +236,7 @@ class AnalogTraceAnalyzer:
                           dims=dims)  # self.timestampes
 
         for coor, vec in zip(all_coords, all_data):
-            pos_data = other - np.atleast_2d(other.min(axis=1)).T
-            da.loc[coor] = pos_data * np.atleast_2d(vec)
+            da.loc[coor] = other * np.atleast_2d(vec)
 
         da.attrs['fps'] = self.framerate
         da.attrs['stim_window'] = self.response_window + self.buffer_after_stim

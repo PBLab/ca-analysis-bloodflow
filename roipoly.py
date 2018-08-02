@@ -35,7 +35,7 @@ class roipoly:
         self.__ID2 = self.fig.canvas.mpl_connect(
             'button_press_event', self.__button_press_callback)
 
-        if sys.flags.interactive:
+        if plt.isinteractive():
             plt.show(block=False)
         else:
             plt.show()

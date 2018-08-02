@@ -10,6 +10,7 @@ from statsmodels.stats.libqsturng import psturng
 import scipy.stats
 import matplotlib.pyplot as plt
 from matplotlib import patches
+from matplotlib import gridspec
 import mne
 import caiman_funcs_for_comparison
 import tifffile
@@ -43,7 +44,6 @@ class VascOccAnalysis:
     split_data = attr.ib(init=False)
     all_spikes = attr.ib(init=False)
     frames_after_stim = attr.ib(init=False)
-    dff_filtered = attr.ib(init=False)
     start_time = attr.ib(init=False)
     timestamps = attr.ib(init=False)
     sliced_fluo = attr.ib(init=False)
@@ -58,19 +58,18 @@ class VascOccAnalysis:
         self.__get_params()
         if self.with_analog:
             self.__run_with_analog()
-            self.dff = None
+            self.dff = self.sliced_fluo.loc['all'].values
         else:
             self.dff = self.__calc_dff_batch(self.data_files['caiman'])
-            num_peaks = self.__find_spikes()
-            self.__calc_firing_rate(num_peaks)
-            self.__scatter_spikes()
-            self.__rolling_window()
-            # self.__per_cell_analysis(num_peaks)
-        return self.dff
+        num_peaks = self.__find_spikes()
+        self.__calc_firing_rate(num_peaks)
+        self.__scatter_spikes()
+        self.__rolling_window()
+        self.__per_cell_analysis(num_peaks)
 
     def __run_with_analog(self):
         """ Helper function to run sequentially all needed analysis of dF/F + Analog data """
-        self.sliced_fluo = []  # we have to compare each file with its analog data, individually
+        list_of_sliced_fluo = []  # we have to compare each file with its analog data, individually
         for idx, row in self.data_files.iterrows():
             dff = self.__calc_dff(row['caiman'])
             analog_data = pd.read_table(row['analog'], header=None, 
@@ -83,8 +82,9 @@ class VascOccAnalysis:
                                                 timestamps=self.timestamps,
                                                 occluder=True, occ_metadata=occ_metadata)
             analog_trace.run()
-            self.sliced_fluo.append(analog_trace * dff)  # overloaded __mul__
-        self.sliced_fluo = xr.concat(self.sliced_fluo, dim='neuron')
+            list_of_sliced_fluo.append(analog_trace * dff)  # overloaded __mul__
+            self.__visualize_occ_with_analog_data(row['tif'], dff, analog_trace)
+        self.sliced_fluo = xr.concat(list_of_sliced_fluo, dim='neuron')
 
     def __find_all_files(self):
         """
@@ -112,11 +112,11 @@ class VascOccAnalysis:
             self.data_files = self.data_files.append(pd.DataFrame([[str(file), raw_tif, analog_file]],
                                                                   columns=['caiman', 'tif', 'analog'],
                                                                   index=[idx]))
-        print(self.data_files)
 
     def __get_params(self):
         """ Get general stack parameters from the TiffFile object """
         try:
+            print("Getting TIF parameters...")
             with tifffile.TiffFile(self.data_files['tif'][0]) as f:
                 si_meta = f.scanimage_metadata
                 self.fps = si_meta['FrameData']['SI.hRoiManager.scanFrameRate']
@@ -125,10 +125,12 @@ class VascOccAnalysis:
                 self.frames_after_stim = num_of_frames - (self.frames_before_stim + self.len_of_epoch_in_frames)
                 self.start_time = str(datetime.fromtimestamp(os.path.getmtime(self.data_files['tif'][0])))
                 self.timestamps = np.arange(num_of_frames)
+                print("Done without errors!")
         except TypeError:
             self.start_time = None
             self.timestamps = None
             self.frames_after_stim = 1000
+            print("Unsuccessful in getting the parameters.")
 
     def __calc_dff(self, file):
         data = np.load(file)
@@ -159,6 +161,7 @@ class VascOccAnalysis:
         after_stim = self.frames_before_stim + self.len_of_epoch_in_frames
         norm_factor_during = self.frames_before_stim / self.len_of_epoch_in_frames
         norm_factor_after = self.frames_before_stim / self.frames_after_stim
+        print(self.dff[0])
         for row, cell in enumerate(self.dff):
             idx = peakutils.indexes(cell, thres=thresh, min_dist=min_dist)
             self.all_spikes[row, idx] = 1
@@ -253,11 +256,57 @@ class VascOccAnalysis:
         fig, ax = plt.subplots()
         ax.plot(spike_freq_df.loc[:, 'before':'after'].T, '-o')
 
+    def __visualize_occ_with_analog_data(self, file: str, dff: np.ndarray, analog_data: AnalogTraceAnalyzer):
+        """ Show a figure with the dF/F heatmap, analog traces and occluder timings """
+
+        fig = plt.figure()
+        gs = gridspec.GridSpec(8, 1)
+        self.__display_heatmap(plt.subplot(gs[:4, :]), dff)
+        self.__display_analog_traces(plt.subplot(gs[4, :]),
+                                     plt.subplot(gs[5, :]),
+                                     plt.subplot(gs[6, :]),
+                                     analog_data)
+        self.__display_occluder(plt.subplot(gs[7, :]), dff.shape[1])
+        fig.suptitle(f'{file}')
+        fig.tight_layout()
+        plt.show()
+
+    def __display_heatmap(self, ax, dff):
+        """ Show an "image" of the dF/F of all cells """
+        downsampled = dff[::8, ::8].copy()
+        ax.pcolor(downsampled, vmin=downsampled.min(), vmax=downsampled.max(), cmap='gray')
+        ax.set_aspect('auto')
+        ax.set_ylabel('Cell ID')
+        ax.set_xlabel('')
+
+    def __display_analog_traces(self, ax_puff, ax_jux, ax_run, data: AnalogTraceAnalyzer):
+        """ Show three Axes of the analog data """
+        ax_puff.plot(data.stim_vec)
+        ax_puff.invert_yaxis()
+        ax_puff.set_ylabel('Direct air puff')
+        ax_puff.set_xlabel('')
+        ax_jux.plot(data.juxta_vec)
+        ax_jux.invert_yaxis()
+        ax_jux.set_ylabel('Juxtaposed puff')
+        ax_jux.set_xlabel('')
+        ax_run.plot(data.run_vec)
+        ax_run.invert_yaxis()
+        ax_run.set_ylabel('Run times')
+        ax_run.set_xlabel('')
+
+    def __display_occluder(self, ax, data_length):
+        """ Show the occluder timings """
+        occluder = np.zeros((data_length))
+        occluder[self.frames_before_stim:self.frames_before_stim + self.len_of_epoch_in_frames] = 1
+        ax.plot(occluder)
+        ax.invert_yaxis()
+        ax.set_ylabel('Artery occlusion')
+        ax.set_xlabel('')
 
 if __name__ == '__main__':
     vasc = VascOccAnalysis(foldername=r'/data/Amos/occluder/8th_July18_VIP_Td_SynGCaMP_Occluder',
                            glob=r'*results.npz', frames_before_stim=17484,
                            len_of_epoch_in_frames=7000, fps=58.28,
-                           invalid_cells=[], with_analog=True)
+                           invalid_cells=[], with_analog=True, num_of_channels=2)
     vasc.run()
     plt.show(block=False)
