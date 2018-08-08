@@ -54,8 +54,12 @@ class CalciumAnalysisOverTime:
     result_files = attr.ib(init=False)
     analog_files = attr.ib(init=False)
     list_of_fovs = attr.ib(init=False)
-    # analyzed_sliced_hyper = attr.ib(init=False)
-    # analyzed_sliced_hypo = attr.ib(init=False)
+    analyzed_sliced_hyper = attr.ib(init=False)
+    analyzed_sliced_hypo = attr.ib(init=False)
+    
+    def __attrs_post_init__(self):
+        self.analyzed_sliced_hyper = None
+        self.analyzed_sliced_hypo = None
     
     def _find_all_relevant_files(self):
         self.fluo_files = []
@@ -94,18 +98,16 @@ class CalciumAnalysisOverTime:
         self._find_all_relevant_files()
         assert len(self.fluo_files) == len(self.analog_files) == len(self.result_files)
 
-        # for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
-        #     print(f"Parsing {file_fluo}")
-        #     self.list_of_fovs.append(self._analyze_single_fov(file_fluo, file_result, file_analog))
-        self.list_of_fovs = mp.Pool().starmap(self._analyze_single_fov,
-                                              zip(self.fluo_files, self.result_files, self.analog_files))
+        for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
+            print(f"Parsing {file_fluo}")
+            self.list_of_fovs.append(self._analyze_single_fov(file_fluo, file_result, file_analog))
         print("Finished processing all files, starting the concatenation...")
-        # sliced_fluo = xr.concat([fov.fluo_analyzed for fov in self.list_of_fovs],
-        #                         dim='neuron')
-        # self.analyzed_sliced_hyper = CalciumAnalyzer(sliced_fluo, cond=Condition.HYPER)
-        # self.analyzed_sliced_hyper.run_analysis()
-        # self.analyzed_sliced_hypo = CalciumAnalyzer(sliced_fluo, cond=Condition.HYPO)
-        # self.analyzed_sliced_hypo.run_analysis()
+        sliced_fluo = xr.concat([fov.fluo_analyzed for fov in self.list_of_fovs],
+                                dim='neuron')
+        self.analyzed_sliced_hyper = CalciumAnalyzer(sliced_fluo, cond=Condition.HYPER)
+        self.analyzed_sliced_hyper.run_analysis()
+        self.analyzed_sliced_hypo = CalciumAnalyzer(sliced_fluo, cond=Condition.HYPO)
+        self.analyzed_sliced_hypo.run_analysis()
 
     def _analyze_single_fov(self, fname_fluo, fname_results, fname_analog):
         """ Helper function to go file by file, each with its fluorescence and analog data,
