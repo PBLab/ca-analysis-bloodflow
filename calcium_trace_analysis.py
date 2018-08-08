@@ -8,6 +8,12 @@ import pandas as pd
 import xarray as xr
 import matplotlib.pyplot as plt
 from typing import List, Tuple, Dict
+from enum import Enum
+
+
+class Condition(Enum):
+    HYPER = 'Hyper'
+    HYPO = 'Hypo'
 
 
 @attr.s(slots=True)
@@ -16,7 +22,7 @@ class CalciumAnalyzer:
     Advanced methods to work and analyze calcium trace
     """
     data = attr.ib(validator=instance_of(xr.DataArray))
-    cond = attr.ib(default='hyper', validator=instance_of(str))
+    cond = attr.ib(default=Condition.HYPER, validator=instance_of(Condition))
     plot = attr.ib(default=True)
     colors = attr.ib(init=False)
     num_of_neurons = attr.ib(init=False)

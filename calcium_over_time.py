@@ -7,17 +7,21 @@ import tifffile
 from scipy.ndimage.morphology import binary_fill_holes
 from attr.validators import instance_of
 from pathlib import Path
-# from analyze_ca_stacks_with_vessels import *
 import pandas as pd
-from analog_trace import AnalogTraceAnalyzer
-from trace_converter import RawTraceConverter, ConversionMethod
 import os
 import re
 import numpy as np
 from datetime import datetime
-from os import splitext
-import caiman_funcs_for_comparison
+# from os.path import splitext
+import multiprocessing as mp
+import xarray as xr
 
+from fluo_metadata import FluoMetadata
+from analog_trace import AnalogTraceAnalyzer
+from trace_converter import RawTraceConverter, ConversionMethod
+import caiman_funcs_for_comparison
+from single_fov_analysis import SingleFovParser
+from calcium_trace_analysis import CalciumAnalyzer, Condition
 
 
 class Epoch(Enum):
@@ -40,84 +44,72 @@ class Epoch(Enum):
 
 @attr.s(slots=True)
 class CalciumAnalysisOverTime:
-    """ A replacement\refactoring for AnalyzeCalciumOverTime """
+    """ A replacement\refactoring for AnalyzeCalciumOverTime.
+    Usage: run the "run_batch_of_timepoints" method, which will go over all FOVs
+    that were recorded in this experiment.
+    """
     foldername = attr.ib(validator=instance_of(Path))
-    hyper_glob = attr.ib(default=r'*_HYPER_DAY_*[0-9]__EXP_STIM_*FOV_[0-9]_0000[0-9].tif')
-    hypo_glob = attr.ib(default=r'*_HYPO_DAY_*[0-9]__EXP_STIM_*FOV_[0-9]_0000[0-9].tif')
-    fps = attr.ib(init=False)
-    colors = attr.ib(init=False)
-    num_of_channels = attr.ib(init=False)
-    start_time = attr.ib(init=False)
-    timestamps = attr.ib(init=False)
-    fluo_data = attr.ib(init=False, factory=list)
-    all_analog = attr.ib(init=False, factory=list)
+    file_glob = attr.ib(default='*.tif', validator=instance_of(str))
+    fluo_files = attr.ib(init=False)
+    result_files = attr.ib(init=False)
+    analog_files = attr.ib(init=False)
+    list_of_fovs = attr.ib(init=False)
+    analyzed_sliced_hyper = attr.ib(init=False)
+    analyzed_sliced_hypo = attr.ib(init=False)
+    
+    def _find_all_relevant_files(self):
+        self.fluo_files = []
+        self.analog_files = []
+        self.result_files = []
+        for file in self.foldername.rglob(self.file_glob):
+            if 'CHANNEL' in str(file):
+                pass
+            try:
+                analog_file = next(self.foldername.rglob(f'{str(file.name)[:-4]}*analog.txt'))
+            except StopIteration:
+                print(f"File {file} has no analog counterpart.")
+                continue
+            try:
+                result_file = next(self.foldername.rglob(f'{str(file.name)[:-4]}*CHANNEL*results.npz'))
+            except StopIteration:
+                print(f"File {file} has no result.npz couterpart.")
+                continue
+            print(f"Found triplet of files:\nfluo: {file},\nanalog:{analog_file}\nresults:{result_file}")
+            self.fluo_files.append(file)
+            self.analog_files.append(analog_file)
+            self.result_files.append(result_file)
 
-    def __attrs_post_init__(self):
-        self.colors = [f"C{idx}" for idx in range(10)] * 3  # use default matplotlib colormap
-
-    def run_batch_of_timepoint(self):
+    def run_batch_of_timepoints(self):
         """
-        Pool all neurons from all FOVs of a single timepoint together and analyze them
-        :return:
+        Main method to analyze all FOVs in all timepoints in all experiments
         """
-        all_files_hyper, file = self.__find_files(self.hyper_glob, 'Hyper')
-        all_files_hypo, _ = self.__find_files(self.hypo_glob, 'Hypo')
-        self.__get_params()
-        foldername = file.parent
+        self.list_of_fovs = []
+        self._find_all_relevant_files()
+        assert len(self.fluo_files) == len(self.analog_files)
 
-        for file in all_files_hyper:
-            self.fluo_data.append(self.__parse_caiman_result(file, foldername))
-            analog_data_fname = next(file.parent.glob(f'{str(file.name)[:-4]}*analog.txt'))
-            analog_data = pd.read_table(analog_data_fname, header=None,
-                                        names=['stimulus', 'run'], index_col=False)
-            an_trace = AnalogTraceAnalyzer(str(file), analog_data, framerate=self.fps,
-                                           num_of_channels=self.num_of_channels,
-                                           start_time=self.start_time,
-                                           timestamps=self.timestamps)
-            an_trace.run()
-        self.__save(hyper_data, foldername, 'Hyper')
-        self.__save(hypo_data, foldername, 'Hypo')
-        return {'hyper': (sliced_fluo_hyper, hyper_data),
-                'hypo': (sliced_fluo_hypo, hypo_data)}
+        # for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
+        #     print(f"Parsing {file_fluo}")
+        #     self.list_of_fovs.append(self._analyze_single_fov(file_fluo, file_result, file_analog))
+        self.list_of_fovs = mp.Pool().starmap(self._analyze_single_fov,
+                                              zip(self.fluo_files, self.result_files, self.analog_files))
+        print("Finished processing all files, starting the concatenation...")
+        # sliced_fluo = xr.concat([fov.fluo_analyzed for fov in self.list_of_fovs],
+        #                         dim='neuron')
+        # self.analyzed_sliced_hyper = CalciumAnalyzer(sliced_fluo, cond=Condition.HYPER)
+        # self.analyzed_sliced_hyper.run_analysis()
+        # self.analyzed_sliced_hypo = CalciumAnalyzer(sliced_fluo, cond=Condition.HYPO)
+        # self.analyzed_sliced_hypo.run_analysis()
 
+    def _analyze_single_fov(self, fname_fluo, fname_results, fname_analog):
+        """ Helper function to go file by file, each with its fluorescence and analog data,
+        and run the single FOV parsing on it """
 
-    def __parse_caiman_result(file, foldername):
-        name = splitext(file.name)[0]
-        try:
-            corresponding_npz = next(foldername.glob(name + "*results.npz"))
-        except StopIteration:
-            raise FileNotFoundError("CaImAn results file not found in folder {}.")
-        caiman_res = np.load(corresponding_npz)
-        # Currently only fetches dF/F data. Can do more.
-        return caiman_res['F_dff']        
-
-
-    def __get_params(self, file):
-        """ Get TIFF parameters from file """
-        # Get params
-        try:
-            with tifffile.TiffFile(str(file)) as f:
-                si_meta = f.scanimage_metadata
-                self.fps = si_meta['FrameData']['SI.hRoiManager.scanFrameRate']
-                self.num_of_channels = len(si_meta['FrameData']['SI.hChannels.channelsActive'])
-                self.start_time = str(datetime.fromtimestamp(os.path.getmtime(str(file))))
-                self.timestamps = np.arange(len(f.pages)//self.num_of_channels)
-        except TypeError:
-            self.fps = 15.24
-
-    def __find_files(self, glob: str, name: str):
-        """ 
-        Detect all files in a folder recursively according to glob.
-        name lets the function know what is it looking for - HYPER\HYPO.
-        Returns a generator with all files found, and the name of
-        the last file in that list. 
-        """
-        files = self.foldername.glob(glob)
-        print(f"Found the following {name} files:")
-        for file in files:
-            print(file)
-        return self.foldername.glob(glob), file
-
+        meta = FluoMetadata(fname_fluo)
+        meta.get_metadata()
+        fov = SingleFovParser(analog_fname=fname_analog, fluo_fname=fname_results,
+                              metadata=meta)
+        fov.parse()
+        return fov
 
     def __save(self, data: xr.DataArray, foldername: Path, name: str):
             
@@ -297,7 +289,6 @@ class AnalyzeCalciumOverTime:
         except StopIteration:
             raise UserWarning(f"File {tif_filename} doesn't have a corresponding .npz file.")
 
-
         neurons = self.__gen_masked_image(corresponding_npz, tif_filename)
         df_f_mat = RawTraceConverter(conversion_method=ConversionMethod.DFF,
                                         raw_data=neurons).convert()
@@ -335,6 +326,9 @@ if __name__ == '__main__':
     #                '747_HYPER_DAY_14__EXP_STIM']
     # for folder in new_folders:
     #     result = AnalyzeCalciumOverTime(Path(base_folder + folder)).run_batch_of_timepoint()
-    res = AnalyzeCalciumOverTime(Path(r'/data/David/THY_1_GCaMP_BEFOREAFTER_TAC_290517'))\
-        .read_dataarrays_over_time(epoch=Epoch.ALL)
-    plt.show(block=False)
+    # res = AnalyzeCalciumOverTime(Path(r'/data/David/THY_1_GCaMP_BEFOREAFTER_TAC_290517'))\
+    #     .read_dataarrays_over_time(epoch=Epoch.ALL)
+    # plt.show(block=False)
+    folder = Path(r'/data/David/crystal_skull_TAC_180719')
+    res = CalciumAnalysisOverTime(foldername=folder)
+    res.run_batch_of_timepoints()

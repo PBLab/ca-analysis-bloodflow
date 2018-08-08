@@ -33,7 +33,7 @@ class AnalogTraceAnalyzer:
     move_thresh = attr.ib(default=0.25, validator=instance_of(float))  # V
     sample_rate = attr.ib(default=1000, validator=instance_of(int))  # Hz
     occluder = attr.ib(default=False, validator=instance_of(bool))
-    occ_metadata = attr.ib(factory=namedtuple)
+    occ_metadata = attr.ib(default=None)  # namedtuple of the occlusion frame durations
     stim_vec = attr.ib(init=False)
     juxta_vec = attr.ib(init=False)
     spont_vec = attr.ib(init=False)
@@ -42,6 +42,11 @@ class AnalogTraceAnalyzer:
     occluder_vec = attr.ib(init=False)
     before_occ_vec = attr.ib(init=False)
     after_occ_vec = attr.ib(init=False)    
+
+    def __attrs_post_init__(self):
+        if self.occ_metadata is None:
+            occ = namedtuple('Occluder', ('before', 'during'))
+            self.occ_metadata = occ(100, 200)
 
     def run(self):
         # Analog peak detection
@@ -145,9 +150,10 @@ class AnalogTraceAnalyzer:
         self.run_vec = pd.Series(self.run_vec)
         self.spont_vec = pd.Series(self.spont_vec)
         self.stand_vec = pd.Series(self.stand_vec)
-        self.before_occ_vec = pd.Series(self.before_occ_vec)
-        self.occluder_vec = pd.Series(self.occluder_vec)
-        self.after_occ_vec = pd.Series(self.after_occ_vec)
+        if self.occluder:
+            self.before_occ_vec = pd.Series(self.before_occ_vec)
+            self.occluder_vec = pd.Series(self.occluder_vec)
+            self.after_occ_vec = pd.Series(self.after_occ_vec)
 
     def __extract_time_series(self):
         with TiffFile(self.tif_filename) as f:
@@ -225,7 +231,10 @@ class AnalogTraceAnalyzer:
                 all_coords.append('_'.join((filter(None.__ne__, coord))))
             except IndexError:
                 pass
-            all_data.append(datum[0] * datum[1] * datum[2])
+            prod = datum[0]
+            for datumm in datum[1:]:
+                prod *= datumm
+            all_data.append(prod)
 
         all_coords[-1] = 'all'  # last item is ''
         # all_data = all_data[:-1]  # last item is None
