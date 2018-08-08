@@ -54,8 +54,8 @@ class CalciumAnalysisOverTime:
     result_files = attr.ib(init=False)
     analog_files = attr.ib(init=False)
     list_of_fovs = attr.ib(init=False)
-    analyzed_sliced_hyper = attr.ib(init=False)
-    analyzed_sliced_hypo = attr.ib(init=False)
+    # analyzed_sliced_hyper = attr.ib(init=False)
+    # analyzed_sliced_hypo = attr.ib(init=False)
     
     def _find_all_relevant_files(self):
         self.fluo_files = []
@@ -74,18 +74,25 @@ class CalciumAnalysisOverTime:
             except StopIteration:
                 print(f"File {file} has no result.npz couterpart.")
                 continue
-            print(f"Found triplet of files:\nfluo: {file},\nanalog:{analog_file}\nresults:{result_file}")
+            print(f"Found triplet of files:\nfluo: {file},\nanalog: {analog_file}\nresults: {result_file}")
             self.fluo_files.append(file)
             self.analog_files.append(analog_file)
             self.result_files.append(result_file)
 
     def run_batch_of_timepoints(self):
         """
-        Main method to analyze all FOVs in all timepoints in all experiments
+        Main method to analyze all FOVs in all timepoints in all experiments. 
+        Generally used for TAC experiments, which have multiple FOVs per mouse, and 
+        an experiment design which spans multiple days.
+        The script expects a filename containing the following "fields":
+            Mouse ID (digits at the beginning of filename)
+            Either 'HYPER' or 'HYPO'
+            'DAY_0/1/n'
+            'FOV_n'
         """
         self.list_of_fovs = []
         self._find_all_relevant_files()
-        assert len(self.fluo_files) == len(self.analog_files)
+        assert len(self.fluo_files) == len(self.analog_files) == len(self.result_files)
 
         # for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
         #     print(f"Parsing {file_fluo}")
@@ -118,8 +125,6 @@ class CalciumAnalysisOverTime:
             data.to_netcdf(str(foldername) + '/{name}_DataArray.nc')
         except AttributeError:  # NoneType
             pass
-
-
 
 
 @attr.s(slots=True)
@@ -329,6 +334,6 @@ if __name__ == '__main__':
     # res = AnalyzeCalciumOverTime(Path(r'/data/David/THY_1_GCaMP_BEFOREAFTER_TAC_290517'))\
     #     .read_dataarrays_over_time(epoch=Epoch.ALL)
     # plt.show(block=False)
-    folder = Path(r'/data/David/crystal_skull_TAC_180719')
+    folder = Path(r'X:/David/crystal_skull_TAC_180719')
     res = CalciumAnalysisOverTime(foldername=folder)
     res.run_batch_of_timepoints()

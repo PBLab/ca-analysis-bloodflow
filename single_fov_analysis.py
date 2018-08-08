@@ -23,6 +23,7 @@ class SingleFovParser:
 
     def parse(self):
         """ Main method to parse a single duo of analog and fluorescent data """
+        print(f"Parsing {self.fluo_fname}...")
         self.all_fluo_results = np.load(str(self.fluo_fname))
         self.fluo_trace = self.all_fluo_results['F_dff']
         analog_data = pd.read_table(self.analog_fname, header=None,
