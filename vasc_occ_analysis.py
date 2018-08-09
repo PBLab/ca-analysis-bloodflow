@@ -19,6 +19,9 @@ from analog_trace import AnalogTraceAnalyzer
 import xarray as xr
 from collections import namedtuple
 from datetime import datetime
+import colorama
+colorama.init()
+from ansimarkup import ansiprint as aprint
 
 
 @attr.s(slots=True)
@@ -140,6 +143,9 @@ class VascOccAnalysis:
         except KeyError:
             dff =  caiman_funcs_for_comparison.detrend_df_f_auto(data['A'], data['b'], data['C'],
                                                                  data['f'], data['YrA'])
+        finally:
+            aprint(f"The shape of the <b>dF/F matrix</b> for file <i>{file}</i> is <yellow>{dff.shape}</yellow>.")
+
         return dff
 
     def __calc_dff_batch(self, files):
@@ -161,7 +167,6 @@ class VascOccAnalysis:
         after_stim = self.frames_before_stim + self.len_of_epoch_in_frames
         norm_factor_during = self.frames_before_stim / self.len_of_epoch_in_frames
         norm_factor_after = self.frames_before_stim / self.frames_after_stim
-        print(self.dff[0])
         for row, cell in enumerate(self.dff):
             idx = peakutils.indexes(cell, thres=thresh, min_dist=min_dist)
             self.all_spikes[row, idx] = 1
@@ -183,10 +188,15 @@ class VascOccAnalysis:
         num_peaks.drop(self.invalid_cells, inplace=True)
         self.split_data = num_peaks.stack()
         mc = MultiComparison(self.split_data.values, self.split_data.index.get_level_values(1).values)
-        res = mc.tukeyhsd()
-        print(res)
-        print("P-values:", psturng(np.abs(res.meandiffs / res.std_pairs), len(res.groupsunique), res.df_total))
-        print(self.split_data.mean(level=1))
+        try:
+            res = mc.tukeyhsd()
+        except ValueError:
+            aprint("<yellow>Failed during the p-value calculation.</yellow>")
+        else:
+            print(res)
+            print("P-values:", psturng(np.abs(res.meandiffs / res.std_pairs), len(res.groupsunique), res.df_total))
+        finally:
+            print(self.split_data.mean(level=1))
 
     def __scatter_spikes(self):
         """
@@ -274,7 +284,10 @@ class VascOccAnalysis:
     def __display_heatmap(self, ax, dff):
         """ Show an "image" of the dF/F of all cells """
         downsampled = dff[::8, ::8].copy()
-        ax.pcolor(downsampled, vmin=downsampled.min(), vmax=downsampled.max(), cmap='gray')
+        try:
+            ax.pcolor(downsampled, vmin=downsampled.min(), vmax=downsampled.max(), cmap='gray')
+        except ValueError:  # emptry array
+            return
         ax.set_aspect('auto')
         ax.set_ylabel('Cell ID')
         ax.set_xlabel('')
@@ -304,9 +317,10 @@ class VascOccAnalysis:
         ax.set_xlabel('')
 
 if __name__ == '__main__':
-    vasc = VascOccAnalysis(foldername=r'/data/Amos/occluder/8th_July18_VIP_Td_SynGCaMP_Occluder',
-                           glob=r'*results.npz', frames_before_stim=17484,
-                           len_of_epoch_in_frames=7000, fps=58.28,
-                           invalid_cells=[], with_analog=True, num_of_channels=2)
+    vasc = VascOccAnalysis(foldername=r'/data/David/vasc_occ_AND_cca_060818',
+                           glob=r'*VASC*results.npz', frames_before_stim=1800,
+                           len_of_epoch_in_frames=3600, fps=30.03,
+                           invalid_cells=[], with_analog=False, num_of_channels=2)
     vasc.run()
     plt.show(block=False)
+

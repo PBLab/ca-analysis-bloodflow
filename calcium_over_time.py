@@ -15,6 +15,7 @@ from datetime import datetime
 # from os.path import splitext
 import multiprocessing as mp
 import xarray as xr
+import matplotlib.pyplot as plt
 
 from fluo_metadata import FluoMetadata
 from analog_trace import AnalogTraceAnalyzer
@@ -60,7 +61,7 @@ class CalciumAnalysisOverTime:
     def __attrs_post_init__(self):
         self.analyzed_sliced_hyper = None
         self.analyzed_sliced_hypo = None
-    
+        
     def _find_all_relevant_files(self):
         self.fluo_files = []
         self.analog_files = []
@@ -98,7 +99,7 @@ class CalciumAnalysisOverTime:
         self._find_all_relevant_files()
         assert len(self.fluo_files) == len(self.analog_files) == len(self.result_files)
 
-        for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
+        for file_fluo, file_result, file_analog in zip(self.fluo_files[:2], self.result_files[:2], self.analog_files[:2]):
             print(f"Parsing {file_fluo}")
             self.list_of_fovs.append(self._analyze_single_fov(file_fluo, file_result, file_analog))
         print("Finished processing all files, starting the concatenation...")
@@ -336,6 +337,7 @@ if __name__ == '__main__':
     # res = AnalyzeCalciumOverTime(Path(r'/data/David/THY_1_GCaMP_BEFOREAFTER_TAC_290517'))\
     #     .read_dataarrays_over_time(epoch=Epoch.ALL)
     # plt.show(block=False)
-    folder = Path(r'X:/David/crystal_skull_TAC_180719')
+    folder = Path(r'/data/David/crystal_skull_TAC_180719')
     res = CalciumAnalysisOverTime(foldername=folder)
     res.run_batch_of_timepoints()
+    plt.show(block=False)
