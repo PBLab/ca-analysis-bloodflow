@@ -43,7 +43,7 @@ class SingleFovParser:
         The new coordinates order is (epoch, neuron, time, mouse_id, fov, condition, day).
         """
         try:
-            existing = next(pathlib.Path(self.metadata.fname).parent\
+            _ = next(pathlib.Path(self.metadata.fname).parent\
                 .glob(str(self.metadata.fname.name)[:-4] + '.nc'))
         except StopIteration:
             print("Writing new NetCDF to disk.")

@@ -48,8 +48,8 @@ class CalciumAnalysisOverTime:
     """ A replacement\refactoring for AnalyzeCalciumOverTime.
     Usage: run the "run_batch_of_timepoints" method, which will go over all FOVs
     that were recorded in this experiment.
-    If serialize is True, it will write to disk each FOV's DataArray, to make future
-    processing faster.
+    If serialize is True, it will write to disk each FOV's DataArray, as well
+    as the concatenated DataArray to make future processing faster.
     If you've already serialized your data, use "load_batch_of_timepoints" to continue
     the downstream analysis of your files.
     """
@@ -60,7 +60,8 @@ class CalciumAnalysisOverTime:
     result_files = attr.ib(init=False)
     analog_files = attr.ib(init=False)
     sliced_fluo = attr.ib(init=False)
-        
+    list_of_fovs = attr.ib(init=False)
+
     def _find_all_relevant_files(self):
         self.fluo_files = []
         self.analog_files = []
@@ -97,13 +98,17 @@ class CalciumAnalysisOverTime:
             'FOV_n'
         After creating a xr.DataArray out of each file, the script will write this DataArray to
         disk (only if it doesn't exist yet, and only if self.serialize is True) to make future processing faster.
+        Finally, it will take all created DataArrays and concatenate them into a single DataArray, 
+        that can also be written to disk using the "serialize" attribute.
         """
+        self.list_of_fovs = []
         self._find_all_relevant_files()
         assert len(self.fluo_files) == len(self.analog_files) == len(self.result_files)
 
         for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
             print(f"Parsing {file_fluo}")
             self.list_of_fovs.append(self._analyze_single_fov(file_fluo, file_result, file_analog))
+        self._concat_fovs()
 
     def _analyze_single_fov(self, fname_fluo, fname_results, fname_analog):
         """ Helper function to go file by file, each with its fluorescence and analog data,
@@ -127,15 +132,23 @@ class CalciumAnalysisOverTime:
         """
         print("Found the following NetCDF files:")
         all_nc = self.foldername.rglob('*.nc')
-        list_of_fovs = []
+        self.list_of_fovs = []
         for file in all_nc:
-            list_of_fovs.append(xr.open_dataarray(file))
+            self.list_of_fovs.append(xr.open_dataarray(file))
             print(file.name)
-        self.sliced_fluo = xr.concat(list_of_fovs, dim='neuron')
-        self.sliced_fluo.attrs['fps'] = list_of_fovs[0].attrs['fps']
-        self.sliced_fluo.attrs['stim_window'] = list_of_fovs[0].attrs['stim_window']
-        self.sliced_fluo.to_netcdf(str(self.foldername / Path("all_fovs_dataset.nc")),
-                                   mode='w', format='NETCDF3_64BIT')
+        self._concat_fovs()
+
+    def _concat_fovs(self):
+        """
+        Take the list of FOVs and turn them into a single DataArray. Can also write to disk
+        the new DataArray.
+        """
+        self.sliced_fluo = xr.concat(self.list_of_fovs, dim='neuron')
+        self.sliced_fluo.attrs['fps'] = self.list_of_fovs[0].attrs['fps']
+        self.sliced_fluo.attrs['stim_window'] = self.list_of_fovs[0].attrs['stim_window']
+        if self.serialize:
+            self.sliced_fluo.to_netcdf(str(self.foldername / Path("all_fovs_dataset.nc")),
+                                    mode='w', format='NETCDF3_64BIT')
 
 
 if __name__ == '__main__':
