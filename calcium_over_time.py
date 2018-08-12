@@ -48,13 +48,17 @@ class CalciumAnalysisOverTime:
     """ A replacement\refactoring for AnalyzeCalciumOverTime.
     Usage: run the "run_batch_of_timepoints" method, which will go over all FOVs
     that were recorded in this experiment.
+    If serialize is True, it will write to disk each FOV's DataArray, to make future
+    processing faster.
+    If you've already serialized your data, use "load_batch_of_timepoints" to continue
+    the downstream analysis of your files.
     """
     foldername = attr.ib(validator=instance_of(Path))
     file_glob = attr.ib(default='*.tif', validator=instance_of(str))
+    serialize = attr.ib(default=False, validator=instance_of(bool))
     fluo_files = attr.ib(init=False)
     result_files = attr.ib(init=False)
     analog_files = attr.ib(init=False)
-    list_of_fovs = attr.ib(init=False)
     sliced_fluo = attr.ib(init=False)
         
     def _find_all_relevant_files(self):
@@ -91,16 +95,15 @@ class CalciumAnalysisOverTime:
             Either 'HYPER' or 'HYPO'
             'DAY_0/1/n'
             'FOV_n'
+        After creating a xr.DataArray out of each file, the script will write this DataArray to
+        disk (only if it doesn't exist yet, and only if self.serialize is True) to make future processing faster.
         """
-        self.list_of_fovs = []
         self._find_all_relevant_files()
         assert len(self.fluo_files) == len(self.analog_files) == len(self.result_files)
 
-        for file_fluo, file_result, file_analog in zip(self.fluo_files[:], self.result_files[:], self.analog_files[:]):
+        for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
             print(f"Parsing {file_fluo}")
             self.list_of_fovs.append(self._analyze_single_fov(file_fluo, file_result, file_analog))
-        print("Finished processing all files, starting the concatenation...")
-        self.sliced_fluo = self.__concat_dataarrays()
 
     def _analyze_single_fov(self, fname_fluo, fname_results, fname_analog):
         """ Helper function to go file by file, each with its fluorescence and analog data,
@@ -111,57 +114,34 @@ class CalciumAnalysisOverTime:
         fov = SingleFovParser(analog_fname=fname_analog, fluo_fname=fname_results,
                               metadata=meta)
         fov.parse()
+        if self.serialize:
+            fov.add_metadata_and_serialize()
         return fov
 
-    def __concat_dataarrays(self) -> xr.Dataset:
+    def load_batch_of_timepoints(self):
         """ 
-        Parses all exisiting DataArrays, each corresponding to a different FOV, and concatenates
-        them into a single xr.Dataset that can later be sliced properly. The method first creates
-        a new DataArray object with all metadata as data coordinates, and then tries to concat
-        these objects.
-        The new coordinates order is (epoch, neuron, time, mouse_id, fov, condition).
-        The "day" coordinate is considered the "special" dimension of the final xr.Dataset.
+        Find all .nc files that were generated from the previous analysis
+        and chain them together into a single list. This list is then concatenated
+        into a single xr.DataArray. The new coordinates order is 
+        (epoch, neuron, time, mouse_id, fov, condition, day).
         """
-        days_with_data = {}
-        for fov in self.list_of_fovs:
-            days_with_data[fov.metadata.day] = None
-
-        for fov in self.list_of_fovs:
-            raw_data = fov.fluo_analyzed.data
-            raw_data = raw_data[..., np.newaxis, np.newaxis, np.newaxis]
-            assert len(raw_data.shape) == 6
-            coords = {}
-            coords['epoch'] = fov.fluo_analyzed['epoch'].values
-            coords['neuron'] = fov.fluo_analyzed['neuron'].values
-            coords['time'] = fov.fluo_analyzed['time'].values
-            coords['mouse_id'] = np.array([fov.metadata.mouse_id])
-            coords['fov'] = np.array([fov.metadata.fov])
-            coords['condition'] = np.array([fov.metadata.condition])
-            darr = xr.DataArray(raw_data, coords=coords, dims=coords.keys())
-            day = fov.metadata.day
-            try:
-                days_with_data[day] = xr.concat([days_with_data[day], darr], dim='neuron')
-            except TypeError:  # empty day, need to populate the first one
-                days_with_data[day] = darr
-        
-        ds = xr.Dataset(days_with_data)
-        ds.attrs['fps'] = fov.fluo_analyzed.attrs['fps']
-        ds.attrs['stim_window'] = fov.fluo_analyzed.attrs['stim_window']
-        return ds
+        print("Found the following NetCDF files:")
+        all_nc = self.foldername.rglob('*.nc')
+        list_of_fovs = []
+        for file in all_nc:
+            list_of_fovs.append(xr.open_dataarray(file))
+            print(file.name)
+        self.sliced_fluo = xr.concat(list_of_fovs, dim='neuron')
+        self.sliced_fluo.attrs['fps'] = list_of_fovs[0].attrs['fps']
+        self.sliced_fluo.attrs['stim_window'] = list_of_fovs[0].attrs['stim_window']
+        self.sliced_fluo.to_netcdf(str(self.foldername / Path("all_fovs_dataset.nc")),
+                                   mode='w', format='NETCDF3_64BIT')
 
 
 if __name__ == '__main__':
-    # base_folder = r'/data/David/THY_1_GCaMP_BEFOREAFTER_TAC_290517/'
-    # new_folders = [
-    #                '747_HYPER_DAY_1__EXP_STIM',
-    #                '747_HYPER_DAY_7__EXP_STIM',
-    #                '747_HYPER_DAY_14__EXP_STIM']
-    # for folder in new_folders:
-    #     result = AnalyzeCalciumOverTime(Path(base_folder + folder)).run_batch_of_timepoint()
-    # res = AnalyzeCalciumOverTime(Path(r'/data/David/THY_1_GCaMP_BEFOREAFTER_TAC_290517'))\
-    #     .read_dataarrays_over_time(epoch=Epoch.ALL)
-    # plt.show(block=False)
-    folder = Path(r'X:/David/crystal_skull_TAC_180719')
-    res = CalciumAnalysisOverTime(foldername=folder)
-    res.run_batch_of_timepoints()
+    folder = Path.home() / Path(r'data/David/crystal_skull_TAC_180719')
+    assert folder.exists()
+    res = CalciumAnalysisOverTime(foldername=folder, serialize=True)
+    # res.run_batch_of_timepoints()
+    res.load_batch_of_timepoints()
     plt.show(block=False)

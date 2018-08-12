@@ -28,7 +28,7 @@ class SingleFovParser:
         analog_data = pd.read_table(self.analog_fname, header=None,
                                     names=['stimulus', 'run'], index_col=False)
         self.analog_analyzed = AnalogTraceAnalyzer(tif_filename=str(self.analog_fname), 
-                                                   analog_trace=analog_data, 
+                                                   analog_trace=analog_data,
                                                    framerate=self.metadata.fps,
                                                    num_of_channels=self.metadata.num_of_channels,
                                                    start_time=self.metadata.start_time,
@@ -36,3 +36,28 @@ class SingleFovParser:
         self.analog_analyzed.run()
         if self.fluo_trace.shape[0] != 0:
             self.fluo_analyzed = self.analog_analyzed * self.fluo_trace
+
+    def add_metadata_and_serialize(self):
+        """ 
+        Write a full DataArray to disk after parsing the FOV.
+        The new coordinates order is (epoch, neuron, time, mouse_id, fov, condition, day).
+        """
+        try:
+            existing = next(pathlib.Path(self.metadata.fname).parent\
+                .glob(str(self.metadata.fname.name)[:-4] + '.nc'))
+        except StopIteration:
+            print("Writing new NetCDF to disk.")
+            raw_data = self.fluo_analyzed.data
+            raw_data = raw_data[..., np.newaxis, np.newaxis, np.newaxis, np.newaxis]
+            assert len(raw_data.shape) == 7
+            coords = {}
+            coords['epoch'] = self.fluo_analyzed['epoch'].values
+            coords['neuron'] = self.fluo_analyzed['neuron'].values
+            coords['time'] = self.metadata.timestamps
+            coords['mouse_id'] = np.array([self.metadata.mouse_id])
+            coords['fov'] = np.array([self.metadata.fov])
+            coords['condition'] = np.array([self.metadata.condition])
+            coords['day'] = np.array([self.metadata.day])
+            darr = xr.DataArray(raw_data, coords=coords, dims=coords.keys())
+            darr.to_netcdf(str(self.metadata.fname)[:-4] + ".nc", mode='w',
+                           format='NETCDF3_64BIT')

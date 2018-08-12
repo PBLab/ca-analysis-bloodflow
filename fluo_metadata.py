@@ -30,7 +30,7 @@ class FluoMetadata:
                 self.num_of_channels = len(si_meta['FrameData']['SI.hChannels.channelsActive'])
                 self.start_time = str(datetime.fromtimestamp(os.path.getmtime(str(self.fname))))
                 length = len(f.pages)//self.num_of_channels
-                self.timestamps = np.linspace(0, self.fps * length, num=length, endpoint=False)
+                self.timestamps = np.arange(length)/self.fps
         except TypeError:
             self.timestamps = None
         
