@@ -7,3 +7,5 @@
 *.pdf
 *.eps
 .vscode/
+.idea/*
+__pycache__/*
