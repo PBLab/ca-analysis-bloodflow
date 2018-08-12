@@ -78,7 +78,7 @@ class CalciumAnalyzer:
             x_scat = np.tile(np.arange(1, sampled.shape[0]+1, dtype=np.uint32), (sampled.shape[1], 1))
             ax_means.scatter(x_scat.ravel(), sampled.T.ravel(), s=0.2, c='k', alpha=0.5)
             self.__fig_manipulation(fig_means, ax_means, title=f'Mean Fluorescence Per Neuron, {cur_tag} Epoch',
-                                    xlabel='Neuron Number', ylabel='$\Delta$F/F')
+                                    xlabel='Neuron Number', ylabel=r'$\Delta$F/F')
 
         fig_all, ax_all = plt.subplots()
         ax_all.violinplot(sampled_data_to_plot.mean(axis=-1).T,

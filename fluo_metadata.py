@@ -29,9 +29,10 @@ class FluoMetadata:
                 self.fps = si_meta['FrameData']['SI.hRoiManager.scanFrameRate']
                 self.num_of_channels = len(si_meta['FrameData']['SI.hChannels.channelsActive'])
                 self.start_time = str(datetime.fromtimestamp(os.path.getmtime(str(self.fname))))
-                self.timestamps = np.arange(len(f.pages)//self.num_of_channels)
+                length = len(f.pages)//self.num_of_channels
+                self.timestamps = np.linspace(0, self.fps * length, num=length, endpoint=False)
         except TypeError:
-            self.timestamps = np.arange(len(f.pages))
+            self.timestamps = None
         
         id_reg = re.compile(r'(^\d+?)_')
         self.mouse_id = id_reg.findall(str(self.fname.name))[0]
@@ -39,12 +40,12 @@ class FluoMetadata:
 
         day_reg = re.compile(r'_DAY.+?(\d+)_')
         try:
-            self.day = day_reg.findall(str(self.fname))[0]
+            self.day = int(day_reg.findall(str(self.fname.name))[0])
         except IndexError:
             self.day = 99
 
         fov_reg = re.compile(r'_FOV.+?(\d+)_')
         try:
-            self.fov = fov_reg.findall(str(self.fname))[0]
+            self.fov = int(fov_reg.findall(str(self.fname.name))[0])
         except IndexError:
             self.fov = 99

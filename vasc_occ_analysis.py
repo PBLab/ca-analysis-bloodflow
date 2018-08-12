@@ -15,13 +15,15 @@ import mne
 import caiman_funcs_for_comparison
 import tifffile
 import os
-from analog_trace import AnalogTraceAnalyzer
 import xarray as xr
 from collections import namedtuple
 from datetime import datetime
 import colorama
 colorama.init()
 from ansimarkup import ansiprint as aprint
+
+from analog_trace import AnalogTraceAnalyzer
+from dff_tools import calc_dff, calc_dff_batch, scatter_spikes, plot_mean_vals
 
 
 @attr.s(slots=True)
@@ -63,7 +65,7 @@ class VascOccAnalysis:
             self.__run_with_analog()
             self.dff = self.sliced_fluo.loc['all'].values
         else:
-            self.dff = self.__calc_dff_batch(self.data_files['caiman'])
+            self.dff = calc_dff_batch(self.data_files['caiman'])
         num_peaks = self.__find_spikes()
         self.__calc_firing_rate(num_peaks)
         self.__scatter_spikes()
@@ -135,26 +137,6 @@ class VascOccAnalysis:
             self.frames_after_stim = 1000
             print("Unsuccessful in getting the parameters.")
 
-    def __calc_dff(self, file):
-        data = np.load(file)
-        print(f"Analyzing {file}...")
-        try:
-            dff =  data['F_dff']
-        except KeyError:
-            dff =  caiman_funcs_for_comparison.detrend_df_f_auto(data['A'], data['b'], data['C'],
-                                                                 data['f'], data['YrA'])
-        finally:
-            aprint(f"The shape of the <b>dF/F matrix</b> for file <i>{file}</i> is <yellow>{dff.shape}</yellow>.")
-
-        return dff
-
-    def __calc_dff_batch(self, files):
-        """ Read data from all files """
-        all_data = []
-        for file in files:
-            all_data.append(self.__calc_dff(file))
-        return np.concatenate(all_data)
-
     def __find_spikes(self):
         """ Calculates a dataframe, each row being a cell, with three columns - before, during and after
         the occlusion. The numbers for each cell are normalized for the length of the epoch."""
@@ -206,22 +188,9 @@ class VascOccAnalysis:
         :param after:
         :return:
         """
-        x, y = np.nonzero(self.all_spikes)
-        fig, ax = plt.subplots()
-        downsample_display = 10
-        num_displayed_cells = self.dff.shape[0] // downsample_display
         time = np.linspace(0, self.dff.shape[1]/self.fps, num=self.dff.shape[1], dtype=np.int32)
-        ax.plot(time,
-                (self.dff[:-10:downsample_display] + np.arange(num_displayed_cells)[:, np.newaxis]).T)
-        peakvals = self.dff * self.all_spikes
-        peakvals[peakvals == 0] = np.nan
-        ax.plot(time,
-                (peakvals[:-10:downsample_display] + np.arange(num_displayed_cells)[:, np.newaxis]).T,
-                'r.', linewidth=0.1)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.set_xlabel('Time (seconds)')
-        ax.set_ylabel('Cell ID')
+        fig = scatter_spikes(self.dff, self.all_spikes, time_vec=time)
+        ax = fig.axes[0]
         p = patches.Rectangle((self.frames_before_stim / self.fps, 0), width=self.len_of_epoch_in_frames / self.fps,
                               height=num_displayed_cells,
                               facecolor='red', alpha=0.3, edgecolor='None')
@@ -229,24 +198,21 @@ class VascOccAnalysis:
         plt.savefig('spike_scatter.pdf', transparent=True)
 
     def __rolling_window(self):
-        mean_spike = pd.DataFrame(self.all_spikes.mean(axis=0))
-        mean_spike['x'] = np.arange(mean_spike.shape[0])/self.fps
-        ax = mean_spike.rolling(window=int(self.fps)).mean().plot(x='x')
-        ax.set_xlabel('Time (sec)')
-        ax.set_ylabel('Mean Spike Rate')
-        ax.set_title('Rolling mean (0.91 sec window length)')
-        ax.plot(np.arange(self.frames_before_stim, self.frames_before_stim + self.len_of_epoch_in_frames)/self.fps,
-                np.full(self.len_of_epoch_in_frames, 0.01), 'r')
+        x_axis = np.arange(self.all_spikes.shape[1])/self.fps
+        ax_spikes = plot_mean_vals(self.all_spikes, x_axis=x_axis,
+                                   window=int(self.fps), title='Rolling mean (0.91 sec window length)')
+        ax_spikes.set_xlabel('Time (sec)')
+        ax_spikes.set_ylabel('Mean Spike Rate')
+        ax_spikes.plot(np.arange(self.frames_before_stim, self.frames_before_stim + self.len_of_epoch_in_frames)/self.fps,
+                       np.full(self.len_of_epoch_in_frames, 0.01), 'r')
         plt.savefig('mean_spike_rate.pdf', transparent=True)
 
-        mean_dff = pd.DataFrame(self.dff.mean(axis=0))
-        mean_dff['x'] = mean_spike['x']
-        ax = mean_dff.rolling(window=int(self.fps)).mean().plot(x='x')
-        ax.set_xlabel('Time (sec)')
-        ax.set_ylabel('Mean dF/F')
-        ax.set_title('Rolling mean over dF/F (0.91 sec window length)')
-        ax.plot(np.arange(self.frames_before_stim, self.frames_before_stim + self.len_of_epoch_in_frames)/self.fps,
-                np.full(self.len_of_epoch_in_frames, 0.01), 'r')
+        ax_dff = plot_mean_vals(self.dff, x_axis=x_axis, window=int(self.fps),
+                                title='Rolling mean over dF/F (0.91 sec window length)')
+        ax_dff.set_xlabel('Time (sec)')
+        ax_dff.set_ylabel('Mean dF/F')
+        ax_dff.plot(np.arange(self.frames_before_stim, self.frames_before_stim + self.len_of_epoch_in_frames)/self.fps,
+                    np.full(self.len_of_epoch_in_frames, 0.01), 'r')
         plt.savefig('mean_dff.pdf', transparent=True)
 
     def __per_cell_analysis(self, spike_freq_df):
