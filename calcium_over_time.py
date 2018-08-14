@@ -10,9 +10,9 @@ from pathlib import Path
 import pandas as pd
 import os
 import re
+from collections import defaultdict
 import numpy as np
 from datetime import datetime
-# from os.path import splitext
 import multiprocessing as mp
 import xarray as xr
 import matplotlib.pyplot as plt
@@ -132,10 +132,15 @@ class CalciumAnalysisOverTime:
         """
         print("Found the following NetCDF files:")
         all_nc = self.foldername.rglob('*.nc')
-        self.list_of_fovs = []
+        self.list_of_fovs = defaultdict(list)
         for file in all_nc:
-            self.list_of_fovs.append(xr.open_dataarray(file))
             print(file.name)
+            data = xr.open_dataarray(file)
+            try:
+                day = data.coords['day'].values[0]
+            except KeyError:
+                day = data.attrs['day']
+            self.list_of_fovs[day].append(data)
         self._concat_fovs()
 
     def _concat_fovs(self):
@@ -143,16 +148,21 @@ class CalciumAnalysisOverTime:
         Take the list of FOVs and turn them into a single DataArray. Can also write to disk
         the new DataArray.
         """
-        self.sliced_fluo = xr.concat(self.list_of_fovs, dim='neuron')
-        self.sliced_fluo.attrs['fps'] = self.list_of_fovs[0].attrs['fps']
-        self.sliced_fluo.attrs['stim_window'] = self.list_of_fovs[0].attrs['stim_window']
-        if self.serialize:
-            self.sliced_fluo.to_netcdf(str(self.foldername / Path("all_fovs_dataset.nc")),
-                                    mode='w', format='NETCDF3_64BIT')
+        print("Concatenating all FOVs...")
+        self.sliced_fluo = {}
+        for day, data in self.list_of_fovs.items():
+            print(f"FOVs for day {day}...")
+            self.sliced_fluo[day] = xr.concat(self.list_of_fovs[day], dim='neuron')
+        self.sliced_fluo['fps'] = self.list_of_fovs[0][0].attrs['fps']
+        self.sliced_fluo['stim_window'] = self.list_of_fovs[0][0].attrs['stim_window']
+        # if self.serialize:
+        #     self.sliced_fluo.to_netcdf(str(self.foldername / Path("all_fovs_dataset.nc")),
+        #                             mode='w', format='NETCDF3_64BIT')
 
 
 if __name__ == '__main__':
-    folder = Path.home() / Path(r'data/David/crystal_skull_TAC_180719')
+    # folder = Path.home() / Path(r'data/David/crystal_skull_TAC_180719')
+    folder = Path(r'X:/David/crystal_skull_TAC_180719')
     assert folder.exists()
     res = CalciumAnalysisOverTime(foldername=folder, serialize=True)
     # res.run_batch_of_timepoints()
