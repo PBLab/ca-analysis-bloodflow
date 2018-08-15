@@ -53,7 +53,7 @@ def locate_spikes_peakutils(data, fps=30.03, thresh=0.65):
     return all_spikes
 
 
-def scatter_spikes(raw_data, spike_data, downsample_display=10, time_vec=None) -> matplotlib.Figure:
+def scatter_spikes(raw_data, spike_data, downsample_display=10, time_vec=None):
     """
     Shows a scatter plots of spike locations on each individual fluorescent trace.
     Parameters:
