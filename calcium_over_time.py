@@ -108,7 +108,8 @@ class CalciumAnalysisOverTime:
         for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
             print(f"Parsing {file_fluo}")
             self.list_of_fovs.append(self._analyze_single_fov(file_fluo, file_result, file_analog))
-        self._concat_fovs()
+
+        self.generate_da_per_day()
 
     def _analyze_single_fov(self, fname_fluo, fname_results, fname_analog):
         """ Helper function to go file by file, each with its fluorescence and analog data,
@@ -123,48 +124,58 @@ class CalciumAnalysisOverTime:
             fov.add_metadata_and_serialize()
         return fov
 
-    def load_batch_of_timepoints(self):
+    def generate_da_per_day(self):
         """ 
-        Find all .nc files that were generated from the previous analysis
-        and chain them together into a single list. This list is then concatenated
-        into a single xr.DataArray. The new coordinates order is 
-        (epoch, neuron, time, mouse_id, fov, condition, day).
+        Prase .nc files that were generated from the previous analysis
+        and chain all "DAY_X" DataArrays together into a single list. 
+        This list is then concatenated in to a single DataARray, creating a 
+        large data structure for each experimental day.
+        If we arrived here from "run_batch_of_timepoints()", the data is already
+        present in self.list_of_fovs. Otherwise, we have to manually find the 
+        files using a glob string.
+        Saves all day-data into self.foldername.
         """
-        print("Found the following NetCDF files:")
-        all_nc = self.foldername.rglob('*.nc')
-        self.list_of_fovs = defaultdict(list)
-        for file in all_nc:
-            print(file.name)
-            data = xr.open_dataarray(file)
-            try:
-                day = data.coords['day'].values[0]
-            except KeyError:
-                day = data.attrs['day']
-            self.list_of_fovs[day].append(data)
-        self._concat_fovs()
+        fovs_by_day = defaultdict(list)
+        day_reg = re.compile(r'_DAY.+?(\d+)_')
+        try:  # coming from run_batch_of_timepoints()
+            all_files = self.list_of_fovs
+        except AttributeError:
+            all_files = self.foldername.rglob('*.nc')
 
-    def _concat_fovs(self):
+        for file in all_files:
+            print(file.name)
+            try:
+                day = int(day_reg.findall(file.name)[0])
+            except IndexError:
+                self.day = 99
+            fovs_by_day[day].append(file)
+
+        self._concat_fovs(fovs_by_day)
+
+    def _concat_fovs(self, fovs_by_day: dict):
         """
-        Take the list of FOVs and turn them into a single DataArray. Can also write to disk
-        the new DataArray.
+        Take the list of FOVs and turn them into a single DataArray. Lastly it will
+        write this DataArray to disk.
+        fovs_by_day: Dictionary with its keys being the days of experiment (0, 1, ...) and
+        values as a list of filenames.
         """
         print("Concatenating all FOVs...")
-        self.sliced_fluo = {}
-        for day, data in self.list_of_fovs.items():
-            print(f"FOVs for day {day}...")
-            self.sliced_fluo[day] = xr.concat(self.list_of_fovs[day], dim='neuron')
-        self.sliced_fluo['fps'] = self.list_of_fovs[0][0].attrs['fps']
-        self.sliced_fluo['stim_window'] = self.list_of_fovs[0][0].attrs['stim_window']
-        # if self.serialize:
-        #     self.sliced_fluo.to_netcdf(str(self.foldername / Path("all_fovs_dataset.nc")),
-        #                             mode='w', format='NETCDF3_64BIT')
+        data_per_day = []
+        for day, file in fovs_by_day.items():
+            data_per_day.append(xr.open_dataarray(file))
+            concat = xr.concat(data_per_day, dim='neuron')
+            concat.attrs['fps'] = data_per_day[0].attrs['fps']
+            concat.attrs['stim_window'] = data_per_day[0].attrs['stim_window']
+            concat.attrs['day'] = day
+            concat.to_netcdf(str(self.foldername / f"data_of_day_{day}.nc"), mode='w',
+                             format='NETCDF3_64BIT')
 
 
 if __name__ == '__main__':
+    # folder = Path('/data/David/crystal_skull_TAC_180719')
     # folder = Path.home() / Path(r'data/David/crystal_skull_TAC_180719')
-    folder = Path(r'X:/David/crystal_skull_TAC_180719')
+    folder = Path(r'/pblab/pblab/David')
     assert folder.exists()
     res = CalciumAnalysisOverTime(foldername=folder, serialize=True)
-    # res.run_batch_of_timepoints()
-    res.load_batch_of_timepoints()
-    plt.show(block=False)
+    res.run_batch_of_timepoints()
+    # res.generate_da_per_day(folder)

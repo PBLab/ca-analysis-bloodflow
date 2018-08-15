@@ -40,7 +40,7 @@ class SingleFovParser:
     def add_metadata_and_serialize(self):
         """ 
         Write a full DataArray to disk after parsing the FOV.
-        The new coordinates order is (epoch, neuron, time, mouse_id, fov, condition, day).
+        The new coordinates order is (epoch, neuron, time, mouse_id, fov, condition).
         """
         try:
             _ = next(pathlib.Path(self.metadata.fname).parent\
@@ -48,8 +48,8 @@ class SingleFovParser:
         except StopIteration:
             print("Writing new NetCDF to disk.")
             raw_data = self.fluo_analyzed.data
-            raw_data = raw_data[..., np.newaxis, np.newaxis, np.newaxis, np.newaxis]
-            assert len(raw_data.shape) == 7
+            raw_data = raw_data[..., np.newaxis, np.newaxis, np.newaxis]
+            assert len(raw_data.shape) == 6
             coords = {}
             coords['epoch'] = self.fluo_analyzed['epoch'].values
             coords['neuron'] = self.fluo_analyzed['neuron'].values
@@ -57,7 +57,10 @@ class SingleFovParser:
             coords['mouse_id'] = np.array([self.metadata.mouse_id])
             coords['fov'] = np.array([self.metadata.fov])
             coords['condition'] = np.array([self.metadata.condition])
-            coords['day'] = np.array([self.metadata.day])
-            darr = xr.DataArray(raw_data, coords=coords, dims=coords.keys())
+            metadata = {'day': np.array([self.metadata.day]),
+                        'fps': self.metadata.fps,
+                        'stim_window': self.fluo_analyzed.attrs['stim_window']}
+            darr = xr.DataArray(raw_data, coords=coords, dims=coords.keys(),
+                                attrs=metadata)
             darr.to_netcdf(str(self.metadata.fname)[:-4] + ".nc", mode='w',
                            format='NETCDF3_64BIT')
