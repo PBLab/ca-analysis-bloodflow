@@ -107,8 +107,8 @@ class CalciumAnalysisOverTime:
 
         for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
             print(f"Parsing {file_fluo}")
-            self.list_of_fovs.append(self._analyze_single_fov(file_fluo, file_result, file_analog))
-
+            fov = self._analyze_single_fov(file_fluo, file_result, file_analog)
+            self.list_of_fovs.append(fov.metadata.fname[:-4] + ".nc")
         self.generate_da_per_day()
 
     def _analyze_single_fov(self, fname_fluo, fname_results, fname_analog):
@@ -177,5 +177,5 @@ if __name__ == '__main__':
     folder = Path(r'/pblab/pblab/David')
     assert folder.exists()
     res = CalciumAnalysisOverTime(foldername=folder, serialize=True)
-    res.run_batch_of_timepoints()
-    # res.generate_da_per_day(folder)
+    # res.run_batch_of_timepoints()
+    res.generate_da_per_day()

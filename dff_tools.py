@@ -7,6 +7,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import patches
 from matplotlib import gridspec
+import sklearn.metrics
 
 import caiman_funcs_for_comparison
 
@@ -108,3 +109,24 @@ def plot_mean_vals(data, x_axis=None, window=30, title='Rolling Mean',
     ax.set_title(title)
     return ax
 
+
+def calc_auc(data):
+    """ Return the total area under the curve of all neurons in the data matrix.
+    Uses a simple trapezoidal rule, and subtracts the offset of each cell before 
+    the computation.
+    """
+    summed_auc = 0
+    x = np.arange(data.shape[1])
+    for cell in data:
+        no_offset = cell - cell.min()
+        summed_auc += sklearn.metrics.auc(x, no_offset)
+    return summed_auc
+
+
+def calc_mean_dff(data):
+    """ Return the mean dF/F value of all neurons in the data matrix.
+    Subtracts the offset of each cell before the computation.
+    """
+    min_vec = np.atleast_2d(data.min(axis=1)).T
+    data_no_offset = data - min_vec
+    return data_no_offset.mean()

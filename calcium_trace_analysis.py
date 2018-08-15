@@ -9,12 +9,71 @@ import xarray as xr
 import matplotlib.pyplot as plt
 from typing import List, Tuple, Dict
 from enum import Enum
+import pathlib
+import re
+
+from dff_tools import calc_auc, calc_mean_dff
 
 
 class Condition(Enum):
     HYPER = 'Hyper'
     HYPO = 'Hypo'
 
+@attr.s
+class CalciumReview:
+    """
+    New class to evaluate and analyze calcium data from
+    TAC-like experiments.
+    """
+    folder = attr.ib(validator=instance_of(pathlib.Path))
+    glob = attr.ib(default=r'data_of_day_*.nc')
+    files = attr.ib(init=False)
+    days = attr.ib(init=False)
+    
+    def __attrs_post_init__(self):
+        """ Find all files and parsed days for the experiment """
+        self.files = []
+        all_files = folder.rglob(self.glob)
+        day_reg = re.compile(r'of_day_(\d+).nc')
+        parsed_days = []
+        print("Found the following files:")
+        for file in all_files:
+            print(file)
+            self.files.append(file)
+            parsed_days.append(day_reg.findall(file.name)[0])
+        self.days = np.array(parsed_days)
+
+    def dff_auc_over_time(self, epoch='spont'):
+        """
+        Plot two graphs, showing the AUC of the dF/F graphs, of the HYPO and HYPER cells,
+        for a specific epoch, of all mice, over time.
+        """
+        hypo_data = []
+        hyper_data = []
+        for file in self.files:
+            data = xr.open_dataarray(file)
+            hypo_data.append(calc_auc(np.squeeze(data.sel(condition='Hypo', epoch=epoch))))
+            hyper_data.append(calc_auc(np.squeeze(data.sel(condition='Hyper', epoch=epoch))))
+
+        all_data = pd.DataFrame(dict(hypo=hypo_data, hyper=hyper_data),
+                                index=self.days)
+        all_data.plot(title='AUC Over Time')
+
+    def dff_mean_over_time(self, epoch='spont'):
+        """
+        Plot two graphs, showing the mean dF/F value of the HYPO and HYPER cells,
+        for a specific epoch, of all mice, over time
+        """
+        hypo_data = []
+        hyper_data = []
+        for file in self.files:
+            data = xr.open_dataarray(file)
+            hypo_data.append(calc_mean_dff(np.squeeze(data.sel(condition='Hypo', epoch=epoch))))
+            hyper_data.append(calc_mean_dff(np.squeeze(data.sel(condition='Hyper', epoch=epoch))))
+
+        all_data = pd.DataFrame(dict(hypo=hypo_data, hyper=hyper_data),
+                                index=self.days)
+        all_data.plot(title='Mean dF/F Over Time')
 
 @attr.s(slots=True)
 class CalciumAnalyzer:
@@ -149,3 +208,9 @@ class CalciumAnalyzer:
         except PermissionError:
             print("Couldn't save figure due to a permission error.")
 
+if __name__ == '__main__':
+    folder = pathlib.Path(r'/data/David/crystal_skull_TAC_180719')
+    assert folder.exists()
+    ca = CalciumReview(folder)
+    ca.dff_auc_over_time()
+    plt.show()
