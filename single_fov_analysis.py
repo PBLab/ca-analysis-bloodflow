@@ -39,7 +39,7 @@ class SingleFovParser:
 
     def add_metadata_and_serialize(self):
         """ 
-        Write a full DataArray to disk after parsing the FOV.
+        Write a full DataArray to disk after parsing the FOV, if it doesn't exist yet.
         The new coordinates order is (epoch, neuron, time, mouse_id, fov, condition).
         """
         try:

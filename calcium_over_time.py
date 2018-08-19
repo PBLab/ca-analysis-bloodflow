@@ -108,7 +108,7 @@ class CalciumAnalysisOverTime:
         for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
             print(f"Parsing {file_fluo}")
             fov = self._analyze_single_fov(file_fluo, file_result, file_analog)
-            self.list_of_fovs.append(fov.metadata.fname[:-4] + ".nc")
+            self.list_of_fovs.append(str(fov.metadata.fname)[:-4] + ".nc")
         self.generate_da_per_day()
 
     def _analyze_single_fov(self, fname_fluo, fname_results, fname_analog):
@@ -126,7 +126,7 @@ class CalciumAnalysisOverTime:
 
     def generate_da_per_day(self):
         """ 
-        Prase .nc files that were generated from the previous analysis
+        Parse .nc files that were generated from the previous analysis
         and chain all "DAY_X" DataArrays together into a single list. 
         This list is then concatenated in to a single DataARray, creating a 
         large data structure for each experimental day.
@@ -136,16 +136,16 @@ class CalciumAnalysisOverTime:
         Saves all day-data into self.foldername.
         """
         fovs_by_day = defaultdict(list)
-        day_reg = re.compile(r'_DAY.+?(\d+)_')
+        day_reg = re.compile(r'_DAY_*(\d+)_')
         try:  # coming from run_batch_of_timepoints()
             all_files = self.list_of_fovs
         except AttributeError:
             all_files = self.foldername.rglob('*.nc')
 
         for file in all_files:
-            print(file.name)
+            print(file)
             try:
-                day = int(day_reg.findall(file.name)[0])
+                day = int(day_reg.findall(str(file))[0])
             except IndexError:
                 self.day = 99
             fovs_by_day[day].append(file)
@@ -160,9 +160,9 @@ class CalciumAnalysisOverTime:
         values as a list of filenames.
         """
         print("Concatenating all FOVs...")
-        data_per_day = []
-        for day, file in fovs_by_day.items():
-            data_per_day.append(xr.open_dataarray(file))
+        for day, file_list in fovs_by_day.items():
+            print(f"Concatenating day {day}")
+            data_per_day = [xr.open_dataarray(file) for file in file_list]
             concat = xr.concat(data_per_day, dim='neuron')
             concat.attrs['fps'] = data_per_day[0].attrs['fps']
             concat.attrs['stim_window'] = data_per_day[0].attrs['stim_window']
@@ -172,9 +172,9 @@ class CalciumAnalysisOverTime:
 
 
 if __name__ == '__main__':
-    # folder = Path('/data/David/crystal_skull_TAC_180719')
+    folder = Path('/data/David/crystal_skull_TAC_180719/')
     # folder = Path.home() / Path(r'data/David/crystal_skull_TAC_180719')
-    folder = Path(r'/pblab/pblab/David')
+    # folder = Path(r'/pblab/pblab/David')
     assert folder.exists()
     res = CalciumAnalysisOverTime(foldername=folder, serialize=True)
     # res.run_batch_of_timepoints()
