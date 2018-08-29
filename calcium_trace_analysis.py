@@ -12,6 +12,7 @@ from enum import Enum
 import pathlib
 import re
 
+import dff_tools
 from dff_tools import calc_auc, calc_mean_dff
 
 
@@ -19,20 +20,46 @@ class Condition(Enum):
     HYPER = 'Hyper'
     HYPO = 'Hypo'
 
+
+class AvailableFuncs(Enum):
+    """ Allowed analysis functions that can be used with CalciumReview.
+    The values of the enum variants are names of functions in dff_tools.py """
+    AUC = 'calc_auc'
+    MEAN = 'calc_mean_dff'
+    SPIKERATE = 'calc_mean_spike_rate'
+
+
 @attr.s
 class CalciumReview:
     """
-    New class to evaluate and analyze calcium data from
-    TAC-like experiments.
+    Evaluate and analyze calcium data from TAC-like experiments.
+    The attributes ending with `_data` are pd.DataFrames that
+    contain the result of different function from dff_tools.py. If you wish
+    to add a new function, first make sure that its output is
+    compatible with that of existing functions, then add a new
+    attribute to the class and a new variant to the enum,
+    and finally patch the __attrs_post_init__ method to include this
+    new attribute. Make sure to not change the order of the enum - add
+    the function at the bottom of that list.
     """
     folder = attr.ib(validator=instance_of(pathlib.Path))
     glob = attr.ib(default=r'data_of_day_*.nc')
     files = attr.ib(init=False)
     days = attr.ib(init=False)
+    df_columns = attr.ib(init=False)
+    funcs_dict = attr.ib(init=False)
+    raw_data = attr.ib(init=False)
+    auc_data = attr.ib(init=False)
+    mean_data = attr.ib(init=False)
+    spike_data = attr.ib(init=False)
     
     def __attrs_post_init__(self):
-        """ Find all files and parsed days for the experiment """
+        """
+        Find all files and parsed days for the experiment, and (partially) load them
+        into memory.
+         """
         self.files = []
+        self.raw_data = {}
         all_files = folder.rglob(self.glob)
         day_reg = re.compile(r'of_day_(\d+).nc')
         parsed_days = []
@@ -40,40 +67,65 @@ class CalciumReview:
         for file in all_files:
             print(file)
             self.files.append(file)
-            parsed_days.append(day_reg.findall(file.name)[0])
+            day = int(day_reg.findall(file.name)[0])
+            parsed_days.append(day)
+            self.raw_data[day] = xr.open_dataarray(file)
         self.days = np.array(parsed_days)
 
-    def dff_auc_over_time(self, epoch='spont'):
-        """
-        Plot two graphs, showing the AUC of the dF/F graphs, of the HYPO and HYPER cells,
-        for a specific epoch, of all mice, over time.
-        """
-        hypo_data = []
-        hyper_data = []
-        for file in self.files:
-            data = xr.open_dataarray(file)
-            hypo_data.append(calc_auc(np.squeeze(data.sel(condition='Hypo', epoch=epoch))))
-            hyper_data.append(calc_auc(np.squeeze(data.sel(condition='Hyper', epoch=epoch))))
+        self.df_columns = ['hypo_mean', 'hypo_std', 'hyper_mean', 'hyper_std']
+        self.auc_data = pd.DataFrame(columns=self.df_columns)
+        self.mean_data = pd.DataFrame(columns=self.df_columns)
+        self.spike_data = pd.DataFrame(columns=self.df_columns)
+        # Map the function name to its corresponding DataFrame
+        self.funcs_dict = {key: val for key, val in zip(AvailableFuncs.__members__.values(),
+                                                        [self.auc_data,
+                                                         self.mean_data,
+                                                         self.spike_data])}
 
-        all_data = pd.DataFrame(dict(hypo=hypo_data, hyper=hyper_data),
-                                index=self.days)
-        all_data.plot(title='AUC Over Time')
+    def data_of_day(self, day: int, condition: Condition, epoch='spont'):
+        """ A function used to retrieve the "raw" data of dF/F, in the form of
+        cells x time, to the user. Supply a proper day, condition and epoch and receive a numpy array. """
+        assert type(condition) == Condition
+        try:
+            unselected_data = self.raw_data[day]
+        except KeyError:
+            print(f"The day {day} is invalid. Valid days are {self.days}.")
+        else:
+            return self._filter_da(unselected_data, condition=condition, epoch=epoch)
 
-    def dff_mean_over_time(self, epoch='spont'):
-        """
-        Plot two graphs, showing the mean dF/F value of the HYPO and HYPER cells,
-        for a specific epoch, of all mice, over time
-        """
-        hypo_data = []
-        hyper_data = []
-        for file in self.files:
-            data = xr.open_dataarray(file)
-            hypo_data.append(calc_mean_dff(np.squeeze(data.sel(condition='Hypo', epoch=epoch))))
-            hyper_data.append(calc_mean_dff(np.squeeze(data.sel(condition='Hyper', epoch=epoch))))
+    def apply_analysis_funcs(self, funcs: list, epoch: str):
+        """ Call the list of methods given to save time and memory """
+        for day, raw_datum in self.raw_data.items():
+            print(f"Analyzing day {day}...")
+            selected_hyper = self._filter_da(raw_datum, condition='Hyper', epoch=epoch)
+            selected_hypo = self._filter_da(raw_datum, condition='Hypo', epoch=epoch)
+            for func in funcs:
+                ans_hyper, ans_hyper_std = getattr(dff_tools, func.value)(selected_hyper)
+                ans_hypo, ans_hypo_std = getattr(dff_tools, func.value)(selected_hypo)
+                df_dict = {col: data for col, data in zip(self.df_columns,
+                                                          [ans_hypo, ans_hypo_std, ans_hyper, ans_hyper_std])}
+                self.funcs_dict[func] = self.funcs_dict[func].append(pd.DataFrame(df_dict, index=[day]))
 
-        all_data = pd.DataFrame(dict(hypo=hypo_data, hyper=hyper_data),
-                                index=self.days)
-        all_data.plot(title='Mean dF/F Over Time')
+    @staticmethod
+    def plot_df(df, title):
+        """ Helper method to plot DataFrames """
+        fig, ax = plt.subplots()
+        ax.errorbar(df.index.values, df.hypo_mean, df.hypo_std, c='C0', label='Hypo', fmt='o')
+        ax.errorbar(df.index.values, df.hyper_mean, df.hyper_std, c='C1', label='Hyper', fmt='o')
+        ax.legend()
+        ax.set_xticks(df.index.values)
+        ax.set_xlabel('Days')
+        ax.set_title(title)
+
+    def _filter_da(self, data, condition, epoch):
+        """ Filter a DataArray by the given condition and epoch.
+         Returns a numpy array in the shape of cells x time """
+        selected = data.sel(condition=condition, epoch=epoch, drop=True).values
+        relevant_idx = np.where(np.isfinite(selected))
+        num_of_cells = len(np.unique(relevant_idx[0]))  # first dim is "neuron"
+        selected = selected[relevant_idx].reshape((num_of_cells, -1))
+        return selected
+
 
 @attr.s(slots=True)
 class CalciumAnalyzer:
@@ -209,8 +261,9 @@ class CalciumAnalyzer:
             print("Couldn't save figure due to a permission error.")
 
 if __name__ == '__main__':
-    folder = pathlib.Path(r'/data/David/crystal_skull_TAC_180719')
+    folder = pathlib.Path.home() / pathlib.Path(r'data/David/crystal_skull_TAC_180719')
     assert folder.exists()
     ca = CalciumReview(folder)
-    ca.dff_auc_over_time()
+    ca.apply_analysis_funcs([AvailableFuncs.AUC, AvailableFuncs.MEAN,
+                             AvailableFuncs.SPIKERATE], 'spont')
     plt.show()

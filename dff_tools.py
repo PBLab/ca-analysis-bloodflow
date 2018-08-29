@@ -53,6 +53,22 @@ def locate_spikes_peakutils(data, fps=30.03, thresh=0.65):
     return all_spikes
 
 
+def calc_mean_spike_rate(data, fps=30.03, thresh=0.65):
+    """
+    Find the spikes in the data (using "locate_spikes_peakutils") and count
+    them, to create statistics on their average number.
+    :param data: Raw data, cells x time
+    :param fps: Framerate
+    :param thresh: Peakutils threshold for spikes
+    :return: mean, SEM of spike number for that given matrix.
+    """
+    all_spikes = locate_spikes_peakutils(data, fps, thresh)
+    sum_of_spikes = all_spikes.sum(axis=1)
+    mean_spike_rate = sum_of_spikes.mean()
+    sem_spike_rate = sum_of_spikes.std(ddof=1) / np.sqrt(sum_of_spikes.shape[0])
+    return mean_spike_rate, sem_spike_rate
+
+
 def scatter_spikes(raw_data, spike_data, downsample_display=10, time_vec=None):
     """
     Shows a scatter plots of spike locations on each individual fluorescent trace.
@@ -86,7 +102,7 @@ def scatter_spikes(raw_data, spike_data, downsample_display=10, time_vec=None):
 
 
 def plot_mean_vals(data, x_axis=None, window=30, title='Rolling Mean',
-              ax=None) -> matplotlib.axes.Axes:
+                   ax=None) -> matplotlib.axes.Axes:
     """ 
     Calculate a mean rolling window on the data, after averaging the 0th (cell) axis.
     This can be used to calculate the rolling mean firing rate, if `data` is a 0-1 binary 
@@ -102,7 +118,7 @@ def plot_mean_vals(data, x_axis=None, window=30, title='Rolling Mean',
     if x_axis is None:
         x_axis = np.arange(data.shape[1])
     mean = pd.DataFrame(data.mean(axis=0))
-    mean['x'] = x_ax
+    mean['x'] = x_axis
     ax = mean.rolling(window=window).mean().plot(x='x', ax=ax)
     ax.set_xlabel('Time')
     ax.set_ylabel('Mean rate')
@@ -111,22 +127,24 @@ def plot_mean_vals(data, x_axis=None, window=30, title='Rolling Mean',
 
 
 def calc_auc(data):
-    """ Return the total area under the curve of all neurons in the data matrix.
+    """ Return the mean area under the curve, with its SEM of all neurons in the data matrix.
     Uses a simple trapezoidal rule, and subtracts the offset of each cell before 
     the computation.
     """
-    summed_auc = 0
     x = np.arange(data.shape[1])
+    all_auc = []
     for cell in data:
         no_offset = cell - cell.min()
-        summed_auc += sklearn.metrics.auc(x, no_offset)
-    return summed_auc
+        result = sklearn.metrics.auc(x, no_offset)
+        all_auc.append(result)
+    all_auc = np.array(all_auc)
+    return all_auc.mean(), all_auc.std(ddof=1) / np.sqrt(all_auc.shape[0])
 
 
 def calc_mean_dff(data):
-    """ Return the mean dF/F value of all neurons in the data matrix.
+    """ Return the mean dF/F value, and the SEM of all neurons in the data matrix.
     Subtracts the offset of each cell before the computation.
     """
     min_vec = np.atleast_2d(data.min(axis=1)).T
     data_no_offset = data - min_vec
-    return data_no_offset.mean()
+    return data_no_offset.mean(), data_no_offset.std(ddof=1) / np.sqrt(data_no_offset.shape[0])
