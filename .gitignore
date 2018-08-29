@@ -6,6 +6,8 @@
 *.xlsx
 *.pdf
 *.eps
+*.pyc
 .vscode/
 .idea/*
 __pycache__/*
+.pytest_cache/
