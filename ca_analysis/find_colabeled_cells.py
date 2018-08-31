@@ -88,7 +88,7 @@ class ColabeledCells:
     def _find_cells(self, img, mask):
         """ Detects cell-like shapes in an xy image """
         assert len(img.shape) == 2
-        quantile_val = np.percentile(img, 99.2)
+        quantile_val = np.percentile(img, 98)
         binary_img = np.zeros_like(img)
         binary_img[img > quantile_val] = 1
         label, num_features = scipy.ndimage.label(binary_img)
@@ -128,8 +128,6 @@ class ColabeledCells:
         dist_mat = np.full((min(len(np.unique(func_idx)), len(np.unique(morph_idx))), 3), np.nan)
         dist_idx = 0
         for func_i, morph_i in zip(func_idx, morph_idx):
-            if self.verbose:
-                print(f"dist_idx is {dist_idx}")
             if (func_i not in dist_mat[:, 0]) and (morph_i not in dist_mat[:, 1]):
                 dist_mat[dist_idx, :] = (func_i, morph_i, dist[func_i, morph_i])
                 dist_idx += 1
@@ -148,6 +146,19 @@ class ColabeledCells:
                     dist_mat[dupe_idx, :] = (func_i, morph_i, new_dist)
 
         return dist_mat
+
+    def _show_colabeled_cells(self, min_distances):
+        """ Shows a plot of the correlation image with the colabeled cells """
+        result_data = np.load(self.result_file)
+        crds = result_data['crd']
+        colabeled_cells = [crds[int(idx)]['CoM'][::-1] for idx in min_distances[:, 0]]
+        circles_0 = [plt.Circle(com, self.cell_radius, alpha=0.3, color='green') for com in colabeled_cells]
+        circles_1 = [plt.Circle(com, self.cell_radius, alpha=0.3, color='green') for com in colabeled_cells]
+        fig, ax = plt.subplots(1, 2)
+        ax[0].imshow(self.act_img, cmap='gray')
+        [ax[0].add_artist(circle) for circle in circles_0]
+        ax[1].imshow(self.morph_img, cmap='gray')
+        [ax[1].add_artist(circle) for circle in circles_1]
 
 
 if __name__ == '__main__':
