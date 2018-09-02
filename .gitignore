@@ -7,6 +7,8 @@
 *.pdf
 *.eps
 *.pyc
+*.npz
+*.npy
 .vscode/
 .idea/*
 __pycache__/*

@@ -19,6 +19,7 @@ class AnalogTraceAnalyzer:
 
     Usage:
         AnalogTraceAnalyzer(tif_filename, analog_trace).run()
+    # TODO: ADD SUPPORT FOR COLABELING INDICES
     """
     tif_filename = attr.ib(validator=instance_of(str))  # Timelapse (doesn't need to be separated)
     analog_trace = attr.ib(validator=instance_of(pd.DataFrame))  # .txt file from ScanImage

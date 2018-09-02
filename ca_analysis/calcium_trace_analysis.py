@@ -1,5 +1,6 @@
 """
 __author__ = Hagai Har-Gil
+Many analysis functions for dF/F. Main class is CalciumReview.
 """
 import attr
 from attr.validators import instance_of

@@ -47,20 +47,24 @@ class ColabeledCells:
     def __attrs_post_init__(self):
         assert self.activity_ch != self.morph_ch
         # Divide movie into its channels (supports 2 currently)
-        raw_data = tifffile.imread(str(self.tif))
         try:
             self.num_of_channels = len(tifffile.TiffFile(str(self.tif)).scanimage_metadata\
                 ['FrameData']['SI.hChannels.channelsActive'])
         except TypeError:
             warnings.warn('Not a ScanImage stack.')
             self.num_of_channels = 1
-        self.act_data = raw_data[self.activity_ch.value::self.num_of_channels]
+
+        raw_data = tifffile.imread(str(self.tif))
         self.morph_data = raw_data[self.morph_ch.value::self.num_of_channels]
-        self.act_img = self.act_data.sum(axis=0)
         self.morph_img = self.morph_data.sum(axis=0)
-    
+
+        if self.verbose:
+            self.act_data = raw_data[self.activity_ch.value::self.num_of_channels]
+            self.act_img = self.act_data.sum(axis=0)
+        
     def find_colabeled(self):
-        """ Main method of class. Finds co-labeled cells. """
+        """ Main method of class. Finds co-labeled cells. Returns the number
+        of cells found. """
         if self.verbose:
             self._show_images()
         self.struct_element = self._create_mask(self.cell_radius)
@@ -69,7 +73,9 @@ class ColabeledCells:
         min_distances = self._find_unique_pairs(dist_mat, func_idx, morph_idx)
         if self.verbose:
             self._show_colabeled_cells(min_distances)
-        
+        self._serialize_colabeled(min_distances)
+        return min_distances.shape[0]
+
     def _show_images(self):
         """ Show the summed images of each channel of data """
         fig, ax = plt.subplots(1, 2)
@@ -104,7 +110,9 @@ class ColabeledCells:
         Returns indices of the components that are close to each other. """
 
         # Start by reading the center of mass coordinates of CaImAn components
-        all_crd = np.load(self.result_file)['crd']
+        res_file = np.load(self.result_file)
+        all_crd = res_file['crd']
+        all_crd = all_crd[res_file['idx_components']]  # filters bad components
         centroids_functional = np.array([data['CoM'] for data in all_crd])
         assert centroids_functional.shape[1] == 2  # two columns, x and y
         large_regions = [region for region in regions if region.area > self.cell_radius ** 2]
@@ -159,13 +167,42 @@ class ColabeledCells:
         [ax[0].add_artist(circle) for circle in circles_0]
         ax[1].imshow(self.morph_img, cmap='gray')
         [ax[1].add_artist(circle) for circle in circles_1]
+    
+    def _serialize_colabeled(self, dist):
+        """ Write the cell indices to disk """
+        fname = pathlib.Path(str(self.result_file)[:-11] + "colabeled_idx.npy")
+        try:
+            np.save(fname, dist[:, 0].astype(np.uint32))
+        except PermissionError:
+            warnings.warn(f"Permission error for folder {fname.parent}")
+
+
+def batch_colabeled(foldername: pathlib.Path):
+    """ Batch process all stacks in folder to find and write to disk
+    the indices of the colabeled cells """
+    result_files = foldername.rglob('*results.npz')
+    for file in result_files:
+        name_without_channel = str(file.name)[:-22] + '.tif'
+        try:
+            matching_tif = next(file.parent.glob(name_without_channel))
+        except StopIteration:
+            continue
+        else:
+            cur_pair = (file, matching_tif)
+            colabeled = ColabeledCells(tif=matching_tif, result_file=file,
+                                       activity_ch=TiffChannels.ONE,
+                                       morph_ch=TiffChannels.TWO,
+                                       cell_radius=4).find_colabeled()
+            print(f"File {file} contained {colabeled} colabeled cells.")
 
 
 if __name__ == '__main__':
-    tif = pathlib.Path.home() / pathlib.Path(r'data/Amos/occluder/4th_July18_VIP_Td_SynGCaMP_Occluder/fov1_mag_2p5_256PX_58p28HZ_vasc_occ_00001.tif')
-    result = pathlib.Path.home() / pathlib.Path(r'data/Amos/occluder/4th_July18_VIP_Td_SynGCaMP_Occluder/fov1_mag_2p5_256PX_58p28HZ_vasc_occ_00001_CHANNEL_1_results.npz')
-    c = ColabeledCells(tif=tif, result_file=result,
-                       activity_ch=TiffChannels.ONE, morph_ch=TiffChannels.TWO,
-                       verbose=True, cell_radius=4)
-    c.find_colabeled()
+    # tif = pathlib.Path.home() / pathlib.Path(r'data/Amos/occluder/4th_July18_VIP_Td_SynGCaMP_Occluder/fov1_mag_2p5_256PX_58p28HZ_vasc_occ_00001.tif')
+    # result = pathlib.Path.home() / pathlib.Path(r'data/Amos/occluder/4th_July18_VIP_Td_SynGCaMP_Occluder/fov1_mag_2p5_256PX_58p28HZ_vasc_occ_00001_CHANNEL_1_results.npz')
+    # c = ColabeledCells(tif=tif, result_file=result,
+    #                    activity_ch=TiffChannels.ONE, morph_ch=TiffChannels.TWO,
+    #                    verbose=True, cell_radius=4)
+    # c.find_colabeled()
     plt.show(block=True)
+    folder = pathlib.Path.home() / pathlib.Path(r'data/Amos/occluder/')
+    batch_colabeled(folder)

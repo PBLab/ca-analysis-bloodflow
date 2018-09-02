@@ -12,7 +12,7 @@ import sklearn.metrics
 import caiman_funcs_for_comparison
 
 
-def calc_dff(file):
+def calc_dff(file) -> np.ndarray:
     """ Read the dF/F data from a specific file. If the data doesn't exist,
     caclulate it using CaImAn's function.
     """
@@ -98,7 +98,7 @@ def scatter_spikes(raw_data, spike_data, downsample_display=10, time_vec=None):
     ax.spines['right'].set_visible(False)
     ax.set_xlabel('Time (seconds)')
     ax.set_ylabel('Cell ID')
-    return fig
+    return fig, num_displayed_cells
 
 
 def plot_mean_vals(data, x_axis=None, window=30, title='Rolling Mean',
@@ -114,16 +114,21 @@ def plot_mean_vals(data, x_axis=None, window=30, title='Rolling Mean',
         window (int): size of rolling window in number of array cells.
         title (str): Title of the figure.
         ax (plt.Axis): Axis to plot on. If None - creates a new one.
+    
+    Returns:
+        ax (plt.Axis): Axis that was plotted on.
+        mean (float): The mean value of the entire rolling data.
     """
     if x_axis is None:
         x_axis = np.arange(data.shape[1])
     mean = pd.DataFrame(data.mean(axis=0))
     mean['x'] = x_axis
-    ax = mean.rolling(window=window).mean().plot(x='x', ax=ax)
+    mean_val = mean.rolling(window=window).mean()
+    ax = mean_val.plot(x='x', ax=ax)
     ax.set_xlabel('Time')
     ax.set_ylabel('Mean rate')
     ax.set_title(title)
-    return ax
+    return ax, mean_val[0].mean()
 
 
 def calc_auc(data):
