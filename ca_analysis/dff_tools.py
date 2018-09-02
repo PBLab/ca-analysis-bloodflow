@@ -1,15 +1,21 @@
+import pathlib
+
 import numpy as np
 import pandas as pd
 import xarray as xr
 from ansimarkup import ansiprint as aprint
 import peakutils
 import matplotlib
+import matplotlib.gridspec
 import matplotlib.pyplot as plt
 from matplotlib import patches
 from matplotlib import gridspec
 import sklearn.metrics
+import skimage.draw
+import tifffile
 
 import caiman_funcs_for_comparison
+from find_colabeled_cells import TiffChannels
 
 
 def calc_dff(file) -> np.ndarray:
@@ -153,3 +159,86 @@ def calc_mean_dff(data):
     min_vec = np.atleast_2d(data.min(axis=1)).T
     data_no_offset = data - min_vec
     return data_no_offset.mean(), data_no_offset.std(ddof=1) / np.sqrt(data_no_offset.shape[0])
+
+
+def display_heatmap(data, ax=None, epoch='All cells', downsample_factor=8):
+    """ Show an "image" of the dF/F of all cells """
+    if not ax:
+        _, ax = plt.subplots()
+    downsampled = data[::downsample_factor, ::downsample_factor].copy()
+    top = np.nanpercentile(downsampled, q=70)
+    bot = np.nanpercentile(downsampled, q=30)
+    try:
+        ax.pcolor(downsampled, vmin=downsampled.min(), vmax=downsampled.max())
+    except ValueError:  # emptry array
+        return
+    ax.set_aspect('auto')
+    ax.set_ylabel('Cell ID')
+    ax.set_xlabel('')
+    ax.set_title(f"dF/F Heatmap for epoch {epoch}")
+
+
+def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Path, 
+                                    indices=slice(None), num_to_display=20,
+                                    cell_radius=10, data_channel=TiffChannels.ONE,
+                                    number_of_channels=2):
+    """ 
+    Display the same cell as it fluoresces during the recording time.
+    Parameters:
+    -----------
+        results_file (pathlib.Path): Path to a results.npz file.
+        tif (pathlib.Path): Path to the corresponding raw tiff recording.
+        indices (slice or np.ndarray): List of indices of the relevant cells to look at.
+        num_to_display (int): We usually have too many cells to display them all nicely.
+        cell_radius (int): Number of pixels in the cell's radius.
+        data_channel (Tiffchannels):  The channel containing the functional data.
+        number_of_channels (int): Number of data channels.
+    """
+    res_data = np.load(results_file)
+    relevant_indices = res_data['idx_components'][indices][:num_to_display]
+    coords = res_data['crd'][relevant_indices]
+
+    with tifffile.TiffFile(tif, movie=True) as f:
+        data = f.asarray(slice(data_channel.value, None, number_of_channels))
+        fps = f.scanimage_metadata['FrameData']['SI.hRoiManager.scanFrameRate']
+
+    cell_coms = [coords[idx]['CoM'].astype(np.uint16) for idx in range(len(coords))]
+    shape = data.shape[1:]
+    masks = [skimage.draw.rectangle(cell, extent=cell_radius*2, shape=shape) for cell in cell_coms]
+    cell_data = [data[:, mask[0], mask[1]] for mask in masks]
+    
+    # Start plotting
+    idx_sample_start = np.linspace(start=0, stop=data.shape[0], endpoint=False,
+                                   num=num_to_display, dtype=np.uint64)
+    idx_sample_end = idx_sample_start + np.uint64(5)
+    fig, axes = plt.subplots(len(cell_data), num_to_display)
+    for row_idx, (ax, cell) in enumerate(zip(axes, cell_data)):
+        for col_idx, (frame_idx_start, frame_idx_end) in enumerate(zip(idx_sample_start,
+                                                                       idx_sample_end)):
+            ax[col_idx].imshow(cell[frame_idx_start:frame_idx_end, ...].mean(0), cmap='gray')
+            ax[col_idx].spines['top'].set_visible(False)
+            ax[col_idx].spines['bottom'].set_visible(False)
+            ax[col_idx].spines['left'].set_visible(False)
+            ax[col_idx].spines['right'].set_visible(False)
+            ax[col_idx].set_xticks([])
+            ax[col_idx].set_yticks([])
+            ax[col_idx].set_frame_on(False)
+    # Add labels to row and column at the edge
+    for sample_idx, ax in zip(idx_sample_start, axes[-1, :]):
+        ax.set_xticks([cell_radius])
+        label = f'{sample_idx/fps:.2f}'
+        ax.set_xticklabels([label])
+    
+    for cell_idx, ax in zip(np.arange(1, len(cell_data) + 1), axes[:, 0]):
+        ax.set_yticks([cell_radius])
+        ax.set_yticklabels([cell_idx])
+    
+    fig.suptitle('Cell Excerpts Over Time')
+    fig.subplots_adjust(hspace=0.05, wspace=0.001)
+    fig.text(0.49, 0.05, 'Time (sec)')
+
+if __name__ == '__main__':
+    tif = pathlib.Path.home() / pathlib.Path(r'data/Amos/occluder/4th_July18_VIP_Td_SynGCaMP_Occluder/fov1_mag_2p5_256PX_58p28HZ_vasc_occ_00001.tif')
+    result = pathlib.Path.home() / pathlib.Path(r'data/Amos/occluder/4th_July18_VIP_Td_SynGCaMP_Occluder/fov1_mag_2p5_256PX_58p28HZ_vasc_occ_00001_CHANNEL_1_results.npz')
+    mask = display_cell_excerpts_over_time(result, tif)
+    plt.show(block=True)

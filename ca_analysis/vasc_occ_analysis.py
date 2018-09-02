@@ -24,7 +24,7 @@ colorama.init()
 from ansimarkup import ansiprint as aprint
 
 from analog_trace import AnalogTraceAnalyzer
-from dff_tools import calc_dff, calc_dff_batch, scatter_spikes, plot_mean_vals
+from dff_tools import calc_dff, calc_dff_batch, scatter_spikes, plot_mean_vals, display_heatmap
 
 
 @attr.s(slots=True)
@@ -91,6 +91,9 @@ class VascOccAnalysis:
         self.__scatter_spikes(dff, all_spikes, title)
         self.__rolling_window(dff, all_spikes, title)
         self.__per_cell_analysis(num_peaks, title)
+        if not self.with_analog:
+            display_heatmap(data=dff, epoch=title, downsample_factor=6)
+
         return all_spikes, num_peaks
 
     def __run_with_analog(self):
@@ -231,8 +234,7 @@ class VascOccAnalysis:
         window = int(self.fps)
         fig_title = 'Rolling mean in epoch {epoch} over {over} ({win:.2f} sec window length)'
 
-        ax_spikes, mean_val_spikes = plot_mean_vals(all_spikes, x_axis=x_axis,
-                                                    window=window, 
+        ax_spikes, mean_val_spikes = plot_mean_vals(all_spikes, x_axis=x_axis, window=window, 
                                                     title=fig_title.format(epoch=epoch, 
                                                                            over='spike rate', 
                                                                            win=window/self.fps))
@@ -273,26 +275,15 @@ class VascOccAnalysis:
 
         fig = plt.figure()
         gs = gridspec.GridSpec(8, 1)
-        self.__display_heatmap(plt.subplot(gs[:4, :]), dff)
         self.__display_analog_traces(plt.subplot(gs[4, :]),
                                      plt.subplot(gs[5, :]),
                                      plt.subplot(gs[6, :]),
                                      analog_data)
+        display_heatmap(ax=plt.subplot(gs[:4, :]), data=dff)
         self.__display_occluder(plt.subplot(gs[7, :]), dff.shape[1])
         fig.suptitle(f'{file}')
         fig.tight_layout()
         plt.show()
-
-    def __display_heatmap(self, ax, dff):
-        """ Show an "image" of the dF/F of all cells """
-        downsampled = dff[::8, ::8].copy()
-        try:
-            ax.pcolor(downsampled, vmin=downsampled.min(), vmax=downsampled.max(), cmap='gray')
-        except ValueError:  # emptry array
-            return
-        ax.set_aspect('auto')
-        ax.set_ylabel('Cell ID')
-        ax.set_xlabel('')
 
     def __display_analog_traces(self, ax_puff, ax_jux, ax_run, data: AnalogTraceAnalyzer):
         """ Show three Axes of the analog data """
@@ -315,6 +306,7 @@ class VascOccAnalysis:
         occluder[self.frames_before_stim:self.frames_before_stim + self.len_of_epoch_in_frames] = 1
         ax.plot(occluder)
         ax.invert_yaxis()
+
         ax.set_ylabel('Artery occlusion')
         ax.set_xlabel('')
 

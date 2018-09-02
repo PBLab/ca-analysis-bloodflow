@@ -54,13 +54,16 @@ class ColabeledCells:
             warnings.warn('Not a ScanImage stack.')
             self.num_of_channels = 1
 
-        raw_data = tifffile.imread(str(self.tif))
-        self.morph_data = raw_data[self.morph_ch.value::self.num_of_channels]
+        with tifffile.TiffFile(str(self.tif), movie=True) as f:
+            if self.verbose:
+                raw_data = f.asarray()
+                self.morph_data = raw_data[self.morph_ch.value::self.num_of_channels]
+                self.act_data = raw_data[self.activity_ch.value::self.num_of_channels]
+                self.act_img = self.act_data.sum(axis=0)
+            else:
+                sl = slice(self.morph_ch.value, None, self.num_of_channels)
+                self.morph_data = f.asarray(sl)
         self.morph_img = self.morph_data.sum(axis=0)
-
-        if self.verbose:
-            self.act_data = raw_data[self.activity_ch.value::self.num_of_channels]
-            self.act_img = self.act_data.sum(axis=0)
         
     def find_colabeled(self):
         """ Main method of class. Finds co-labeled cells. Returns the number
