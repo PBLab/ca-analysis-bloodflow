@@ -13,6 +13,7 @@ from matplotlib import gridspec
 import sklearn.metrics
 import skimage.draw
 import tifffile
+import scipy.ndimage
 
 import caiman_funcs_for_comparison
 from find_colabeled_cells import TiffChannels
@@ -166,10 +167,12 @@ def display_heatmap(data, ax=None, epoch='All cells', downsample_factor=8):
     if not ax:
         _, ax = plt.subplots()
     downsampled = data[::downsample_factor, ::downsample_factor].copy()
-    top = np.nanpercentile(downsampled, q=70)
-    bot = np.nanpercentile(downsampled, q=30)
+    # filtered = scipy.ndimage.gaussian_filter1d(downsampled, sigma=2, axis=1)
+    filtered = downsampled
+    top = np.nanpercentile(filtered, q=95)
+    bot = np.nanpercentile(filtered, q=5)
     try:
-        ax.pcolor(downsampled, vmin=downsampled.min(), vmax=downsampled.max())
+        ax.pcolor(filtered, vmin=bot, vmax=top)
     except ValueError:  # emptry array
         return
     ax.set_aspect('auto')
@@ -211,7 +214,8 @@ def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Pat
     idx_sample_start = np.linspace(start=0, stop=data.shape[0], endpoint=False,
                                    num=num_to_display, dtype=np.uint64)
     idx_sample_end = idx_sample_start + np.uint64(5)
-    fig, axes = plt.subplots(len(cell_data), num_to_display)
+    w, h = matplotlib.figure.figaspect(1.)
+    fig, axes = plt.subplots(len(cell_data), num_to_display, figsize=(w, h))
     for row_idx, (ax, cell) in enumerate(zip(axes, cell_data)):
         for col_idx, (frame_idx_start, frame_idx_end) in enumerate(zip(idx_sample_start,
                                                                        idx_sample_end)):
@@ -226,7 +230,7 @@ def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Pat
     # Add labels to row and column at the edge
     for sample_idx, ax in zip(idx_sample_start, axes[-1, :]):
         ax.set_xticks([cell_radius])
-        label = f'{sample_idx/fps:.2f}'
+        label = f'{sample_idx/fps:.1f}'
         ax.set_xticklabels([label])
     
     for cell_idx, ax in zip(np.arange(1, len(cell_data) + 1), axes[:, 0]):
@@ -234,8 +238,11 @@ def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Pat
         ax.set_yticklabels([cell_idx])
     
     fig.suptitle('Cell Excerpts Over Time')
-    fig.subplots_adjust(hspace=0.05, wspace=0.001)
-    fig.text(0.49, 0.05, 'Time (sec)')
+    fig.subplots_adjust(hspace=0.05, wspace=0.05)
+    fig.text(0.5, 0.05, 'Time (sec)', horizontalalignment='center')
+    fig.text(0.07, 0.5, 'Cell ID', verticalalignment='center', rotation='vertical')
+    fig.savefig('mosaic.png', frameon=False, transparent=True)
+
 
 if __name__ == '__main__':
     tif = pathlib.Path.home() / pathlib.Path(r'data/Amos/occluder/4th_July18_VIP_Td_SynGCaMP_Occluder/fov1_mag_2p5_256PX_58p28HZ_vasc_occ_00001.tif')

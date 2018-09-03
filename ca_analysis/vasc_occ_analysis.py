@@ -35,7 +35,7 @@ class VascOccAnalysis:
     to the system, occlusion of an artery in this case. The class needs to know how many frames
     were acquired before the perturbation and how many were acquired during. It also needs 
     other metadata, such as the framerate, and the IDs of cells that the CaImAn pipeline
-    accidently labeled as active components. If the data contains analog recordings as well,
+    accidentally labeled as active components. If the data contains analog recordings as well,
     of the mouse's movements and air puffs, they will be integrated into the analysis as well.
     If one of the data channels contains co-labeling with a different, usually morphological, 
     fluorophore indicating the cell type, it will be integrated as well.
