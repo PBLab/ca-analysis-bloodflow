@@ -9,6 +9,7 @@
 *.pyc
 *.npz
 *.npy
+*.png
 .vscode/
 .idea/*
 __pycache__/*

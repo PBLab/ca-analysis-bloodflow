@@ -92,7 +92,9 @@ class VascOccAnalysis:
         self.__rolling_window(dff, all_spikes, title)
         self.__per_cell_analysis(num_peaks, title)
         if not self.with_analog:
-            display_heatmap(data=dff, epoch=title, downsample_factor=6)
+            downsample_factor = 1 if title == 'Labeled' else 6
+            display_heatmap(data=dff, epoch=title, downsample_factor=downsample_factor, 
+                            fps=self.fps)
 
         return all_spikes, num_peaks
 
@@ -208,7 +210,10 @@ class VascOccAnalysis:
             aprint("<yellow>Failed during the p-value calculation.</yellow>")
         else:
             print(res)
-            print(f"P-values ({epoch}):", psturng(np.abs(res.meandiffs / res.std_pairs), len(res.groupsunique), res.df_total))
+            print(f"P-values ({epoch}, number of cells: {split_data.shape[0] // 3}):", 
+                  psturng(np.abs(res.meandiffs / res.std_pairs), 
+                          len(res.groupsunique), 
+                          res.df_total))
         finally:
             print(split_data.mean(level=1))
 
@@ -279,7 +284,7 @@ class VascOccAnalysis:
                                      plt.subplot(gs[5, :]),
                                      plt.subplot(gs[6, :]),
                                      analog_data)
-        display_heatmap(ax=plt.subplot(gs[:4, :]), data=dff)
+        display_heatmap(ax=plt.subplot(gs[:4, :]), data=dff, fps=self.fps)
         self.__display_occluder(plt.subplot(gs[7, :]), dff.shape[1])
         fig.suptitle(f'{file}')
         fig.tight_layout()
@@ -330,10 +335,10 @@ class VascOccAnalysis:
 
 
 if __name__ == '__main__':
-    folder = '/export/home/pblab/data/Amos/occluder/'
+    folder = '/export/home/pblab/data/David/vip_td_gcamp_vasc_occ_280818'
     glob = r'*results.npz'
-    frames_before_stim = 14000
-    len_of_epoch_in_frames = 14000
+    frames_before_stim = 4000
+    len_of_epoch_in_frames = 4000
     fps = 58.2
     invalid_cells = []
     with_analog = False

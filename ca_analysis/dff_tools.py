@@ -162,22 +162,23 @@ def calc_mean_dff(data):
     return data_no_offset.mean(), data_no_offset.std(ddof=1) / np.sqrt(data_no_offset.shape[0])
 
 
-def display_heatmap(data, ax=None, epoch='All cells', downsample_factor=8):
+def display_heatmap(data, ax=None, epoch='All cells', downsample_factor=8,
+                    fps=30.03):
     """ Show an "image" of the dF/F of all cells """
     if not ax:
         _, ax = plt.subplots()
     downsampled = data[::downsample_factor, ::downsample_factor].copy()
-    # filtered = scipy.ndimage.gaussian_filter1d(downsampled, sigma=2, axis=1)
-    filtered = downsampled
-    top = np.nanpercentile(filtered, q=95)
-    bot = np.nanpercentile(filtered, q=5)
+    top = np.nanpercentile(downsampled, q=95)
+    bot = np.nanpercentile(downsampled, q=5)
     try:
-        ax.pcolor(filtered, vmin=bot, vmax=top)
+        xaxis = np.arange(downsampled.shape[1]) * downsample_factor / fps
+        yaxis = np.arange(downsampled.shape[0])
+        ax.pcolor(xaxis, yaxis, downsampled, vmin=bot, vmax=top)
     except ValueError:  # emptry array
         return
     ax.set_aspect('auto')
     ax.set_ylabel('Cell ID')
-    ax.set_xlabel('')
+    ax.set_xlabel('Time (sec)')
     ax.set_title(f"dF/F Heatmap for epoch {epoch}")
 
 
