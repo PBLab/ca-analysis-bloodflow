@@ -22,6 +22,7 @@ from datetime import datetime
 import colorama
 colorama.init()
 from ansimarkup import ansiprint as aprint
+import copy
 
 from analog_trace import AnalogTraceAnalyzer
 from dff_tools import calc_dff, calc_dff_batch, scatter_spikes, plot_mean_vals, display_heatmap
@@ -68,7 +69,7 @@ class VascOccAnalysis:
         self.__get_params()
         if self.with_analog:
             self.__run_with_analog()
-            self.dff = self.sliced_fluo.loc['all'].values
+            self.dff = self.sliced_fluo.loc['spont'].values
         elif self.with_colabeling:
             self.dff, self.colabel_idx = self.__load_colabeled_data()
         else:
@@ -102,7 +103,7 @@ class VascOccAnalysis:
         """ Helper function to run sequentially all needed analysis of dF/F + Analog data """
         list_of_sliced_fluo = []  # we have to compare each file with its analog data, individually
         for idx, row in self.data_files.iterrows():
-            dff = self.__calc_dff(row['caiman'])
+            dff = calc_dff((row['caiman']))
             analog_data = pd.read_table(row['analog'], header=None, 
                                         names=['stimulus', 'run'], index_col=False)
             occ_metadata = self.OccMetadata(self.frames_before_stim, self.len_of_epoch_in_frames,
@@ -114,8 +115,11 @@ class VascOccAnalysis:
                                                 timestamps=self.timestamps,
                                                 occluder=True, occ_metadata=occ_metadata)
             analog_trace.run()
+            copied_trace = copy.deepcopy(analog_trace)  # for some reason,
+            # multiplying the trace by the dff changes analog_trace. To overcome
+            # this weird issue we're copying it.
             list_of_sliced_fluo.append(analog_trace * dff)  # overloaded __mul__
-            self.__visualize_occ_with_analog_data(row['tif'], dff, analog_trace)
+            self.__visualize_occ_with_analog_data(row['tif'], dff, copied_trace)
         self.sliced_fluo = xr.concat(list_of_sliced_fluo, dim='neuron')
 
     def __find_all_files(self):
@@ -284,7 +288,7 @@ class VascOccAnalysis:
                                      plt.subplot(gs[5, :]),
                                      plt.subplot(gs[6, :]),
                                      analog_data)
-        display_heatmap(ax=plt.subplot(gs[:4, :]), data=dff, fps=self.fps)
+        display_heatmap(ax=plt.subplot(gs[:4, :]), data=dff, fps=self.fps, downsample_factor=1)
         self.__display_occluder(plt.subplot(gs[7, :]), dff.shape[1])
         fig.suptitle(f'{file}')
         fig.tight_layout()
@@ -296,20 +300,26 @@ class VascOccAnalysis:
         ax_puff.invert_yaxis()
         ax_puff.set_ylabel('Direct air puff')
         ax_puff.set_xlabel('')
+        ax_puff.set_xticks([])
         ax_jux.plot(data.juxta_vec)
         ax_jux.invert_yaxis()
         ax_jux.set_ylabel('Juxtaposed puff')
         ax_jux.set_xlabel('')
+        ax_jux.set_xticks([])
         ax_run.plot(data.run_vec)
         ax_run.invert_yaxis()
         ax_run.set_ylabel('Run times')
         ax_run.set_xlabel('')
+        ax_run.set_xticks([])
 
     def __display_occluder(self, ax, data_length):
         """ Show the occluder timings """
         occluder = np.zeros((data_length))
         occluder[self.frames_before_stim:self.frames_before_stim + self.len_of_epoch_in_frames] = 1
-        ax.plot(occluder)
+        time = np.arange(data_length) / self.fps
+        ax.plot(time, occluder)
+        ax.get_xaxis().set_ticks_position('top')
+
         ax.invert_yaxis()
 
         ax.set_ylabel('Artery occlusion')
@@ -340,8 +350,8 @@ if __name__ == '__main__':
     frames_before_stim = 4000
     len_of_epoch_in_frames = 4000
     fps = 58.2
-    invalid_cells = []
-    with_analog = False
+    invalid_cells: list = []
+    with_analog = True
     num_of_channels = 2
     with_colabeling = True
     vasc = VascOccAnalysis(foldername=folder, glob=glob,

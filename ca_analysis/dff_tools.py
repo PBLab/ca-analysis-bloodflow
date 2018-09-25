@@ -187,7 +187,8 @@ def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Pat
                                     cell_radius=10, data_channel=TiffChannels.ONE,
                                     number_of_channels=2):
     """ 
-    Display the same cell as it fluoresces during the recording time.
+    Display cells as they fluoresce during the recording time, each cell in its
+    own row, over time.
     Parameters:
     -----------
         results_file (pathlib.Path): Path to a results.npz file.
@@ -245,8 +246,44 @@ def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Pat
     fig.savefig('mosaic.png', frameon=False, transparent=True)
 
 
+def draw_rois_over_cells(fname: pathlib.Path):
+    """ 
+    Draw ROIs around cells in the FOV, and mark their number (ID).
+    Parameters:
+        fname (pathlib.Path): Original TIF filename.
+    """
+    assert fname.exists()
+    try:
+        results_file = next(fname.parent.glob(fname.name[:-4] + '*results.npz'))
+    except StopIteration:
+        print("Results file not found. Exiting.")
+        return
+    
+    full_dict = np.load(results_file)
+    rel_crds = full_dict['crd'][full_dict['idx_components']]
+    fig, ax_img = plt.subplots()
+    print("Reading TIF")
+    data = tifffile.imread(str(fname)).mean(0)
+    ax_img.imshow(data, cmap='gray')
+    colors = [f'C{idx}' for idx in range(10)]
+    for idx, item in enumerate(rel_crds):
+        cur_coor = item['coordinates']
+        # assert bounding box size
+        bbox_x = np.abs(item['bbox'][0] - item['bbox'][2])
+        bbox_y = np.abs(item['bbox'][1] - item['bbox'][3])
+        if bbox_x * bbox_y == 0.:
+            continue
+        # Drop nans and draw
+        cur_coor = cur_coor[~np.isnan(cur_coor)].reshape((-1, 2))
+        ax_img.plot(cur_coor[:, 0], cur_coor[:, 1], colors[idx % 10])
+        min_c, max_c = cur_coor[:, 0].max(), cur_coor[:, 1].max()
+        ax_img.text(min_c, max_c, str(idx+1), color='w')
+
+
 if __name__ == '__main__':
     tif = pathlib.Path.home() / pathlib.Path(r'data/Amos/occluder/4th_July18_VIP_Td_SynGCaMP_Occluder/fov1_mag_2p5_256PX_58p28HZ_vasc_occ_00001.tif')
     result = pathlib.Path.home() / pathlib.Path(r'data/Amos/occluder/4th_July18_VIP_Td_SynGCaMP_Occluder/fov1_mag_2p5_256PX_58p28HZ_vasc_occ_00001_CHANNEL_1_results.npz')
-    mask = display_cell_excerpts_over_time(result, tif)
+    tif = pathlib.Path.home() / pathlib.Path(r'data/David/vip_td_gcamp_vasc_occ_280818/fov_1_mag_2p5_256Px_60Hz_00001.tif')
+    # mask = display_cell_excerpts_over_time(result, tif)
+    draw_rois_over_cells(tif)
     plt.show(block=True)

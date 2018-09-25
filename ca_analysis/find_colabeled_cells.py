@@ -170,6 +170,7 @@ class ColabeledCells:
         [ax[0].add_artist(circle) for circle in circles_0]
         ax[1].imshow(self.morph_img, cmap='gray')
         [ax[1].add_artist(circle) for circle in circles_1]
+        fig.savefig(str(self.tif)[:-4] + '.pdf', transparent=True)
     
     def _serialize_colabeled(self, dist):
         """ Write the cell indices to disk """
@@ -180,7 +181,7 @@ class ColabeledCells:
             warnings.warn(f"Permission error for folder {fname.parent}")
 
 
-def batch_colabeled(foldername: pathlib.Path):
+def batch_colabeled(foldername: pathlib.Path, verbose=False):
     """ Batch process all stacks in folder to find and write to disk
     the indices of the colabeled cells """
     result_files = foldername.rglob('*results.npz')
@@ -195,7 +196,7 @@ def batch_colabeled(foldername: pathlib.Path):
             colabeled = ColabeledCells(tif=matching_tif, result_file=file,
                                        activity_ch=TiffChannels.ONE,
                                        morph_ch=TiffChannels.TWO,
-                                       cell_radius=4).find_colabeled()
+                                       cell_radius=4, verbose=verbose).find_colabeled()
             print(f"File {file} contained {colabeled} colabeled cells.")
 
 
@@ -208,4 +209,4 @@ if __name__ == '__main__':
     # c.find_colabeled()
     plt.show(block=True)
     folder = pathlib.Path.home() / pathlib.Path(r'data/David/vip_td_gcamp_vasc_occ_280818')
-    batch_colabeled(folder)
+    batch_colabeled(folder, verbose=True)

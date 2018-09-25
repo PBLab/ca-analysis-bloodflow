@@ -70,7 +70,7 @@ class AnalogTraceAnalyzer:
         that were real stimuli and juxta peaks
         :return: Two numpy arrays with the stimulus and juxta peak indices
         """
-        diffs_stim = np.where(self.analog_trace.stimulus > 4.8)[0]
+        diffs_stim = np.where(self.analog_trace.stimulus > 4)[0]
         if len(diffs_stim) > 0:
             diffs_stim_con = np.concatenate((np.atleast_1d(diffs_stim[0]), diffs_stim))
             idx_true_stim = np.concatenate((np.atleast_1d(diffs_stim[0]),
@@ -205,7 +205,7 @@ class AnalogTraceAnalyzer:
         Multiplying an AnalogTrace with a numpy array containing the fluorescent trace results
         in an xarray containing the sliced data. The numpy array will start from zero.
         :param other: np.ndarray
-        :return:
+        :return xr.DataArray:
         """
         assert isinstance(other, np.ndarray)
 
@@ -238,7 +238,6 @@ class AnalogTraceAnalyzer:
             all_data.append(prod)
 
         all_coords[-1] = 'all'  # last item is ''
-        # all_data = all_data[:-1]  # last item is None
 
         da = xr.DataArray(np.zeros((len(all_coords), other.shape[0], other.shape[1])),
                           coords=[('epoch', all_coords), ('neuron', coords_of_neurons),
