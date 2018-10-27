@@ -69,9 +69,12 @@ class VascOccAnalysis:
         self.__get_params()
         if self.with_analog:
             self.__run_with_analog()
-            self.dff = self.sliced_fluo.loc['spont'].values
+            self.dff = self.sliced_fluo.loc['all'].values
+            if self.with_colabeling:
+                self.colabel_idx = self.__load_colabeled_idx()
         elif self.with_colabeling:
-            self.dff, self.colabel_idx = self.__load_colabeled_data()
+            self.dff = self.__load_dff()
+            self.colabel_idx = self.__load_colabeled_idx()
         else:
             self.dff = calc_dff_batch(self.data_files['caiman'])
         
@@ -342,6 +345,30 @@ class VascOccAnalysis:
         self.colabel_idx = np.array(list(itertools.chain.from_iterable(self.colabel_idx)))
         assert self.colabel_idx.max() <= self.dff.shape[0]
         return self.dff, self.colabel_idx
+
+    def __load_dff(self):
+        """ Loads the dF/F data from all found files """
+        self.colabel_idx = []
+        for _, row in self.data_files.iterrows():
+            cur_data = np.load(row.caiman)['F_dff']
+            cur_idx = np.load(row.colabeled)
+            cur_idx += num_of_cells
+            self.colabel_idx.append(cur_idx)
+            num_of_cells += cur_data.shape[0]
+
+        self.colabeled_idx = np.array(list(itertools.chain.from_iterable(self.colabel_idx)))
+        return self.colabel_idx
+
+        
+        self.dff = np.concatenate(self.dff)
+        return self.dff
+    
+    def __load_colabeled_idx(self):
+        """ Loads the indices of the colabeled cells from all found files """
+        self.colabel_idx = []
+        num_of_cells = 0
+        for _, row in self.data_files.iterrows():
+            cur_data = np.load(row.caiman)['F_dff']
 
 
 if __name__ == '__main__':
