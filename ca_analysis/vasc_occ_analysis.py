@@ -149,7 +149,7 @@ class VascOccAnalysis:
             try:
                 colabeled_file = next(file.parent.glob(cur_file + '*_colabeled*.npy'))
             except StopIteration:
-                print(f"No corresponding colabeled channel found for file {cur_file}.")
+                print(f"No corresponding colabeled channel found for file {cur_file}. Did you run 'batch_colabeled'?")
                 colabeled_file = ''
 
             self.data_files = self.data_files.append(pd.DataFrame([[str(file), raw_tif, analog_file, colabeled_file]],
@@ -345,7 +345,7 @@ class VascOccAnalysis:
 
 
 if __name__ == '__main__':
-    folder = '/export/home/pblab/data/David/vip_td_gcamp_vasc_occ_280818'
+    folder = '/export/home/pblab/data/David/vip_td_gcamp_270818_muscle_only'
     glob = r'*results.npz'
     frames_before_stim = 4000
     len_of_epoch_in_frames = 4000

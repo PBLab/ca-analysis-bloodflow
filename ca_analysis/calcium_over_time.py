@@ -189,9 +189,9 @@ class CalciumAnalysisOverTime:
 
 if __name__ == '__main__':
     # folder = Path('/data/David/crystal_skull_TAC_180719/')
-    folder = Path.home() / Path(r'data/David/crystal_skull_TAC_180719')
+    folder = Path.home() / Path(r'data/David/THY_1_GCaMP_BEFOREAFTER_TAC_290517/747_HYPER_DAY_0__EXP_STIM')
     # folder = Path(r'/pblab/pblab/David')
     assert folder.exists()
     res = CalciumAnalysisOverTime(foldername=folder, serialize=True)
-    # res.run_batch_of_timepoints()
-    res.generate_da_per_day()
+    res.run_batch_of_timepoints()
+    # res.generate_da_per_day()

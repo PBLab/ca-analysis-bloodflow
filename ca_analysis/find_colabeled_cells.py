@@ -115,7 +115,8 @@ class ColabeledCells:
         # Start by reading the center of mass coordinates of CaImAn components
         res_file = np.load(self.result_file)
         all_crd = res_file['crd']
-        all_crd = all_crd[res_file['idx_components']]  # filters bad components
+        if res_file['idx_components']:  # newer .npz files are already "filtered" and so this line isn't needed
+            all_crd = all_crd[res_file['idx_components']]  # filters bad components
         centroids_functional = np.array([data['CoM'] for data in all_crd])
         assert centroids_functional.shape[1] == 2  # two columns, x and y
         large_regions = [region for region in regions if region.area > self.cell_radius ** 2]
@@ -208,5 +209,5 @@ if __name__ == '__main__':
     #                    verbose=True, cell_radius=4)
     # c.find_colabeled()
     plt.show(block=True)
-    folder = pathlib.Path.home() / pathlib.Path(r'data/David/vip_td_gcamp_vasc_occ_280818')
+    folder = pathlib.Path.home() / pathlib.Path(r'data/David/vip_td_gcamp_270818_muscle_only')
     batch_colabeled(folder, verbose=True)
