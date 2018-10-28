@@ -75,7 +75,7 @@ class CalciumAnalysisOverTime:
                 print(f"File {file} has no analog counterpart.")
                 continue
             try:
-                result_file = next(self.foldername.rglob(f'{str(file.name)[:-4]}*CHANNEL*results.npz'))
+                result_file = next(self.foldername.rglob(f'{str(file.name)[:-4]}*results.npz'))
             except StopIteration:
                 print(f"File {file} has no result.npz couterpart.")
                 continue
@@ -189,7 +189,7 @@ class CalciumAnalysisOverTime:
 
 if __name__ == '__main__':
     # folder = Path('/data/David/crystal_skull_TAC_180719/')
-    folder = Path.home() / Path(r'data/David/THY_1_GCaMP_BEFOREAFTER_TAC_290517/747_HYPER_DAY_0__EXP_STIM')
+    folder = Path.home() / Path(r'data/Amit_QNAP/Calcium_FXS/x10')
     # folder = Path(r'/pblab/pblab/David')
     assert folder.exists()
     res = CalciumAnalysisOverTime(foldername=folder, serialize=True)
