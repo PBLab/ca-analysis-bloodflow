@@ -85,7 +85,6 @@ class VascOccAnalysis:
             dff_labeled = self.dff[self.colabel_idx]
             all_spikes_labeled, peaks_labeled = self.__run_extra_analysis(dff_labeled, 'Labeled')
             all_spikes_unlabeled, peaks_unlabeled = self.__run_extra_analysis(dff_unlabeled, 'Unlabeled')
-
         
     def __run_extra_analysis(self, dff, title: str='All cells'):
         """ Wrapper method to run several consecutive analysis scripts
@@ -328,38 +327,12 @@ class VascOccAnalysis:
         ax.set_ylabel('Artery occlusion')
         ax.set_xlabel('')
 
-    def __load_colabeled_data(self):
-        """ Load data from file and find the indices of the colabeled cells in it. """
+    def __load_dff(self):
+        """ Loads the dF/F data from all found files """
         self.dff = []
-        self.colabel_idx = []
-        num_of_cells = 0
         for _, row in self.data_files.iterrows():
             cur_data = np.load(row.caiman)['F_dff']
             self.dff.append(cur_data)
-            cur_idx = np.load(row.colabeled)
-            cur_idx += num_of_cells
-            self.colabel_idx.append(cur_idx)
-            num_of_cells += cur_data.shape[0]
-        
-        self.dff = np.concatenate(self.dff)
-        self.colabel_idx = np.array(list(itertools.chain.from_iterable(self.colabel_idx)))
-        assert self.colabel_idx.max() <= self.dff.shape[0]
-        return self.dff, self.colabel_idx
-
-    def __load_dff(self):
-        """ Loads the dF/F data from all found files """
-        self.colabel_idx = []
-        for _, row in self.data_files.iterrows():
-            cur_data = np.load(row.caiman)['F_dff']
-            cur_idx = np.load(row.colabeled)
-            cur_idx += num_of_cells
-            self.colabel_idx.append(cur_idx)
-            num_of_cells += cur_data.shape[0]
-
-        self.colabeled_idx = np.array(list(itertools.chain.from_iterable(self.colabel_idx)))
-        return self.colabel_idx
-
-        
         self.dff = np.concatenate(self.dff)
         return self.dff
     
@@ -369,6 +342,13 @@ class VascOccAnalysis:
         num_of_cells = 0
         for _, row in self.data_files.iterrows():
             cur_data = np.load(row.caiman)['F_dff']
+            cur_idx = np.load(row.colabeled)
+            cur_idx += num_of_cells
+            self.colabel_idx.append(cur_idx)
+            num_of_cells += cur_data.shape[0]
+
+        self.colabel_idx = np.array(list(itertools.chain.from_iterable(self.colabel_idx)))
+        return self.colabel_idx
 
 
 if __name__ == '__main__':
