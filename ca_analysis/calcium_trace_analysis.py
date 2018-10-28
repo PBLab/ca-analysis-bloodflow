@@ -18,8 +18,8 @@ from dff_tools import calc_auc, calc_mean_dff
 
 
 class Condition(Enum):
-    HYPER = 'Hyper'
-    HYPO = 'Hypo'
+    HYPER = 'HYPER'
+    HYPO = 'HYPO'
 
 
 class AvailableFuncs(Enum):

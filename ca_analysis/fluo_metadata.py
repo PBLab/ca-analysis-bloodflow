@@ -19,6 +19,7 @@ class FluoMetadata:
     id_reg = attr.ib(default=r'(^\d+?)_', validator=instance_of(str))
     day_reg = attr.ib(default=r'_DAY.+?(\d+)_', validator=instance_of(str))
     fov_reg = attr.ib(default=r'_FOV.+?(\d+)_', validator=instance_of(str))
+    cond_reg = attr.ib(default=r'[0-9]_(HYP.+?)_DAY', validator=instance_of(str))
     timestamps = attr.ib(init=False)
     mouse_id = attr.ib(init=False)
     condition = attr.ib(init=False)
@@ -30,7 +31,7 @@ class FluoMetadata:
         self.mouse_id = str(self._get_meta_using_regex(self.id_reg))
         self.day = int(self._get_meta_using_regex(self.day_reg))
         self.fov = int(self._get_meta_using_regex(self.fov_reg))
-        self.condition = 'Hyper' if 'HYPER' in str(self.fname) else 'Hypo'
+        self.condition = str(self._get_meta_using_regex(self.cond_reg)).capitalize()
     
     def _get_si_meta(self):
         """ Parse the metadata from the SI-generated file """
@@ -38,7 +39,11 @@ class FluoMetadata:
             with tifffile.TiffFile(str(self.fname)) as f:
                 si_meta = f.scanimage_metadata
                 self.fps = si_meta['FrameData']['SI.hRoiManager.scanFrameRate']
-                self.num_of_channels = len(si_meta['FrameData']['SI.hChannels.channelsActive'])
+                active_chans = si_meta['FrameData']['SI.hChannels.channelsActive']
+                if type(active_chans) is int:
+                    self.num_of_channels = 1
+                else:
+                    self.num_of_channels = len(active_chans)
                 self.start_time = str(datetime.fromtimestamp(os.path.getmtime(str(self.fname))))
                 length = len(f.pages)//self.num_of_channels
                 self.timestamps = np.arange(length)/self.fps

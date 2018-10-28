@@ -86,7 +86,7 @@ class CalciumAnalysisOverTime:
 
         print("\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C")
 
-    def run_batch_of_timepoints(self):
+    def run_batch_of_timepoints(self, **regex):
         """
         Main method to analyze all FOVs in all timepoints in all experiments. 
         Generally used for TAC experiments, which have multiple FOVs per mouse, and 
@@ -100,6 +100,9 @@ class CalciumAnalysisOverTime:
         disk (only if it doesn't exist yet, and only if self.serialize is True) to make future processing faster.
         Finally, it will take all created DataArrays and concatenate them into a single DataArray, 
         that can also be written to disk using the "serialize" attribute.
+        The `**regex` kwargs-like parameter is used to manually set the regex
+        that will parse the metadata from the file name. The default regexes are 
+        described above. Valid keys are "id_reg", "fov_reg" and "day_reg".
         """
         self.list_of_fovs = []
         self._find_all_relevant_files()
@@ -107,15 +110,15 @@ class CalciumAnalysisOverTime:
 
         for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
             print(f"Parsing {file_fluo}")
-            fov = self._analyze_single_fov(file_fluo, file_result, file_analog)
+            fov = self._analyze_single_fov(file_fluo, file_result, file_analog, **regex)
             self.list_of_fovs.append(str(fov.metadata.fname)[:-4] + ".nc")
         self.generate_da_per_day()
 
-    def _analyze_single_fov(self, fname_fluo, fname_results, fname_analog):
+    def _analyze_single_fov(self, fname_fluo, fname_results, fname_analog, **regex):
         """ Helper function to go file by file, each with its fluorescence and analog data,
         and run the single FOV parsing on it """
 
-        meta = FluoMetadata(fname_fluo)
+        meta = FluoMetadata(fname_fluo, **regex)
         meta.get_metadata()
         fov = SingleFovParser(analog_fname=fname_analog, fluo_fname=fname_results,
                               metadata=meta)
@@ -193,5 +196,7 @@ if __name__ == '__main__':
     # folder = Path(r'/pblab/pblab/David')
     assert folder.exists()
     res = CalciumAnalysisOverTime(foldername=folder, serialize=True)
-    res.run_batch_of_timepoints()
+    regex = {'id_reg': r'_(\d+?)_X10',
+             'cond_reg': r'^([a-zA-Z]+?)_[0-9]'}
+    res.run_batch_of_timepoints(**regex)
     # res.generate_da_per_day()
