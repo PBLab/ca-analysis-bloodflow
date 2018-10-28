@@ -150,7 +150,7 @@ class CalciumAnalysisOverTime:
             try:
                 day = int(day_reg.findall(str(file))[0])
             except IndexError:
-                day = 99
+                day = 999
             fovs_by_day[day].append(file)
 
         self._concat_fovs(fovs_by_day)
@@ -191,9 +191,7 @@ class CalciumAnalysisOverTime:
 
 
 if __name__ == '__main__':
-    # folder = Path('/data/David/crystal_skull_TAC_180719/')
-    folder = Path.home() / Path(r'data/Amit_QNAP/Calcium_FXS/x10')
-    # folder = Path(r'/pblab/pblab/David')
+    folder = Path.home() / Path(r'data/Amit_QNAP/Calcium_FXS/x10/FXS_614')
     assert folder.exists()
     res = CalciumAnalysisOverTime(foldername=folder, serialize=True)
     regex = {'id_reg': r'_(\d+?)_X10',

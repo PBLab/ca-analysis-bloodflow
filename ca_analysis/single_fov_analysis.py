@@ -63,4 +63,4 @@ class SingleFovParser:
             darr = xr.DataArray(raw_data, coords=coords, dims=coords.keys(),
                                 attrs=metadata)
             darr.to_netcdf(str(self.metadata.fname)[:-4] + ".nc", mode='w',
-                           format='NETCDF3_64BIT')
+                           format='NETCDF3_64BIT')  # TODO: compress

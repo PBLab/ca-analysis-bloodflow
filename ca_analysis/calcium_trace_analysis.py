@@ -12,6 +12,7 @@ from typing import List, Tuple, Dict
 from enum import Enum
 import pathlib
 import re
+import itertools
 
 import dff_tools
 from dff_tools import calc_auc, calc_mean_dff
@@ -47,6 +48,7 @@ class CalciumReview:
     glob = attr.ib(default=r'data_of_day_*.nc')
     files = attr.ib(init=False)
     days = attr.ib(init=False)
+    conditions = attr.ib(init=False)
     df_columns = attr.ib(init=False)
     funcs_dict = attr.ib(init=False)
     raw_data = attr.ib(init=False)
@@ -72,8 +74,9 @@ class CalciumReview:
             parsed_days.append(day)
             self.raw_data[day] = xr.open_dataarray(file)
         self.days = np.array(parsed_days)
-
-        self.df_columns = ['hypo_mean', 'hypo_std', 'hyper_mean', 'hyper_std']
+        stats = ['_mean', '_std']
+        self.conditions = self.raw_data[day].condition.values.tolist()
+        self.df_columns = [''.join(x) for x in itertools.product(self.conditions, stats)]
         self.auc_data = pd.DataFrame(columns=self.df_columns)
         self.mean_data = pd.DataFrame(columns=self.df_columns)
         self.spike_data = pd.DataFrame(columns=self.df_columns)
@@ -98,8 +101,8 @@ class CalciumReview:
         """ Call the list of methods given to save time and memory """
         for day, raw_datum in self.raw_data.items():
             print(f"Analyzing day {day}...")
-            selected_hyper = self._filter_da(raw_datum, condition='Hyper', epoch=epoch)
-            selected_hypo = self._filter_da(raw_datum, condition='Hypo', epoch=epoch)
+            selected_hyper = self._filter_da(raw_datum, condition=self.conditions[0], epoch=epoch)
+            selected_hypo = self._filter_da(raw_datum, condition=self.conditions[1], epoch=epoch)
             for func in funcs:
                 ans_hyper, ans_hyper_std = getattr(dff_tools, func.value)(selected_hyper)
                 ans_hypo, ans_hypo_std = getattr(dff_tools, func.value)(selected_hypo)
@@ -262,7 +265,7 @@ class CalciumAnalyzer:
             print("Couldn't save figure due to a permission error.")
 
 if __name__ == '__main__':
-    folder = pathlib.Path.home() / pathlib.Path(r'data/David/crystal_skull_TAC_180719')
+    folder = pathlib.Path.home() / pathlib.Path(r'data/Amit_QNAP/Calcium_FXS/x10')
     assert folder.exists()
     ca = CalciumReview(folder)
     ca.apply_analysis_funcs([AvailableFuncs.AUC, AvailableFuncs.MEAN,

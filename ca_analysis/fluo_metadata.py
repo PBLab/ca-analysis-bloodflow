@@ -31,7 +31,7 @@ class FluoMetadata:
         self.mouse_id = str(self._get_meta_using_regex(self.id_reg))
         self.day = int(self._get_meta_using_regex(self.day_reg))
         self.fov = int(self._get_meta_using_regex(self.fov_reg))
-        self.condition = str(self._get_meta_using_regex(self.cond_reg)).capitalize()
+        self.condition = str(self._get_meta_using_regex(self.cond_reg)).upper()
     
     def _get_si_meta(self):
         """ Parse the metadata from the SI-generated file """
