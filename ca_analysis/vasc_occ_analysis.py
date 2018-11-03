@@ -23,6 +23,7 @@ import colorama
 colorama.init()
 from ansimarkup import ansiprint as aprint
 import copy
+import warnings
 
 from analog_trace import AnalogTraceAnalyzer
 from dff_tools import calc_dff, calc_dff_batch, scatter_spikes, plot_mean_vals, display_heatmap
@@ -50,6 +51,7 @@ class VascOccAnalysis:
     with_analog = attr.ib(default=False, validator=instance_of(bool))
     with_colabeling = attr.ib(default=False, validator=instance_of(bool))
     num_of_channels = attr.ib(default=2, validator=instance_of(int))
+    display_each_fov = attr.ib(default=True, validator=instance_of(bool))
     dff = attr.ib(init=False)
     split_data = attr.ib(init=False)
     all_spikes = attr.ib(init=False)
@@ -121,7 +123,8 @@ class VascOccAnalysis:
             # multiplying the trace by the dff changes analog_trace. To overcome
             # this weird issue we're copying it.
             list_of_sliced_fluo.append(analog_trace * dff)  # overloaded __mul__
-            self.__visualize_occ_with_analog_data(row['tif'], dff, copied_trace)
+            if self.display_each_fov:
+                self.__visualize_occ_with_analog_data(row['tif'], dff, copied_trace)
         self.sliced_fluo = xr.concat(list_of_sliced_fluo, dim='neuron')
 
     def __find_all_files(self):
@@ -172,6 +175,7 @@ class VascOccAnalysis:
                 self.timestamps = np.arange(num_of_frames)
                 print("Done without errors!")
         except TypeError:
+            warnings.warn('Failed to parse ScanImage metadata')
             self.start_time = None
             self.timestamps = None
             self.frames_after_stim = 1000
@@ -183,7 +187,7 @@ class VascOccAnalysis:
         idx_section1 = []
         idx_section2 = []
         idx_section3 = []
-        thresh = 0.75
+        thresh = 0.85
         min_dist = int(self.fps)
         all_spikes = np.zeros_like(dff)
         after_stim = self.frames_before_stim + self.len_of_epoch_in_frames
@@ -352,22 +356,24 @@ class VascOccAnalysis:
 
 
 if __name__ == '__main__':
-    folder = '/export/home/pblab/data/David/vip_td_gcamp_270818_muscle_only'
-    glob = r'*results.npz'
-    frames_before_stim = 4000
-    len_of_epoch_in_frames = 4000
+    folder = '/export/home/pblab/data/David/Vascular occluder_ALL/Thy_1_gcampF_vasc_occ_311018/right_hemi_(cca_left_with_vascular_occ)/'
+    glob = r'f*results.npz'
+    frames_before_stim = 17484
+    len_of_epoch_in_frames = 7000
     fps = 58.2
     invalid_cells: list = []
     with_analog = True
     num_of_channels = 2
-    with_colabeling = True
+    with_colabeling = False
+    display_each_fov = False
     vasc = VascOccAnalysis(foldername=folder, glob=glob,
                            frames_before_stim=frames_before_stim,
                            len_of_epoch_in_frames=len_of_epoch_in_frames, 
                            fps=fps, invalid_cells=invalid_cells, 
                            with_analog=with_analog, 
                            num_of_channels=num_of_channels,
-                           with_colabeling=with_colabeling)
+                           with_colabeling=with_colabeling,
+                           display_each_fov=display_each_fov)
     vasc.run()
     plt.show(block=True)
 

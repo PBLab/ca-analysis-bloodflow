@@ -60,20 +60,18 @@ def locate_spikes_peakutils(data, fps=30.03, thresh=0.65):
     return all_spikes
 
 
-def calc_mean_spike_rate(data, fps=30.03, thresh=0.65):
+def calc_mean_spike_num(data, fps=30.03, thresh=0.65):
     """
     Find the spikes in the data (using "locate_spikes_peakutils") and count
     them, to create statistics on their average number.
     :param data: Raw data, cells x time
     :param fps: Framerate
     :param thresh: Peakutils threshold for spikes
-    :return: mean, SEM of spike number for that given matrix.
+    :return: Number of spikes for each neuron
     """
     all_spikes = locate_spikes_peakutils(data, fps, thresh)
     sum_of_spikes = all_spikes.sum(axis=1)
-    mean_spike_rate = sum_of_spikes.mean()
-    sem_spike_rate = sum_of_spikes.std(ddof=1) / np.sqrt(sum_of_spikes.shape[0])
-    return mean_spike_rate, sem_spike_rate
+    return sum_of_spikes
 
 
 def scatter_spikes(raw_data, spike_data, downsample_display=10, time_vec=None):
@@ -93,13 +91,14 @@ def scatter_spikes(raw_data, spike_data, downsample_display=10, time_vec=None):
     x, y = np.nonzero(spike_data)
     fig, ax = plt.subplots()
     downsample_display = 10
-    num_displayed_cells = raw_data.shape[0] // downsample_display
+    downsampled_data = raw_data[::downsample_display]
+    num_displayed_cells = downsampled_data.shape[0]
     ax.plot(time_vec,
-            (raw_data[:-10:downsample_display] + np.arange(num_displayed_cells)[:, np.newaxis]).T)
+            (downsampled_data + np.arange(num_displayed_cells)[:, np.newaxis]).T)
     peakvals = raw_data * spike_data
     peakvals[peakvals == 0] = np.nan
     ax.plot(time_vec,
-            (peakvals[:-10:downsample_display] + np.arange(num_displayed_cells)[:, np.newaxis]).T,
+            (peakvals[::downsample_display] + np.arange(num_displayed_cells)[:, np.newaxis]).T,
             'r.', linewidth=0.1)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -139,7 +138,7 @@ def plot_mean_vals(data, x_axis=None, window=30, title='Rolling Mean',
 
 
 def calc_auc(data):
-    """ Return the mean area under the curve, with its SEM of all neurons in the data matrix.
+    """ Return the area under the curve of all neurons in the data matrix.
     Uses a simple trapezoidal rule, and subtracts the offset of each cell before 
     the computation.
     """
@@ -150,8 +149,7 @@ def calc_auc(data):
         result = sklearn.metrics.auc(x, no_offset)
         all_auc.append(result)
     all_auc = np.array(all_auc)
-    return all_auc.mean(), all_auc.std(ddof=1) / np.sqrt(all_auc.shape[0])
-
+    return all_auc
 
 def calc_mean_dff(data):
     """ Return the mean dF/F value, and the SEM of all neurons in the data matrix.
@@ -159,7 +157,7 @@ def calc_mean_dff(data):
     """
     min_vec = np.atleast_2d(data.min(axis=1)).T
     data_no_offset = data - min_vec
-    return data_no_offset.mean(), data_no_offset.std(ddof=1) / np.sqrt(data_no_offset.shape[0])
+    return data_no_offset.mean(1)
 
 
 def display_heatmap(data, ax=None, epoch='All cells', downsample_factor=8,
