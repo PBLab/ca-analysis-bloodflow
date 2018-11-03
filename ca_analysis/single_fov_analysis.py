@@ -25,6 +25,8 @@ class SingleFovParser:
         """ Main method to parse a single duo of analog and fluorescent data """
         self.all_fluo_results = np.load(str(self.fluo_fname))
         self.fluo_trace = self.all_fluo_results['F_dff']
+        if not self.fluo_trace:  # no cells detected
+            self.fluo_trace = np.array([])
         analog_data = pd.read_table(self.analog_fname, header=None,
                                     names=['stimulus', 'run'], index_col=False)
         self.analog_analyzed = AnalogTraceAnalyzer(tif_filename=str(self.analog_fname), 
@@ -34,6 +36,7 @@ class SingleFovParser:
                                                    start_time=self.metadata.start_time,
                                                    timestamps=self.metadata.timestamps)
         self.analog_analyzed.run()
+        print(self.fluo_trace.shape)
         if self.fluo_trace.shape[0] != 0:
             self.fluo_analyzed = self.analog_analyzed * self.fluo_trace
 

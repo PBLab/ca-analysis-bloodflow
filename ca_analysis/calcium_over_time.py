@@ -22,7 +22,7 @@ from analog_trace import AnalogTraceAnalyzer
 from trace_converter import RawTraceConverter, ConversionMethod
 import caiman_funcs_for_comparison
 from single_fov_analysis import SingleFovParser
-from calcium_trace_analysis import CalciumAnalyzer, Condition
+from calcium_trace_analysis import Condition
 
 
 class Epoch(Enum):
@@ -79,10 +79,13 @@ class CalciumAnalysisOverTime:
             except StopIteration:
                 print(f"File {file} has no result.npz couterpart.")
                 continue
-            print(f"Found triplet of files:\nfluo: {file},\nanalog: {analog_file}\nresults: {result_file}")
-            self.fluo_files.append(file)
-            self.analog_files.append(analog_file)
-            self.result_files.append(result_file)
+            try:
+                fov_analysis_file = next(self.foldername.rglob(f'{str(file.name)[:-4]}*.nc'))
+            except StopIteration:  # FOV wasn't already analyzed
+                print(f"Found triplet of files:\nfluo: {file},\nanalog: {analog_file}\nresults: {result_file}")
+                self.fluo_files.append(file)
+                self.analog_files.append(analog_file)
+                self.result_files.append(result_file)
 
         print("\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C")
 
@@ -91,7 +94,7 @@ class CalciumAnalysisOverTime:
         Main method to analyze all FOVs in all timepoints in all experiments. 
         Generally used for TAC experiments, which have multiple FOVs per mouse, and 
         an experiment design which spans multiple days.
-        The script expects a filename containing the following "fields":
+        The script expects a filename containing the following "fself.fov_analysis_files.append(None)ields":
             Mouse ID (digits at the beginning of filename)
             Either 'HYPER' or 'HYPO'
             'DAY_0/1/n'
@@ -191,10 +194,10 @@ class CalciumAnalysisOverTime:
 
 
 if __name__ == '__main__':
-    folder = Path.home() / Path(r'data/Amit_QNAP/Calcium_FXS/x10/FXS_614')
+    folder = Path.home() / Path(r'data/David/NEW_crystal_skull_TAC_161018')
     assert folder.exists()
     res = CalciumAnalysisOverTime(foldername=folder, serialize=True)
-    regex = {'id_reg': r'_(\d+?)_X10',
-             'cond_reg': r'^([a-zA-Z]+?)_[0-9]'}
-    res.run_batch_of_timepoints(**regex)
+    # regex = {'id_reg': r'_(\d+?)_X10',
+    #          'cond_reg': r'^([a-zA-Z]+?)_[0-9]'}
+    res.run_batch_of_timepoints()
     # res.generate_da_per_day()
