@@ -138,7 +138,7 @@ def plot_mean_vals(data, x_axis=None, window=30, title='Rolling Mean',
 
 
 def calc_auc(data):
-    """ Return the area under the curve of all neurons in the data matrix.
+    """ Return the normalized area under the curve of all neurons in the data matrix.
     Uses a simple trapezoidal rule, and subtracts the offset of each cell before 
     the computation.
     """
@@ -147,7 +147,7 @@ def calc_auc(data):
     for cell in data:
         no_offset = cell - cell.min()
         result = sklearn.metrics.auc(x, no_offset)
-        all_auc.append(result)
+        all_auc.append(result / data.shape[1])
     all_auc = np.array(all_auc)
     return all_auc
 

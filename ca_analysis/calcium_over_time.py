@@ -172,7 +172,12 @@ class CalciumAnalysisOverTime:
                 next(self.foldername.glob(fname_to_save + str(day) + '.nc'))
             except StopIteration:   #.nc file doesn't exist
                 print(f"Concatenating day {day}")
-                data_per_day = [xr.open_dataarray(file).load() for file in file_list]
+                data_per_day = []
+                for file in file_list:
+                    try:
+                        data_per_day.append(xr.open_dataarray(file).load())
+                    except FileNotFoundError:
+                        pass
                 concat = xr.concat(data_per_day, dim='neuron')
                 concat.attrs['fps'] = self._get_metadata(data_per_day, 'fps', 30)
                 concat.attrs['stim_window'] = self._get_metadata(data_per_day, 'stim_window', 1.5)
@@ -199,5 +204,5 @@ if __name__ == '__main__':
     res = CalciumAnalysisOverTime(foldername=folder, serialize=True)
     # regex = {'id_reg': r'_(\d+?)_X10',
     #          'cond_reg': r'^([a-zA-Z]+?)_[0-9]'}
-    res.run_batch_of_timepoints()
-    # res.generate_da_per_day()
+    # res.run_batch_of_timepoints()
+    res.generate_da_per_day()

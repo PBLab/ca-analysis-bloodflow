@@ -136,11 +136,11 @@ class CalciumReview:
 
 
 if __name__ == '__main__':
-    folder = pathlib.Path.home() / pathlib.Path(r'data/Amit_QNAP/Calcium_FXS/x10')
+    folder = pathlib.Path.home() / pathlib.Path(r'data/David/crystal_skull_TAC_180719')
     assert folder.exists()
     ca = CalciumReview(folder)
     analysis_methods = [AvailableFuncs.AUC, AvailableFuncs.MEAN,
                         AvailableFuncs.SPIKERATE]
-    epoch = 'stim'
+    epoch = 'spont'
     ca.apply_analysis_funcs(analysis_methods, epoch)
     plt.show()

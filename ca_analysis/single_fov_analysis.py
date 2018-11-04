@@ -25,8 +25,11 @@ class SingleFovParser:
         """ Main method to parse a single duo of analog and fluorescent data """
         self.all_fluo_results = np.load(str(self.fluo_fname))
         self.fluo_trace = self.all_fluo_results['F_dff']
-        if not self.fluo_trace:  # no cells detected
-            self.fluo_trace = np.array([])
+        try:
+            if not self.fluo_trace:  # no cells detected
+                self.fluo_trace = np.array([])
+        except ValueError:
+            pass
         analog_data = pd.read_table(self.analog_fname, header=None,
                                     names=['stimulus', 'run'], index_col=False)
         self.analog_analyzed = AnalogTraceAnalyzer(tif_filename=str(self.analog_fname), 
@@ -36,9 +39,10 @@ class SingleFovParser:
                                                    start_time=self.metadata.start_time,
                                                    timestamps=self.metadata.timestamps)
         self.analog_analyzed.run()
-        print(self.fluo_trace.shape)
         if self.fluo_trace.shape[0] != 0:
             self.fluo_analyzed = self.analog_analyzed * self.fluo_trace
+        else:
+            self.fluo_analyzed = None
 
     def add_metadata_and_serialize(self):
         """ 
@@ -49,8 +53,12 @@ class SingleFovParser:
             _ = next(pathlib.Path(self.metadata.fname).parent\
                 .glob(str(self.metadata.fname.name)[:-4] + '.nc'))
         except StopIteration:
+            try:
+                raw_data = self.fluo_analyzed.data
+            except AttributeError:
+                print("No fluorescent data in this FOV.")
+                return
             print("Writing new NetCDF to disk.")
-            raw_data = self.fluo_analyzed.data
             raw_data = raw_data[..., np.newaxis, np.newaxis, np.newaxis]
             assert len(raw_data.shape) == 6
             coords = {}
