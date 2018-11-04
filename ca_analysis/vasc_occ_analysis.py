@@ -70,10 +70,8 @@ class VascOccAnalysis:
         self.__find_all_files()
         self.__get_params()
         if self.with_analog:
-            self.__run_with_analog()
+            self.__run_with_analog()  # colabeling check is inside there
             self.dff = self.sliced_fluo.loc['all'].values
-            if self.with_colabeling:
-                self.colabel_idx = self.__load_colabeled_idx()
         elif self.with_colabeling:
             self.dff = self.__load_dff()
             self.colabel_idx = self.__load_colabeled_idx()
@@ -112,7 +110,6 @@ class VascOccAnalysis:
                                         names=['stimulus', 'run'], index_col=False)
             occ_metadata = self.OccMetadata(self.frames_before_stim, self.len_of_epoch_in_frames,
                                             self.frames_after_stim)
-            # TODO: ADD SUPPORT FOR COLABELING WITH ANALOG DATA
             analog_trace = AnalogTraceAnalyzer(row['caiman'], analog_data, framerate=self.fps,
                                                 num_of_channels=self.num_of_channels,
                                                 start_time=self.start_time,
@@ -126,6 +123,19 @@ class VascOccAnalysis:
             if self.display_each_fov:
                 self.__visualize_occ_with_analog_data(row['tif'], dff, copied_trace)
         self.sliced_fluo = xr.concat(list_of_sliced_fluo, dim='neuron')
+        if self.with_colabeling:
+            self.colabel_idx = self.__load_colabeled_idx()
+        if self.serialize:
+            self._serialize_results(row['tif'].parent)
+    
+    def _serialize_results(self, foldername):
+        """ Write to disk the generated concatenated DataArray """
+        self.sliced_fluo.attrs['fps'] = self.fps
+        if self.with_colabeling:
+            self.sliced_fluo.attrs['colabeled'] = self.colabeled_idx
+            
+        self.sliced_fluo.to_netcdf(str(foldername) + 'concat_all_data.nc', mode='w',
+                format='NETCDF3_64BIT')  # TODO: compress
 
     def __find_all_files(self):
         """

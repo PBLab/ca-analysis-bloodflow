@@ -11,6 +11,7 @@ import pandas as pd
 import os
 import re
 from collections import defaultdict
+import itertools
 import numpy as np
 from datetime import datetime
 import multiprocessing as mp
@@ -48,13 +49,16 @@ class CalciumAnalysisOverTime:
     """ A replacement\refactoring for AnalyzeCalciumOverTime.
     Usage: run the "run_batch_of_timepoints" method, which will go over all FOVs
     that were recorded in this experiment.
+    The "file_glob" variable is a list of glob strings in that folder. The simplest
+    case is ['*.tif'], but it allows you to parse files from different folders inside
+    one main folder by specifying the folder name in the glob string.
     If serialize is True, it will write to disk each FOV's DataArray, as well
     as the concatenated DataArray to make future processing faster.
     If you've already serialized your data, use "load_batch_of_timepoints" to continue
     the downstream analysis of your files.
     """
-    foldername = attr.ib(validator=instance_of(Path))
-    file_glob = attr.ib(default='*.tif', validator=instance_of(str))
+    results_folder = attr.ib(validator=instance_of(Path))
+    folder_globs = attr.ib(default={Path('.'): '*.tif'}, validator=instance_of(dict))
     serialize = attr.ib(default=False, validator=instance_of(bool))
     fluo_files = attr.ib(init=False)
     result_files = attr.ib(init=False)
@@ -66,26 +70,27 @@ class CalciumAnalysisOverTime:
         self.fluo_files = []
         self.analog_files = []
         self.result_files = []
-        for file in self.foldername.rglob(self.file_glob):
-            if 'CHANNEL' in str(file):
-                pass
-            try:
-                analog_file = next(self.foldername.rglob(f'{str(file.name)[:-4]}*analog.txt'))
-            except StopIteration:
-                print(f"File {file} has no analog counterpart.")
-                continue
-            try:
-                result_file = next(self.foldername.rglob(f'{str(file.name)[:-4]}*results.npz'))
-            except StopIteration:
-                print(f"File {file} has no result.npz couterpart.")
-                continue
-            try:
-                fov_analysis_file = next(self.foldername.rglob(f'{str(file.name)[:-4]}*.nc'))
-            except StopIteration:  # FOV wasn't already analyzed
-                print(f"Found triplet of files:\nfluo: {file},\nanalog: {analog_file}\nresults: {result_file}")
-                self.fluo_files.append(file)
-                self.analog_files.append(analog_file)
-                self.result_files.append(result_file)
+        for folder, globstr in self.folder_globs.items():
+            for file in folder.rglob(globstr):
+                if 'CHANNEL' in str(file):
+                    pass
+                try:
+                    analog_file = next(folder.rglob(f'{str(file.name)[:-4]}*analog.txt'))
+                except StopIteration:
+                    print(f"File {file} has no analog counterpart.")
+                    continue
+                try:
+                    result_file = next(folder.rglob(f'{str(file.name)[:-4]}*results.npz'))
+                except StopIteration:
+                    print(f"File {file} has no result.npz couterpart.")
+                    continue
+                try:
+                    fov_analysis_file = next(folder.rglob(f'{str(file.name)[:-4]}*.nc'))
+                except StopIteration:  # FOV wasn't already analyzed
+                    print(f"Found triplet of files:\nfluo: {file},\nanalog: {analog_file}\nresults: {result_file}")
+                    self.fluo_files.append(file)
+                    self.analog_files.append(analog_file)
+                    self.result_files.append(result_file)
 
         print("\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C")
 
@@ -130,7 +135,7 @@ class CalciumAnalysisOverTime:
             fov.add_metadata_and_serialize()
         return fov
 
-    def generate_da_per_day(self):
+    def generate_da_per_day(self, globstr='*FOV*.nc'):
         """ 
         Parse .nc files that were generated from the previous analysis
         and chain all "DAY_X" DataArrays together into a single list. 
@@ -138,15 +143,17 @@ class CalciumAnalysisOverTime:
         large data structure for each experimental day.
         If we arrived here from "run_batch_of_timepoints()", the data is already
         present in self.list_of_fovs. Otherwise, we have to manually find the 
-        files using a glob string.
-        Saves all day-data into self.foldername.
+        files using a default glob string that runs on each folder in
+        self.folder_globs.
+        Saves all day-data into self.results_folder.
         """
         fovs_by_day = defaultdict(list)
         day_reg = re.compile(r'_DAY_*(\d+)_')
         try:  # coming from run_batch_of_timepoints()
             all_files = self.list_of_fovs
         except AttributeError:
-            all_files = self.foldername.rglob('*FOV*.nc')
+            all_files = [folder.rglob(globstr) for folder in self.folder_globs]
+            all_files = itertools.chain(*all_files)
 
         for file in all_files:
             print(file)
@@ -169,7 +176,7 @@ class CalciumAnalysisOverTime:
         fname_to_save = 'data_of_day_'
         for day, file_list in fovs_by_day.items():
             try:
-                next(self.foldername.glob(fname_to_save + str(day) + '.nc'))
+                next(self.results_folder.glob(fname_to_save + str(day) + '.nc'))
             except StopIteration:   #.nc file doesn't exist
                 print(f"Concatenating day {day}")
                 data_per_day = []
@@ -182,7 +189,7 @@ class CalciumAnalysisOverTime:
                 concat.attrs['fps'] = self._get_metadata(data_per_day, 'fps', 30)
                 concat.attrs['stim_window'] = self._get_metadata(data_per_day, 'stim_window', 1.5)
                 concat.attrs['day'] = day
-                concat.to_netcdf(str(self.foldername / f"{fname_to_save + str(day)}.nc"), mode='w',
+                concat.to_netcdf(str(self.results_folder / f"{fname_to_save + str(day)}.nc"), mode='w',
                                 format='NETCDF3_64BIT')
 
     def _get_metadata(self, list_of_da: list, key: str, default):
@@ -199,9 +206,13 @@ class CalciumAnalysisOverTime:
 
 
 if __name__ == '__main__':
-    folder = Path.home() / Path(r'data/David/NEW_crystal_skull_TAC_161018')
-    assert folder.exists()
-    res = CalciumAnalysisOverTime(foldername=folder, serialize=True)
+    results_folder = Path.home() / Path(r'data/David/TAC_together_nov18')
+    assert results_folder.exists()
+    folder_and_files = {Path.home() / Path('data/David/NEW_crystal_skull_TAC_161018'): 'DAY*/*/*.tif',
+                        Path.home() / Path('data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
+    # folder_and_files = {Path.home() / Path('data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
+    res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True, 
+                                  folder_globs=folder_and_files)
     # regex = {'id_reg': r'_(\d+?)_X10',
     #          'cond_reg': r'^([a-zA-Z]+?)_[0-9]'}
     # res.run_batch_of_timepoints()
