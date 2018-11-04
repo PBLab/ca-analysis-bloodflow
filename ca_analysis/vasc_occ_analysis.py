@@ -52,6 +52,7 @@ class VascOccAnalysis:
     with_colabeling = attr.ib(default=False, validator=instance_of(bool))
     num_of_channels = attr.ib(default=2, validator=instance_of(int))
     display_each_fov = attr.ib(default=True, validator=instance_of(bool))
+    serialize = attr.ib(default=True, validator=instance_of(bool))
     dff = attr.ib(init=False)
     split_data = attr.ib(init=False)
     all_spikes = attr.ib(init=False)
@@ -134,7 +135,7 @@ class VascOccAnalysis:
         if self.with_colabeling:
             self.sliced_fluo.attrs['colabeled'] = self.colabeled_idx
             
-        self.sliced_fluo.to_netcdf(str(foldername) + 'concat_all_data.nc', mode='w',
+        self.sliced_fluo.to_netcdf(str(foldername / 'concat_all_data.nc'), mode='w',
                 format='NETCDF3_64BIT')  # TODO: compress
 
     def __find_all_files(self):
@@ -366,8 +367,9 @@ class VascOccAnalysis:
 
 
 if __name__ == '__main__':
-    folder = '/export/home/pblab/data/David/Vascular occluder_ALL/Thy_1_gcampF_vasc_occ_311018/right_hemi_(cca_left_with_vascular_occ)/'
+    folder = '/export/home/pblab/data/David/Vascular occluder_ALL/Thy_1_gcampF_vasc_occ_311018/left_hemi_(cca_left_with_vascular_occ)/'
     glob = r'f*results.npz'
+    assert pathlib.Path(folder).exists()
     frames_before_stim = 17484
     len_of_epoch_in_frames = 7000
     fps = 58.2
@@ -376,6 +378,7 @@ if __name__ == '__main__':
     num_of_channels = 2
     with_colabeling = False
     display_each_fov = False
+    serialize = True
     vasc = VascOccAnalysis(foldername=folder, glob=glob,
                            frames_before_stim=frames_before_stim,
                            len_of_epoch_in_frames=len_of_epoch_in_frames, 
@@ -383,7 +386,8 @@ if __name__ == '__main__':
                            with_analog=with_analog, 
                            num_of_channels=num_of_channels,
                            with_colabeling=with_colabeling,
-                           display_each_fov=display_each_fov)
+                           display_each_fov=display_each_fov,
+                           serialize=serialize)
     vasc.run()
     plt.show(block=True)
 
