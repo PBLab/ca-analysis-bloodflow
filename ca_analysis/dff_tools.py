@@ -15,8 +15,8 @@ import skimage.draw
 import tifffile
 import scipy.ndimage
 
-import caiman_funcs_for_comparison
-from find_colabeled_cells import TiffChannels
+from ca_analysis import caiman_funcs_for_comparison
+from ca_analysis.find_colabeled_cells import TiffChannels
 
 
 def calc_dff(file) -> np.ndarray:

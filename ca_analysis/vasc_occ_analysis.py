@@ -52,11 +52,11 @@ class VascOccAnalyzer:
         """ Wrapper method to run several consecutive analysis scripts
         that all rely on a single dF/F matrix as their input """
         self.data = self._concat_dataarrays()
-        all_spikes, num_peaks = self.__find_spikes(dff)
-        self.__calc_firing_rate(num_peaks, title)
-        self.__scatter_spikes(dff, all_spikes, title)
-        self.__rolling_window(dff, all_spikes, title)
-        self.__per_cell_analysis(num_peaks, title)
+        all_spikes, num_peaks = self._find_spikes(dff)
+        self._calc_firing_rate(num_peaks, title)
+        self._scatter_spikes(dff, all_spikes, title)
+        self._rolling_window(dff, all_spikes, title)
+        self._per_cell_analysis(num_peaks, title)
         if not self.with_analog:
             downsample_factor = 1 if title == 'Labeled' else 6
             display_heatmap(data=dff, epoch=title, downsample_factor=downsample_factor, 
@@ -72,7 +72,7 @@ class VascOccAnalyzer:
             all_da.append(xr.open_dataarray(str(next(folder.glob(globstr)))).load())
         return concat_vasc_occ_dataarrays(all_da)
 
-    def __find_spikes(self, dff):
+    def _find_spikes(self, dff):
         """ Calculates a dataframe, each row being a cell, with three columns - before, during and after
         the occlusion. The numbers for each cell are normalized for the length of the epoch."""
         idx_section1 = []
@@ -96,7 +96,7 @@ class VascOccAnalyzer:
                           index=np.arange(len(idx_section1)))
         return all_spikes, df
 
-    def __calc_firing_rate(self, num_peaks: pd.DataFrame, epoch: str='All cells'):
+    def _calc_firing_rate(self, num_peaks: pd.DataFrame, epoch: str='All cells'):
         """
         Sum all indices of peaks to find the average firing rate of cells in the three epochs
         :return:
@@ -118,7 +118,7 @@ class VascOccAnalyzer:
         finally:
             print(split_data.mean(level=1))
 
-    def __scatter_spikes(self, dff, all_spikes, title='All cells'):
+    def _scatter_spikes(self, dff, all_spikes, title='All cells'):
         """
         Show a scatter plot of spikes in the three epochs
         :param dff: Numpy array of cells x dF/F values
@@ -135,7 +135,7 @@ class VascOccAnalyzer:
         ax.set_title(f'Scatter plot of spikes for cells: {title}')
         plt.savefig(f'spike_scatter_{title}.pdf', transparent=True)
 
-    def __rolling_window(self, dff, all_spikes, epoch='All cells'):
+    def _rolling_window(self, dff, all_spikes, epoch='All cells'):
         x_axis = np.arange(all_spikes.shape[1])/self.fps
         window = int(self.fps)
         fig_title = 'Rolling mean in epoch {epoch} over {over} ({win:.2f} sec window length)'
@@ -158,7 +158,7 @@ class VascOccAnalyzer:
                     np.full(self.len_of_epoch_in_frames, mean_val_dff*3), 'r')
         plt.savefig(f'mean_dff_{epoch}.pdf', transparent=True)
 
-    def __per_cell_analysis(self, spike_freq_df, title='All cells'):
+    def _per_cell_analysis(self, spike_freq_df, title='All cells'):
         """ Obtain a mean firing rate of each cell before, during and after the occlusion. Find
         the cells that have a large variance between these epochs. """
         # Normalization
@@ -176,7 +176,7 @@ class VascOccAnalyzer:
         ax.plot(spike_freq_df.loc[:, 'before':'after'].T, '-o')
         ax.set_title(f'Per-cell analysis of {title}')
 
-    def __visualize_occ_with_analog_data(self, file: str, dff: np.ndarray, analog_data: AnalogTraceAnalyzer):
+    def _visualize_occ_with_analog_data(self, file: str, dff: np.ndarray, analog_data: AnalogTraceAnalyzer):
         """ Show a figure with the dF/F heatmap, analog traces and occluder timings """
 
         fig = plt.figure()
@@ -191,7 +191,7 @@ class VascOccAnalyzer:
         fig.tight_layout()
         plt.show()
 
-    def __display_analog_traces(self, ax_puff, ax_jux, ax_run, data: AnalogTraceAnalyzer):
+    def _display_analog_traces(self, ax_puff, ax_jux, ax_run, data: AnalogTraceAnalyzer):
         """ Show three Axes of the analog data """
         ax_puff.plot(data.stim_vec)
         ax_puff.invert_yaxis()
@@ -209,7 +209,7 @@ class VascOccAnalyzer:
         ax_run.set_xlabel('')
         ax_run.set_xticks([])
 
-    def __display_occluder(self, ax, data_length):
+    def _display_occluder(self, ax, data_length):
         """ Show the occluder timings """
         occluder = np.zeros((data_length))
         occluder[self.frames_before_stim:self.frames_before_stim + self.len_of_epoch_in_frames] = 1
@@ -222,7 +222,7 @@ class VascOccAnalyzer:
         ax.set_ylabel('Artery occlusion')
         ax.set_xlabel('')
 
-    def __load_dff(self):
+    def _load_dff(self):
         """ Loads the dF/F data from all found files """
         self.dff = []
         for _, row in self.data_files.iterrows():
@@ -231,7 +231,7 @@ class VascOccAnalyzer:
         self.dff = np.concatenate(self.dff)
         return self.dff
     
-    def __load_colabeled_idx(self):
+    def _load_colabeled_idx(self):
         """ Loads the indices of the colabeled cells from all found files """
         self.colabel_idx = []
         num_of_cells = 0
