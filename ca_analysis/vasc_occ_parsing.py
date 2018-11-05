@@ -50,7 +50,6 @@ class VascOccParser:
     with_analog = attr.ib(default=False, validator=instance_of(bool))
     with_colabeling = attr.ib(default=False, validator=instance_of(bool))
     num_of_channels = attr.ib(default=2, validator=instance_of(int))
-    display_each_fov = attr.ib(default=True, validator=instance_of(bool))
     serialize = attr.ib(default=True, validator=instance_of(bool))
     dff = attr.ib(init=False)
     split_data = attr.ib(init=False)
@@ -97,12 +96,10 @@ class VascOccParser:
             # multiplying the trace by the dff changes analog_trace. To overcome
             # this weird issue we're copying it.
             list_of_sliced_fluo.append(analog_trace * dff)  # overloaded __mul__
-            if self.display_each_fov:
-                self.__visualize_occ_with_analog_data(row['tif'], dff, copied_trace)
         print("Concatenating FOVs into a single data structure...")
         self.sliced_fluo: xr.DataArray = concat_vasc_occ_dataarrays(list_of_sliced_fluo)
         if self.with_colabeling:
-            self.colabel_idx = self.__load_colabeled_idx()
+            self.colabel_idx = self._load_colabeled_idx()
         if self.serialize:
             print("Writing to disk...")
             self._serialize_results(row['tif'].parent)
@@ -192,7 +189,6 @@ class VascOccParser:
         dff = np.concatenate(dff)
         return dff
 
-
 def concat_vasc_occ_dataarrays(da_list: list):
     """ Take a list of DataArrays and concatenate them together
     while keeping the index integrity """
@@ -235,7 +231,6 @@ if __name__ == '__main__':
                          with_analog=with_analog,
                          num_of_channels=num_of_channels,
                          with_colabeling=with_colabeling,
-                         display_each_fov=display_each_fov,
                          serialize=serialize)
     vasc.run()
     plt.show(block=True)
