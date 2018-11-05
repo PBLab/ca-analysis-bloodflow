@@ -52,7 +52,7 @@ class VascOccAnalyzer:
         """ Wrapper method to run several consecutive analysis scripts
         that all rely on a single dF/F matrix as their input """
         self.data = self._concat_dataarrays()
-        all_spikes, num_peaks = self._find_spikes(dff)
+        all_spikes, num_peaks = self._find_spikes(self.epochs)
         self._calc_firing_rate(num_peaks, title)
         self._scatter_spikes(dff, all_spikes, title)
         self._rolling_window(dff, all_spikes, title)
@@ -60,7 +60,7 @@ class VascOccAnalyzer:
         if not self.with_analog:
             downsample_factor = 1 if title == 'Labeled' else 6
             display_heatmap(data=dff, epoch=title, downsample_factor=downsample_factor, 
-                            fps=self.fps)
+                            fps=self.data.attrs['fps'])
 
         return all_spikes, num_peaks
 
@@ -72,14 +72,18 @@ class VascOccAnalyzer:
             all_da.append(xr.open_dataarray(str(next(folder.glob(globstr)))).load())
         return concat_vasc_occ_dataarrays(all_da)
 
-    def _find_spikes(self, dff):
+    def _find_spikes(self, epochs: list):
         """ Calculates a dataframe, each row being a cell, with three columns - before, during and after
         the occlusion. The numbers for each cell are normalized for the length of the epoch."""
         idx_section1 = []
         idx_section2 = []
         idx_section3 = []
         thresh = 0.85
-        min_dist = int(self.fps)
+        min_dist = int(self.data.attrs['fps'])
+
+        for epoch in epochs:
+            dff_before = self.data.loc[{'epoch': epoch + '_before_occ'}].values
+
         all_spikes = np.zeros_like(dff)
         after_stim = self.frames_before_stim + self.len_of_epoch_in_frames
         norm_factor_during = self.frames_before_stim / self.len_of_epoch_in_frames

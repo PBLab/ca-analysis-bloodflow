@@ -108,10 +108,9 @@ class VascOccParser:
         """ Write to disk the generated concatenated DataArray """
         self.sliced_fluo.attrs['fps'] = self.fps
         if self.with_colabeling:
-            self.sliced_fluo.attrs['colabeled'] = self.colabeled_idx
+            self.sliced_fluo.attrs['colabeled'] = self.colabel_idx
 
-        self.sliced_fluo.to_netcdf(str(foldername / 'vasc_occ_parsed.nc'), mode='w',
-                                   format='NETCDF3_64BIT')  # TODO: compress
+        self.sliced_fluo.to_netcdf(str(foldername / 'vasc_occ_parsed.nc'), mode='w')  # TODO: compress
 
     def _find_all_files(self):
         """
@@ -234,4 +233,3 @@ if __name__ == '__main__':
                          serialize=serialize)
     vasc.run()
     plt.show(block=True)
-

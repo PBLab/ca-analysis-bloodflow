@@ -232,9 +232,8 @@ class AnalogTraceAnalyzer:
                 all_coords.append('_'.join((filter(None.__ne__, coord))))
             except IndexError:
                 pass
-            prod = datum[0]
-            for datumm in datum[1:]:
-                prod *= datumm
+            # Filter "None"s and multiply to find the joint area
+            prod = np.array([x for x in datum if type(x) is pd.Series]).prod(axis=0)
             all_data.append(prod)
 
         all_coords[-1] = 'all'  # last item is ''
@@ -242,7 +241,7 @@ class AnalogTraceAnalyzer:
         da = xr.DataArray(np.zeros((len(all_coords), other.shape[0], other.shape[1])),
                           coords=[('epoch', all_coords), ('neuron', coords_of_neurons),
                                   ('time', np.arange(other.shape[1]) / self.framerate)],
-                          dims=dims)  # self.timestampes
+                          dims=dims)  # self.timestamps
 
         for coor, vec in zip(all_coords, all_data):
             da.loc[coor] = other * np.atleast_2d(vec)
