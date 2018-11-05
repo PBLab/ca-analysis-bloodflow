@@ -26,6 +26,7 @@ import warnings
 
 from ca_analysis.analog_trace import AnalogTraceAnalyzer
 from ca_analysis.dff_tools import calc_dff, calc_dff_batch, scatter_spikes, plot_mean_vals, display_heatmap
+from ca_analysis.vasc_occ_parsing import concat_vasc_occ_dataarrays
 
 
 
@@ -39,6 +40,7 @@ class VascOccAnalyzer:
     """
     folder_and_file = attr.ib(validator=instance_of(dict))
     with_analog = attr.ib(default=True, validator=instance_of(bool))
+    data = attr.ib(init=False)
     dff = attr.ib(init=False)
     colabel_idx = attr.ib(init=False)
     split_data = attr.ib(init=False)
@@ -49,6 +51,7 @@ class VascOccAnalyzer:
     def run_extra_analysis(self, dff, title: str='All cells'):
         """ Wrapper method to run several consecutive analysis scripts
         that all rely on a single dF/F matrix as their input """
+        self.data = self._concat_dataarrays()
         all_spikes, num_peaks = self.__find_spikes(dff)
         self.__calc_firing_rate(num_peaks, title)
         self.__scatter_spikes(dff, all_spikes, title)
@@ -60,6 +63,14 @@ class VascOccAnalyzer:
                             fps=self.fps)
 
         return all_spikes, num_peaks
+
+    def _concat_dataarrays(self):
+        """ Performs the concatenation of all given DataArrays
+        into a single one before processing """
+        all_da = []
+        for folder, globstr in self.folder_and_file.items():
+            all_da.append(xr.open_dataarray(str(next(folder.glob(globstr)))).load())
+        return concat_vasc_occ_dataarrays(all_da)
 
     def __find_spikes(self, dff):
         """ Calculates a dataframe, each row being a cell, with three columns - before, during and after
