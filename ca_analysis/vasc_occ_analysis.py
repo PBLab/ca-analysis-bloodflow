@@ -30,7 +30,7 @@ from dff_tools import calc_dff, calc_dff_batch, scatter_spikes, plot_mean_vals, 
 
 
 @attr.s(slots=True)
-class VascOccAnalysis:
+class VascOccParsing:
     """
     A class that provides the analysis pipeline for stacks with vascular occluder. Meaning,
     Data acquired in a before-during-after scheme, where "during" is the perturbation done
@@ -86,21 +86,6 @@ class VascOccAnalysis:
             dff_labeled = self.dff[self.colabel_idx]
             all_spikes_labeled, peaks_labeled = self.__run_extra_analysis(dff_labeled, 'Labeled')
             all_spikes_unlabeled, peaks_unlabeled = self.__run_extra_analysis(dff_unlabeled, 'Unlabeled')
-        
-    def __run_extra_analysis(self, dff, title: str='All cells'):
-        """ Wrapper method to run several consecutive analysis scripts
-        that all rely on a single dF/F matrix as their input """
-        all_spikes, num_peaks = self.__find_spikes(dff)
-        self.__calc_firing_rate(num_peaks, title)
-        self.__scatter_spikes(dff, all_spikes, title)
-        self.__rolling_window(dff, all_spikes, title)
-        self.__per_cell_analysis(num_peaks, title)
-        if not self.with_analog:
-            downsample_factor = 1 if title == 'Labeled' else 6
-            display_heatmap(data=dff, epoch=title, downsample_factor=downsample_factor, 
-                            fps=self.fps)
-
-        return all_spikes, num_peaks
 
     def __run_with_analog(self):
         """ Helper function to run sequentially all needed analysis of dF/F + Analog data """
@@ -191,6 +176,39 @@ class VascOccAnalysis:
             self.timestamps = None
             self.frames_after_stim = 1000
             print("Unsuccessful in getting the parameters.")
+
+
+@attr.s
+class VascOccAnalyzer:
+    """ 
+    Reads vascular occluder data from serialzed data and runs
+    analysis methods on the it. If given more than one folder to
+    look for files, it will concatenate all found files into a
+    single large DataArray before the analysis.
+    """
+    folder_and_file = attr.ib(validator=instance_of(dict))
+    with_analog = attr.ib(default=True, validator=instance_of(bool))
+    dff = attr.ib(init=False)
+    colabel_idx = attr.ib(init=False)
+    split_data = attr.ib(init=False)
+    all_spikes = attr.ib(init=False)
+    labeled_cells = attr.ib(init=False)
+    unlabeled_cells = attr.ib(init=False)
+
+    def run_extra_analysis(self, dff, title: str='All cells'):
+        """ Wrapper method to run several consecutive analysis scripts
+        that all rely on a single dF/F matrix as their input """
+        all_spikes, num_peaks = self.__find_spikes(dff)
+        self.__calc_firing_rate(num_peaks, title)
+        self.__scatter_spikes(dff, all_spikes, title)
+        self.__rolling_window(dff, all_spikes, title)
+        self.__per_cell_analysis(num_peaks, title)
+        if not self.with_analog:
+            downsample_factor = 1 if title == 'Labeled' else 6
+            display_heatmap(data=dff, epoch=title, downsample_factor=downsample_factor, 
+                            fps=self.fps)
+
+        return all_spikes, num_peaks
 
     def __find_spikes(self, dff):
         """ Calculates a dataframe, each row being a cell, with three columns - before, during and after

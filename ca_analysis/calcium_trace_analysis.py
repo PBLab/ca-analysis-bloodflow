@@ -99,23 +99,28 @@ class CalciumReview:
 
     def apply_analysis_funcs(self, funcs: list, epoch: str):
         """ Call the list of methods given to save time and memory """
-        for day, raw_datum in self.raw_data.items():
+        norm_factor = 1
+        for day, raw_datum in dict(sorted(self.raw_data.items())).items():
             print(f"Analyzing day {day}...")
             selected_first = self._filter_da(raw_datum, condition=self.conditions[0], epoch=epoch)
             selected_second = self._filter_da(raw_datum, condition=self.conditions[1], epoch=epoch)
             for func in funcs:
                 cond1 = getattr(dff_tools, func.value)(selected_first)
-                cond1_mean, cond1_sem = cond1.mean(), cond1.std(ddof=1) / np.sqrt(cond1.shape[0]) 
+                cond1_mean, cond1_sem = cond1.mean(), cond1.std(ddof=1) / np.sqrt(cond1.shape[0])
                 cond2 = getattr(dff_tools, func.value)(selected_second)
                 cond2_mean, cond2_sem = cond2.mean(), cond2.std(ddof=1) / np.sqrt(cond2.shape[0])
+                if func == AvailableFuncs.AUC and day == 0:
+                    norm1 = cond1_mean
+                    norm2 = cond2_mean
                 t, p = stats.ttest_ind(cond1, cond2, equal_var=False)
                 df_dict = {col: data for col, data in zip(self.df_columns,
-                    [cond1_mean, cond1_sem, cond2_mean, cond2_sem, t, p])}
+                    [cond1_mean/norm1, cond1_sem/norm1, cond2_mean/norm2, cond2_sem/norm2, t, p])}
                 self.funcs_dict[func] = self.funcs_dict[func].append(pd.DataFrame(df_dict, index=[day]))
 
     def plot_df(self, df, title):
         """ Helper method to plot DataFrames """
         fig, ax = plt.subplots()
+        
         ax.errorbar(df.index.values, df[df.columns[0]], df[df.columns[1]], 
                     c='C0', label=self.conditions[0], fmt='o')
         ax.errorbar(df.index.values, df[df.columns[2]], df[df.columns[3]], 
@@ -136,11 +141,17 @@ class CalciumReview:
 
 
 if __name__ == '__main__':
-    folder = pathlib.Path.home() / pathlib.Path(r'data/David/crystal_skull_TAC_180719')
+    folder = pathlib.Path.home() / pathlib.Path(r'data/David/TAC_together_nov18')
+    #     crystal_skull_TAC_180719   NEW_crystal_skull_TAC_161018   TAC_together_nov18
     assert folder.exists()
     ca = CalciumReview(folder)
     analysis_methods = [AvailableFuncs.AUC, AvailableFuncs.MEAN,
                         AvailableFuncs.SPIKERATE]
     epoch = 'spont'
     ca.apply_analysis_funcs(analysis_methods, epoch)
+    ca.plot_df(ca.funcs_dict[AvailableFuncs.AUC], 
+               f'AUC of Fluo Traces, Epoch: {epoch}')
+    ca.plot_df(ca.funcs_dict[AvailableFuncs.SPIKERATE],
+               f'Spike Rate of Fluo Traces, Epoch: {epoch}')
+        
     plt.show()

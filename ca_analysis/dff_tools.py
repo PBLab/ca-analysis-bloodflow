@@ -60,7 +60,7 @@ def locate_spikes_peakutils(data, fps=30.03, thresh=0.65):
     return all_spikes
 
 
-def calc_mean_spike_num(data, fps=30.03, thresh=0.65):
+def calc_mean_spike_num(data, fps=30.03, thresh=0.75):
     """
     Find the spikes in the data (using "locate_spikes_peakutils") and count
     them, to create statistics on their average number.
@@ -70,8 +70,8 @@ def calc_mean_spike_num(data, fps=30.03, thresh=0.65):
     :return: Number of spikes for each neuron
     """
     all_spikes = locate_spikes_peakutils(data, fps, thresh)
-    sum_of_spikes = all_spikes.sum(axis=1)
-    return sum_of_spikes
+    mean_of_spikes = all_spikes.sum(axis=1) / data.shape[1]
+    return mean_of_spikes
 
 
 def scatter_spikes(raw_data, spike_data, downsample_display=10, time_vec=None):
@@ -137,7 +137,7 @@ def plot_mean_vals(data, x_axis=None, window=30, title='Rolling Mean',
     return ax, mean_val[0].mean()
 
 
-def calc_auc(data):
+def calc_auc(data, norm_factor=1):
     """ Return the normalized area under the curve of all neurons in the data matrix.
     Uses a simple trapezoidal rule, and subtracts the offset of each cell before 
     the computation.
@@ -146,9 +146,10 @@ def calc_auc(data):
     all_auc = []
     for cell in data:
         no_offset = cell - cell.min()
-        result = sklearn.metrics.auc(x, no_offset)
-        all_auc.append(result / data.shape[1])
-    all_auc = np.array(all_auc)
+        auc = sklearn.metrics.auc(x, no_offset)
+        result = auc / (data.shape[1] * norm_factor)
+        all_auc.append(result)
+    all_auc = np.array(all_auc) 
     return all_auc
 
 def calc_mean_dff(data):
