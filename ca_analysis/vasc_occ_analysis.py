@@ -83,8 +83,13 @@ class VascOccAnalyzer:
 
         for epoch in epochs:
             dff_before = self.data.loc[{'epoch': epoch + '_before_occ'}].values
+            dff_during = self.data.loc[{'epoch': epoch + '_during_occ'}].values
+            dff_after = self.data.loc[{'epoch': epoch + '_after_occ'}].values
 
-        all_spikes = np.zeros_like(dff)
+            dff = self.data.loc[{'epoch': epoch}].values
+            all_spikes = np.zeros_like(dff)
+
+
         after_stim = self.frames_before_stim + self.len_of_epoch_in_frames
         norm_factor_during = self.frames_before_stim / self.len_of_epoch_in_frames
         norm_factor_after = self.frames_before_stim / self.frames_after_stim

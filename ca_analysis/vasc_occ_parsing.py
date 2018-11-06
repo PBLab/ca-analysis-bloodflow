@@ -107,6 +107,9 @@ class VascOccParser:
     def _serialize_results(self, foldername: pathlib.Path):
         """ Write to disk the generated concatenated DataArray """
         self.sliced_fluo.attrs['fps'] = self.fps
+        self.sliced_fluo.attrs['frames_before_occ'] = self.frames_before_stim
+        self.sliced_fluo.attrs['frames_during_occ'] = self.len_of_epoch_in_frames
+        self.sliced_fluo.attrs['frames_after_occ'] = self.frames_after_stim
         if self.with_colabeling:
             self.sliced_fluo.attrs['colabeled'] = self.colabel_idx
 
@@ -211,16 +214,16 @@ def concat_vasc_occ_dataarrays(da_list: list):
 
 
 if __name__ == '__main__':
-    folder = '/data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_280818'
-    glob = r'f*results.npz'
+    folder = '/data/David/Vascular occluder_ALL/vasc_occ_air_puff_010418'
+    glob = r'*results.npz'
     assert pathlib.Path(folder).exists()
     frames_before_stim = 4000
     len_of_epoch_in_frames = 4000
-    fps = 58.2
+    fps = 15.24
     invalid_cells: list = []
     with_analog = True
     num_of_channels = 2
-    with_colabeling = True
+    with_colabeling = False
     display_each_fov = False
     serialize = True
     vasc = VascOccParser(foldername=folder, glob=glob,
