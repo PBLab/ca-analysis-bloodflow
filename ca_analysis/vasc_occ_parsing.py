@@ -48,12 +48,12 @@ class VascOccParser:
     len_of_epoch_in_frames = attr.ib(default=1000)
     with_analog = attr.ib(default=False, validator=instance_of(bool))
     with_colabeling = attr.ib(default=False, validator=instance_of(bool))
-    num_of_channels = attr.ib(default=2, validator=instance_of(int))
     serialize = attr.ib(default=True, validator=instance_of(bool))
     dff = attr.ib(init=False)
     frames_after_stim = attr.ib(init=False)
     start_time = attr.ib(init=False)
     timestamps = attr.ib(init=False)
+    num_of_channels = attr.ib(init=False)
     sliced_fluo = attr.ib(init=False)
     OccMetadata = attr.ib(init=False)
     data_files = attr.ib(init=False)
@@ -84,7 +84,6 @@ class VascOccParser:
             occ_metadata = self.OccMetadata(self.frames_before_stim, self.len_of_epoch_in_frames,
                                             self.frames_after_stim)
             analog_trace = AnalogTraceAnalyzer(row['caiman'], analog_data, framerate=self.fps,
-                                               num_of_channels=self.num_of_channels,
                                                start_time=self.start_time,
                                                timestamps=self.timestamps,
                                                occluder=True, occ_metadata=occ_metadata)
@@ -195,7 +194,7 @@ def concat_vasc_occ_dataarrays(da_list: list):
     num_of_neurons = 0
     crd_time = da_list[0].time.values
     crd_epoch = da_list[0].epoch.values
-    for da in da_list:
+    for idx, da in enumerate(da_list):
         crd_neuron = np.arange(num_of_neurons, num_of_neurons + len(da.neuron))
         if len(da.time) > len(crd_time):
             crd_time = da.time.values
@@ -203,7 +202,8 @@ def concat_vasc_occ_dataarrays(da_list: list):
                                     dims=['epoch', 'neuron', 'time'],
                                     coords={'epoch': crd_epoch,
                                             'neuron': crd_neuron,
-                                            'time': crd_time})
+                                            'time': crd_time},
+                                    attrs=da.attrs)
         new_da_list.append(reindexed_da)
         num_of_neurons += len(da.neuron)
 
@@ -211,15 +211,14 @@ def concat_vasc_occ_dataarrays(da_list: list):
 
 
 if __name__ == '__main__':
-    folder = '/data/David/Vascular occluder_ALL/vasc_occ_air_puff_010418'
+    folder = '/data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_anaesthetise'
     glob = r'*results.npz'
     assert pathlib.Path(folder).exists()
     frames_before_stim = 4000
     len_of_epoch_in_frames = 4000
-    fps = 15.24
+    fps = 60.
     with_analog = True
-    num_of_channels = 2
-    with_colabeling = False
+    with_colabeling = True
     display_each_fov = False
     serialize = True
     vasc = VascOccParser(foldername=folder, glob=glob,
@@ -227,7 +226,6 @@ if __name__ == '__main__':
                          len_of_epoch_in_frames=len_of_epoch_in_frames,
                          fps=fps,
                          with_analog=with_analog,
-                         num_of_channels=num_of_channels,
                          with_colabeling=with_colabeling,
                          serialize=serialize)
     vasc.run()

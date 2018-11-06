@@ -26,7 +26,6 @@ class AnalogTraceAnalyzer:
 
     timestamps = attr.ib(validator=instance_of(np.ndarray))
     framerate = attr.ib(validator=instance_of(float))
-    num_of_channels = attr.ib(validator=instance_of(int))
     start_time = attr.ib(validator=instance_of(str))
 
     response_window = attr.ib(default=0.5, validator=instance_of(float))  # sec
@@ -164,18 +163,11 @@ class AnalogTraceAnalyzer:
 
         try:
             self.framerate = d['FrameData']['SI.hRoiManager.scanFrameRate']
-            self.num_of_channels = len(d['FrameData']['SI.hChannels.channelsActive'])
         except (NameError, TypeError):
             self.framerate = 15.24
-            self.num_of_channels = 1
         finally:
             self.start_time = str(datetime.fromtimestamp(os.path.getmtime(self.tif_filename)))
 
-        # regex = re.compile(r'frameTimestamps_sec = ([\d.]+)')
-        # timestamps = []
-        # # for page in ser.pages[::self.num_of_channels]:  # assuming that channel 1 contains the data
-        # #     desc = page.image_description.decode()
-        # #     timestamps.append(float(regex.findall(desc)[0]))
         timestamps = np.arange(num_frames)
         self.timestamps = np.array(timestamps)
 

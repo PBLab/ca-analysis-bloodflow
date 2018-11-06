@@ -35,6 +35,7 @@ class VascOccAnalyzer:
     invalid_cells = attr.ib(factory=list, validator=instance_of(list))
     data = attr.ib(init=False)
     analyzed_data = attr.ib(init=False)
+    meta_params = attr.ib(init=False)
 
     def run_extra_analysis(self, epochs: tuple=('stand_spont',), title: str='All cells'):
         """ Wrapper method to run several consecutive analysis scripts
@@ -42,11 +43,12 @@ class VascOccAnalyzer:
         self.data = self._concat_dataarrays()
         self.analyzed_data = {}
         for epoch in epochs:
-            dff = self.data.loc[{'epoch': epoch}]
+            cur_data = self.data.loc[{'epoch': epoch}]
+            dff = np.delete(cur_data.values, self.invalid_cells, axis=0)
             all_spikes, num_peaks = self._find_spikes(dff)
             self._calc_firing_rate(num_peaks, title)
-            self._scatter_spikes(dff, all_spikes, title)
-            self._rolling_window(dff, all_spikes, title)
+            self._scatter_spikes(dff, all_spikes, title, downsample_display=1)
+            self._rolling_window(cur_data, dff, all_spikes, title)
             self._per_cell_analysis(num_peaks, title)
             if not self.with_analog:
                 downsample_factor = 1 if title == 'Labeled' else 6
@@ -69,7 +71,7 @@ class VascOccAnalyzer:
         idx_section1 = []
         idx_section2 = []
         idx_section3 = []
-        thresh = 0.85
+        thresh = 0.8
         min_dist = int(self.data.attrs['fps'])
         before_occ = self.data.attrs['frames_before_occ']
         during_occ = self.data.attrs['frames_during_occ']
@@ -95,7 +97,6 @@ class VascOccAnalyzer:
         :return:
         """
         # Remove silent cells from comparison
-        num_peaks.drop(self.invalid_cells, inplace=True)
         split_data = num_peaks.stack()
         mc = MultiComparison(split_data.values, split_data.index.get_level_values(1).values)
         try:
@@ -111,44 +112,49 @@ class VascOccAnalyzer:
         finally:
             print(split_data.mean(level=1))
 
-    def _scatter_spikes(self, dff, all_spikes, title='All cells'):
+    def _scatter_spikes(self, dff, all_spikes, title='All cells', downsample_display=10):
         """
         Show a scatter plot of spikes in the three epochs
         :param dff: Numpy array of cells x dF/F values
         :param all_spikes: DataFrame with number of spikes per trial.
         :return:
         """
-        time = np.linspace(0, dff.shape[1]/self.fps, num=dff.shape[1], dtype=np.int32)
-        fig, num_displayed_cells = scatter_spikes(dff, all_spikes, time_vec=time)
+        time = np.linspace(0, dff.shape[1]/self.data.attrs['fps'], num=dff.shape[1], dtype=np.int32)
+        fig, num_displayed_cells = scatter_spikes(dff, all_spikes, time_vec=time,
+                                                  downsample_display=downsample_display)
         ax = fig.axes[0]
-        p = patches.Rectangle((self.frames_before_stim / self.fps, 0), width=self.len_of_epoch_in_frames / self.fps,
+        p = patches.Rectangle((self.data.attrs['frames_before_occ'] / self.data.attrs['fps'], 0),
+                              width=self.data.attrs['frames_during_occ'] / self.data.attrs['fps'],
                               height=num_displayed_cells,
                               facecolor='red', alpha=0.3, edgecolor='None')
         ax.add_artist(p)
         ax.set_title(f'Scatter plot of spikes for cells: {title}')
         plt.savefig(f'spike_scatter_{title}.pdf', transparent=True)
 
-    def _rolling_window(self, dff, all_spikes, epoch='All cells'):
-        x_axis = np.arange(all_spikes.shape[1])/self.fps
-        window = int(self.fps)
+    def _rolling_window(self, data, dff, all_spikes, epoch='All cells'):
+        fps = self.data.attrs['fps']
+        x_axis = np.arange(all_spikes.shape[1])/fps
+        window = int(fps)
+        before_occ = data.attrs['frames_before_occ']
+        during_occ = data.attrs['frames_during_occ']
         fig_title = 'Rolling mean in epoch {epoch} over {over} ({win:.2f} sec window length)'
 
         ax_spikes, mean_val_spikes = plot_mean_vals(all_spikes, x_axis=x_axis, window=window, 
                                                     title=fig_title.format(epoch=epoch, 
                                                                            over='spike rate', 
-                                                                           win=window/self.fps))
+                                                                           win=window/fps))
         ax_spikes.set_xlabel('Time (sec)')
         ax_spikes.set_ylabel('Mean Spike Rate')
-        ax_spikes.plot(np.arange(self.frames_before_stim, self.frames_before_stim + self.len_of_epoch_in_frames)/self.fps,
-                       np.full(self.len_of_epoch_in_frames, mean_val_spikes*3), 'r')
+        ax_spikes.plot(np.arange(before_occ, before_occ + during_occ) / fps,
+                       np.full(during_occ, mean_val_spikes*3), 'r')
         plt.savefig('mean_spike_rate.pdf', transparent=True)
-        ax_dff, mean_val_dff = plot_mean_vals(dff, x_axis=x_axis, window=int(self.fps),
+        ax_dff, mean_val_dff = plot_mean_vals(dff, x_axis=x_axis, window=int(fps),
                                               title=fig_title.format(epoch=epoch, over='dF/F', 
-                                                                     win=window/self.fps))
+                                                                     win=window/fps))
         ax_dff.set_xlabel('Time (sec)')
         ax_dff.set_ylabel('Mean dF/F')
-        ax_dff.plot(np.arange(self.frames_before_stim, self.frames_before_stim + self.len_of_epoch_in_frames)/self.fps,
-                    np.full(self.len_of_epoch_in_frames, mean_val_dff*3), 'r')
+        ax_dff.plot(np.arange(before_occ, before_occ + during_occ) / fps,
+                    np.full(during_occ, mean_val_dff*3), 'r')
         plt.savefig(f'mean_dff_{epoch}.pdf', transparent=True)
 
     def _per_cell_analysis(self, spike_freq_df, title='All cells'):
@@ -168,21 +174,6 @@ class VascOccAnalyzer:
         fig, ax = plt.subplots()
         ax.plot(spike_freq_df.loc[:, 'before':'after'].T, '-o')
         ax.set_title(f'Per-cell analysis of {title}')
-
-    def _visualize_occ_with_analog_data(self, file: str, dff: np.ndarray, analog_data: AnalogTraceAnalyzer):
-        """ Show a figure with the dF/F heatmap, analog traces and occluder timings """
-
-        fig = plt.figure()
-        gs = gridspec.GridSpec(8, 1)
-        self.__display_analog_traces(plt.subplot(gs[4, :]),
-                                     plt.subplot(gs[5, :]),
-                                     plt.subplot(gs[6, :]),
-                                     analog_data)
-        display_heatmap(ax=plt.subplot(gs[:4, :]), data=dff, fps=self.fps, downsample_factor=1)
-        self.__display_occluder(plt.subplot(gs[7, :]), dff.shape[1])
-        fig.suptitle(f'{file}')
-        fig.tight_layout()
-        plt.show()
 
     def _display_analog_traces(self, ax_puff, ax_jux, ax_run, data: AnalogTraceAnalyzer):
         """ Show three Axes of the analog data """
@@ -215,35 +206,21 @@ class VascOccAnalyzer:
         ax.set_ylabel('Artery occlusion')
         ax.set_xlabel('')
 
-    def _load_dff(self):
-        """ Loads the dF/F data from all found files """
-        self.dff = []
-        for _, row in self.data_files.iterrows():
-            cur_data = np.load(row.caiman)['F_dff']
-            self.dff.append(cur_data)
-        self.dff = np.concatenate(self.dff)
-        return self.dff
-
 
 if __name__ == '__main__':
-    folder = '/export/home/pblab/data/David/Vascular occluder_ALL/Thy_1_gcampF_vasc_occ_311018/left_hemi_(cca_left_with_vascular_occ)/'
-    glob = r'f*results.npz'
-    assert pathlib.Path(folder).exists()
-    invalid_cells: list = []
+    # folder = pathlib.Path.home() / 'data/David/Vascular occluder_ALL/vasc_occ_air_puff_010418'
+    folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_anaesthetise')
+    assert folder.exists()
+    glob = r'vasc_occ_parsed.nc'
+    folder_and_files = {folder: glob}
+    invalid_cells: list = [0, 1, 39]
     with_analog = True
     num_of_channels = 2
-    with_colabeling = False
-    display_each_fov = False
-    serialize = True
-    vasc = VascOccAnalyzer(foldername=folder, glob=glob,
-                         frames_before_stim=frames_before_stim,
-                         len_of_epoch_in_frames=len_of_epoch_in_frames,
-                         fps=fps, invalid_cells=invalid_cells,
-                         with_analog=with_analog,
-                         num_of_channels=num_of_channels,
-                         with_colabeling=with_colabeling,
-                         display_each_fov=display_each_fov,
-                         serialize=serialize)
-    vasc.run()
+    with_colabeling = True
+    vasc = VascOccAnalyzer(folder_and_file=folder_and_files,
+                           invalid_cells=invalid_cells,
+                           with_analog=with_analog,
+                           with_colabeling=with_colabeling)
+    vasc.run_extra_analysis()
     plt.show(block=True)
 

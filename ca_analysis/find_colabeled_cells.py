@@ -115,7 +115,7 @@ class ColabeledCells:
         # Start by reading the center of mass coordinates of CaImAn components
         res_file = np.load(self.result_file)
         all_crd = res_file['crd']
-        if res_file['idx_components']:  # newer .npz files are already "filtered" and so this line isn't needed
+        if res_file['idx_components'].any():  # newer .npz files are already "filtered" and so this line isn't needed
             all_crd = all_crd[res_file['idx_components']]  # filters bad components
         centroids_functional = np.array([data['CoM'] for data in all_crd])
         assert centroids_functional.shape[1] == 2  # two columns, x and y
@@ -202,12 +202,8 @@ def batch_colabeled(foldername: pathlib.Path, verbose=False):
 
 
 if __name__ == '__main__':
-    # tif = pathlib.Path.home() / pathlib.Path(r'data/Amos/occluder/4th_July18_VIP_Td_SynGCaMP_Occluder/fov1_mag_2p5_256PX_58p28HZ_vasc_occ_00001.tif')
-    # result = pathlib.Path.home() / pathlib.Path(r'data/Amos/occluder/4th_July18_VIP_Td_SynGCaMP_Occluder/fov1_mag_2p5_256PX_58p28HZ_vasc_occ_00001_CHANNEL_1_results.npz')
-    # c = ColabeledCells(tif=tif, result_file=result,
-    #                    activity_ch=TiffChannels.ONE, morph_ch=TiffChannels.TWO,
-    #                    verbose=True, cell_radius=4)
-    # c.find_colabeled()
     plt.show(block=True)
-    folder = pathlib.Path.home() / pathlib.Path(r'data/David/vip_td_gcamp_270818_muscle_only')
+    # folder = pathlib.Path.home() / pathlib.Path(r'data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_anaesthetise')
+    folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_anaesthetise')
+    assert folder.exists()
     batch_colabeled(folder, verbose=True)

@@ -90,7 +90,6 @@ def scatter_spikes(raw_data, spike_data, downsample_display=10, time_vec=None):
         time_vec = np.arange(raw_data.shape[1])
     x, y = np.nonzero(spike_data)
     fig, ax = plt.subplots()
-    downsample_display = 10
     downsampled_data = raw_data[::downsample_display]
     num_displayed_cells = downsampled_data.shape[0]
     ax.plot(time_vec,
