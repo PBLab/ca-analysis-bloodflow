@@ -204,6 +204,6 @@ def batch_colabeled(foldername: pathlib.Path, verbose=False):
 if __name__ == '__main__':
     plt.show(block=True)
     # folder = pathlib.Path.home() / pathlib.Path(r'data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_anaesthetise')
-    folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_anaesthetise')
+    folder = pathlib.Path('/data/David/Vascular occluder_ALL/SST-TD-GCaMP_VASCULAR_OCC')
     assert folder.exists()
     batch_colabeled(folder, verbose=True)

@@ -8,7 +8,7 @@ from statsmodels.stats.multicomp import MultiComparison
 from statsmodels.stats.libqsturng import psturng
 import matplotlib.pyplot as plt
 from matplotlib import patches
-from matplotlib import gridspec
+import scipy.stats
 import mne
 import xarray as xr
 import colorama
@@ -48,8 +48,9 @@ class VascOccAnalyzer:
             all_spikes, num_peaks = self._find_spikes(dff)
             self._calc_firing_rate(num_peaks, title)
             self._scatter_spikes(dff, all_spikes, title, downsample_display=1)
-            self._rolling_window(cur_data, dff, all_spikes, title)
+            self._rolling_window(cur_data, dff, all_spikes, epoch)
             self._per_cell_analysis(num_peaks, title)
+            self._anova_on_mean_dff(dff, epoch)
             if not self.with_analog:
                 downsample_factor = 1 if title == 'Labeled' else 6
                 display_heatmap(data=dff, epoch=title, downsample_factor=downsample_factor,
@@ -157,6 +158,10 @@ class VascOccAnalyzer:
                     np.full(during_occ, mean_val_dff*3), 'r')
         plt.savefig(f'mean_dff_{epoch}.pdf', transparent=True)
 
+    def _anova_on_mean_dff(self, dff, epoch='All cells'):
+        """ Calculate a one-way anova over the mean dF/F trace of all cells """
+        print(scipy.stats.f_oneway(*dff.T))
+
     def _per_cell_analysis(self, spike_freq_df, title='All cells'):
         """ Obtain a mean firing rate of each cell before, during and after the occlusion. Find
         the cells that have a large variance between these epochs. """
@@ -209,7 +214,7 @@ class VascOccAnalyzer:
 
 if __name__ == '__main__':
     # folder = pathlib.Path.home() / 'data/David/Vascular occluder_ALL/vasc_occ_air_puff_010418'
-    folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_anaesthetise')
+    folder = pathlib.Path('/data/David/Vascular occluder_ALL/SST-TD-GCaMP_VASCULAR_OCC')
     assert folder.exists()
     glob = r'vasc_occ_parsed.nc'
     folder_and_files = {folder: glob}

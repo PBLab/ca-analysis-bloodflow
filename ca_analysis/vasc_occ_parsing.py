@@ -211,12 +211,12 @@ def concat_vasc_occ_dataarrays(da_list: list):
 
 
 if __name__ == '__main__':
-    folder = '/data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_anaesthetise'
+    folder = '/data/David/Vascular occluder_ALL/SST-TD-GCaMP_VASCULAR_OCC'
     glob = r'*results.npz'
     assert pathlib.Path(folder).exists()
-    frames_before_stim = 4000
-    len_of_epoch_in_frames = 4000
-    fps = 60.
+    frames_before_stim = 17484
+    len_of_epoch_in_frames = 7000
+    fps = 58.2
     with_analog = True
     with_colabeling = True
     display_each_fov = False
