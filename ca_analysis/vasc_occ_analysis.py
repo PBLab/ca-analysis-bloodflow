@@ -39,6 +39,7 @@ class VascOccAnalyzer:
     single large DataArray before the analysis.
     """
     folder_and_file = attr.ib(validator=instance_of(dict))
+    epochs = attr.ib(default=['stand_spont'], validator=instance_of(list))
     with_analog = attr.ib(default=True, validator=instance_of(bool))
     data = attr.ib(init=False)
     dff = attr.ib(init=False)
@@ -52,7 +53,8 @@ class VascOccAnalyzer:
         """ Wrapper method to run several consecutive analysis scripts
         that all rely on a single dF/F matrix as their input """
         self.data = self._concat_dataarrays()
-        all_spikes, num_peaks = self._find_spikes(self.epochs)
+        for epoch in self.epochs:
+            all_spikes, num_peaks = self._find_spikes(epoch)
         self._calc_firing_rate(num_peaks, title)
         self._scatter_spikes(dff, all_spikes, title)
         self._rolling_window(dff, all_spikes, title)
@@ -72,7 +74,7 @@ class VascOccAnalyzer:
             all_da.append(xr.open_dataarray(str(next(folder.glob(globstr)))).load())
         return concat_vasc_occ_dataarrays(all_da)
 
-    def _find_spikes(self, epochs: list):
+    def _find_spikes(self, epoch: str):
         """ Calculates a dataframe, each row being a cell, with three columns - before, during and after
         the occlusion. The numbers for each cell are normalized for the length of the epoch."""
         idx_section1 = []
@@ -80,30 +82,24 @@ class VascOccAnalyzer:
         idx_section3 = []
         thresh = 0.85
         min_dist = int(self.data.attrs['fps'])
-
-        for epoch in epochs:
-            dff_before = self.data.loc[{'epoch': epoch + '_before_occ'}].values
-            dff_during = self.data.loc[{'epoch': epoch + '_during_occ'}].values
-            dff_after = self.data.loc[{'epoch': epoch + '_after_occ'}].values
-
-            dff = self.data.loc[{'epoch': epoch}].values
-            all_spikes = np.zeros_like(dff)
-
-
-        after_stim = self.frames_before_stim + self.len_of_epoch_in_frames
-        norm_factor_during = self.frames_before_stim / self.len_of_epoch_in_frames
-        norm_factor_after = self.frames_before_stim / self.frames_after_stim
+        before_occ = self.data.attrs['frames_before_occ']
+        during_occ = self.data.attrs['frames_during_occ']
+        summed_after_occ =  before_occ + during_occ
+        norm_factor_during = before_occ / during_occ
+        norm_factor_after = before_occ / self.data.attrs['frames_after_occ']
+        dff = self.data.loc[{'epoch': epoch}].values
+        all_spikes = np.zeros_like(dff)
         for row, cell in enumerate(dff):
             idx = peakutils.indexes(cell, thres=thresh, min_dist=min_dist)
             all_spikes[row, idx] = 1
-            idx_section1.append(len(idx[idx < self.frames_before_stim]))
-            idx_section2.append(len(idx[(idx >= self.frames_before_stim) &
-                                        (idx < after_stim)]) * norm_factor_during)
-            idx_section3.append(len(idx[idx >= after_stim]) * norm_factor_after)
+            idx_section1.append(len(idx[idx < before_occ]))
+            idx_section2.append(len(idx[(idx >= before_occ) &
+                                        (idx < summed_after_occ)]) * norm_factor_during)
+            idx_section3.append(len(idx[idx >= summed_after_occ]) * norm_factor_after)
 
-        df = pd.DataFrame({'before': idx_section1, 'during': idx_section2, 'after': idx_section3},
-                          index=np.arange(len(idx_section1)))
-        return all_spikes, df
+        num_of_spikes = pd.DataFrame({'before': idx_section1, 'during': idx_section2, 'after': idx_section3},
+                                     index=np.arange(len(idx_section1)))
+        return all_spikes, num_of_spikes
 
     def _calc_firing_rate(self, num_peaks: pd.DataFrame, epoch: str='All cells'):
         """
