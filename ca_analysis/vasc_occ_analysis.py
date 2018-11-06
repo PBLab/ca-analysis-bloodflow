@@ -39,32 +39,34 @@ class VascOccAnalyzer:
     single large DataArray before the analysis.
     """
     folder_and_file = attr.ib(validator=instance_of(dict))
-    epochs = attr.ib(default=['stand_spont'], validator=instance_of(list))
     with_analog = attr.ib(default=True, validator=instance_of(bool))
+    invalid_cells = attr.ib(factory=list, validator=instance_of(list))
     data = attr.ib(init=False)
-    dff = attr.ib(init=False)
+    analyzed_data = attr.ib(init=False)
     colabel_idx = attr.ib(init=False)
     split_data = attr.ib(init=False)
     all_spikes = attr.ib(init=False)
     labeled_cells = attr.ib(init=False)
     unlabeled_cells = attr.ib(init=False)
 
-    def run_extra_analysis(self, dff, title: str='All cells'):
+    def run_extra_analysis(self, epochs: tuple=('stand_spont',), title: str='All cells'):
         """ Wrapper method to run several consecutive analysis scripts
         that all rely on a single dF/F matrix as their input """
         self.data = self._concat_dataarrays()
-        for epoch in self.epochs:
-            all_spikes, num_peaks = self._find_spikes(epoch)
-        self._calc_firing_rate(num_peaks, title)
-        self._scatter_spikes(dff, all_spikes, title)
-        self._rolling_window(dff, all_spikes, title)
-        self._per_cell_analysis(num_peaks, title)
-        if not self.with_analog:
-            downsample_factor = 1 if title == 'Labeled' else 6
-            display_heatmap(data=dff, epoch=title, downsample_factor=downsample_factor, 
-                            fps=self.data.attrs['fps'])
-
-        return all_spikes, num_peaks
+        self.analyzed_data = {}
+        for epoch in epochs:
+            dff = self.data.loc[{'epoch': epoch}]
+            all_spikes, num_peaks = self._find_spikes(dff)
+            self._calc_firing_rate(num_peaks, title)
+            self._scatter_spikes(dff, all_spikes, title)
+            self._rolling_window(dff, all_spikes, title)
+            self._per_cell_analysis(num_peaks, title)
+            if not self.with_analog:
+                downsample_factor = 1 if title == 'Labeled' else 6
+                display_heatmap(data=dff, epoch=title, downsample_factor=downsample_factor,
+                                fps=self.data.attrs['fps'])
+            self.analyzed_data[epoch] = (all_spikes, num_peaks)
+        return self.analyzed_data
 
     def _concat_dataarrays(self):
         """ Performs the concatenation of all given DataArrays
@@ -74,7 +76,7 @@ class VascOccAnalyzer:
             all_da.append(xr.open_dataarray(str(next(folder.glob(globstr)))).load())
         return concat_vasc_occ_dataarrays(all_da)
 
-    def _find_spikes(self, epoch: str):
+    def _find_spikes(self, dff: np.ndarray):
         """ Calculates a dataframe, each row being a cell, with three columns - before, during and after
         the occlusion. The numbers for each cell are normalized for the length of the epoch."""
         idx_section1 = []
@@ -87,7 +89,6 @@ class VascOccAnalyzer:
         summed_after_occ =  before_occ + during_occ
         norm_factor_during = before_occ / during_occ
         norm_factor_after = before_occ / self.data.attrs['frames_after_occ']
-        dff = self.data.loc[{'epoch': epoch}].values
         all_spikes = np.zeros_like(dff)
         for row, cell in enumerate(dff):
             idx = peakutils.indexes(cell, thres=thresh, min_dist=min_dist)
@@ -255,16 +256,13 @@ if __name__ == '__main__':
     folder = '/export/home/pblab/data/David/Vascular occluder_ALL/Thy_1_gcampF_vasc_occ_311018/left_hemi_(cca_left_with_vascular_occ)/'
     glob = r'f*results.npz'
     assert pathlib.Path(folder).exists()
-    frames_before_stim = 17484
-    len_of_epoch_in_frames = 7000
-    fps = 58.2
     invalid_cells: list = []
     with_analog = True
     num_of_channels = 2
     with_colabeling = False
     display_each_fov = False
     serialize = True
-    vasc = VascOccParser(foldername=folder, glob=glob,
+    vasc = VascOccAnalyzer(foldername=folder, glob=glob,
                          frames_before_stim=frames_before_stim,
                          len_of_epoch_in_frames=len_of_epoch_in_frames,
                          fps=fps, invalid_cells=invalid_cells,
