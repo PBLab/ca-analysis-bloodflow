@@ -3,29 +3,20 @@ from attr.validators import instance_of
 import numpy as np
 import pandas as pd
 import pathlib
-import sys
 import peakutils
 from statsmodels.stats.multicomp import MultiComparison
 from statsmodels.stats.libqsturng import psturng
-import scipy.stats
 import matplotlib.pyplot as plt
 from matplotlib import patches
 from matplotlib import gridspec
 import mne
-import tifffile
-import os
-import itertools
 import xarray as xr
-from collections import namedtuple
-from datetime import datetime
 import colorama
 colorama.init()
 from ansimarkup import ansiprint as aprint
-import copy
-import warnings
 
 from ca_analysis.analog_trace import AnalogTraceAnalyzer
-from ca_analysis.dff_tools import calc_dff, calc_dff_batch, scatter_spikes, plot_mean_vals, display_heatmap
+from ca_analysis.dff_tools import scatter_spikes, plot_mean_vals, display_heatmap
 from ca_analysis.vasc_occ_parsing import concat_vasc_occ_dataarrays
 
 
@@ -40,14 +31,10 @@ class VascOccAnalyzer:
     """
     folder_and_file = attr.ib(validator=instance_of(dict))
     with_analog = attr.ib(default=True, validator=instance_of(bool))
+    with_colabeling = attr.ib(default=False, validator=instance_of(bool))
     invalid_cells = attr.ib(factory=list, validator=instance_of(list))
     data = attr.ib(init=False)
     analyzed_data = attr.ib(init=False)
-    colabel_idx = attr.ib(init=False)
-    split_data = attr.ib(init=False)
-    all_spikes = attr.ib(init=False)
-    labeled_cells = attr.ib(init=False)
-    unlabeled_cells = attr.ib(init=False)
 
     def run_extra_analysis(self, epochs: tuple=('stand_spont',), title: str='All cells'):
         """ Wrapper method to run several consecutive analysis scripts
@@ -236,20 +223,6 @@ class VascOccAnalyzer:
             self.dff.append(cur_data)
         self.dff = np.concatenate(self.dff)
         return self.dff
-    
-    def _load_colabeled_idx(self):
-        """ Loads the indices of the colabeled cells from all found files """
-        self.colabel_idx = []
-        num_of_cells = 0
-        for _, row in self.data_files.iterrows():
-            cur_data = np.load(row.caiman)['F_dff']
-            cur_idx = np.load(row.colabeled)
-            cur_idx += num_of_cells
-            self.colabel_idx.append(cur_idx)
-            num_of_cells += cur_data.shape[0]
-
-        self.colabel_idx = np.array(list(itertools.chain.from_iterable(self.colabel_idx)))
-        return self.colabel_idx
 
 
 if __name__ == '__main__':

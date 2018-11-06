@@ -46,14 +46,11 @@ class VascOccParser:
     fps = attr.ib(default=15.24, validator=instance_of(float))
     frames_before_stim = attr.ib(default=1000)
     len_of_epoch_in_frames = attr.ib(default=1000)
-    invalid_cells = attr.ib(factory=list, validator=instance_of(list))
     with_analog = attr.ib(default=False, validator=instance_of(bool))
     with_colabeling = attr.ib(default=False, validator=instance_of(bool))
     num_of_channels = attr.ib(default=2, validator=instance_of(int))
     serialize = attr.ib(default=True, validator=instance_of(bool))
     dff = attr.ib(init=False)
-    split_data = attr.ib(init=False)
-    all_spikes = attr.ib(init=False)
     frames_after_stim = attr.ib(init=False)
     start_time = attr.ib(init=False)
     timestamps = attr.ib(init=False)
@@ -220,7 +217,6 @@ if __name__ == '__main__':
     frames_before_stim = 4000
     len_of_epoch_in_frames = 4000
     fps = 15.24
-    invalid_cells: list = []
     with_analog = True
     num_of_channels = 2
     with_colabeling = False
@@ -229,7 +225,7 @@ if __name__ == '__main__':
     vasc = VascOccParser(foldername=folder, glob=glob,
                          frames_before_stim=frames_before_stim,
                          len_of_epoch_in_frames=len_of_epoch_in_frames,
-                         fps=fps, invalid_cells=invalid_cells,
+                         fps=fps,
                          with_analog=with_analog,
                          num_of_channels=num_of_channels,
                          with_colabeling=with_colabeling,
