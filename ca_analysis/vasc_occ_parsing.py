@@ -178,6 +178,37 @@ class VascOccParser:
         dff = np.concatenate(dff)
         return dff
 
+    def _display_analog_traces(self, ax_puff, ax_jux, ax_run, data: AnalogTraceAnalyzer):
+        """ Show three Axes of the analog data """
+        ax_puff.plot(data.stim_vec)
+        ax_puff.invert_yaxis()
+        ax_puff.set_ylabel('Direct air puff')
+        ax_puff.set_xlabel('')
+        ax_puff.set_xticks([])
+        ax_jux.plot(data.juxta_vec)
+        ax_jux.invert_yaxis()
+        ax_jux.set_ylabel('Juxtaposed puff')
+        ax_jux.set_xlabel('')
+        ax_jux.set_xticks([])
+        ax_run.plot(data.run_vec)
+        ax_run.invert_yaxis()
+        ax_run.set_ylabel('Run times')
+        ax_run.set_xlabel('')
+        ax_run.set_xticks([])
+
+    def _display_occluder(self, ax, data_length):
+        """ Show the occluder timings """
+        occluder = np.zeros((data_length))
+        occluder[self.frames_before_stim:self.frames_before_stim + self.len_of_epoch_in_frames] = 1
+        time = np.arange(data_length) / self.fps
+        ax.plot(time, occluder)
+        ax.get_xaxis().set_ticks_position('top')
+
+        ax.invert_yaxis()
+
+        ax.set_ylabel('Artery occlusion')
+        ax.set_xlabel('')
+
 def concat_vasc_occ_dataarrays(da_list: list):
     """ Take a list of DataArrays and concatenate them together
     while keeping the index integrity """
@@ -202,14 +233,14 @@ def concat_vasc_occ_dataarrays(da_list: list):
 
 
 if __name__ == '__main__':
-    folder = '/data/David/Vascular occluder_ALL/SST-TD-GCaMP_VASCULAR_OCC'
+    folder = '/data/David/Vascular occluder_ALL/Thy_1_gcampF_vasc_occ_311018/right_hemi_(cca_left_with_vascular_occ)'
     glob = r'f*results.npz'
     assert pathlib.Path(folder).exists()
     frames_before_stim = 17484
     len_of_epoch_in_frames = 7000
     fps = 58.2
     with_analog = True
-    with_colabeling = True
+    with_colabeling = False
     display_each_fov = False
     serialize = True
     vasc = VascOccParser(foldername=folder, glob=glob,

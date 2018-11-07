@@ -47,7 +47,7 @@ class VascOccAnalyzer:
             dff = np.delete(cur_data.values, self.invalid_cells, axis=0)
             all_spikes, num_peaks = self._find_spikes(dff)
             self._calc_firing_rate(num_peaks, title)
-            self._scatter_spikes(dff, all_spikes, title, downsample_display=1)
+            self._scatter_spikes(dff, all_spikes, title, downsample_display=10)
             self._rolling_window(cur_data, dff, all_spikes, epoch)
             self._per_cell_analysis(num_peaks, title)
             self._anova_on_mean_dff(dff, epoch)
@@ -180,48 +180,17 @@ class VascOccAnalyzer:
         ax.plot(spike_freq_df.loc[:, 'before':'after'].T, '-o')
         ax.set_title(f'Per-cell analysis of {title}')
 
-    def _display_analog_traces(self, ax_puff, ax_jux, ax_run, data: AnalogTraceAnalyzer):
-        """ Show three Axes of the analog data """
-        ax_puff.plot(data.stim_vec)
-        ax_puff.invert_yaxis()
-        ax_puff.set_ylabel('Direct air puff')
-        ax_puff.set_xlabel('')
-        ax_puff.set_xticks([])
-        ax_jux.plot(data.juxta_vec)
-        ax_jux.invert_yaxis()
-        ax_jux.set_ylabel('Juxtaposed puff')
-        ax_jux.set_xlabel('')
-        ax_jux.set_xticks([])
-        ax_run.plot(data.run_vec)
-        ax_run.invert_yaxis()
-        ax_run.set_ylabel('Run times')
-        ax_run.set_xlabel('')
-        ax_run.set_xticks([])
-
-    def _display_occluder(self, ax, data_length):
-        """ Show the occluder timings """
-        occluder = np.zeros((data_length))
-        occluder[self.frames_before_stim:self.frames_before_stim + self.len_of_epoch_in_frames] = 1
-        time = np.arange(data_length) / self.fps
-        ax.plot(time, occluder)
-        ax.get_xaxis().set_ticks_position('top')
-
-        ax.invert_yaxis()
-
-        ax.set_ylabel('Artery occlusion')
-        ax.set_xlabel('')
-
 
 if __name__ == '__main__':
-    # folder = pathlib.Path.home() / 'data/David/Vascular occluder_ALL/vasc_occ_air_puff_010418'
-    folder = pathlib.Path('/data/David/Vascular occluder_ALL/SST-TD-GCaMP_VASCULAR_OCC')
+    folder = pathlib.Path('/data/David/Vascular occluder_ALL/Thy_1_gcampF_vasc_occ_311018/right_hemi_(cca_left_with_vascular_occ)')
+    # folder = pathlib.Path('/data/David/Vascular occluder_ALL/SST-TD-GCaMP_VASCULAR_OCC')
     assert folder.exists()
     glob = r'vasc_occ_parsed.nc'
     folder_and_files = {folder: glob}
-    invalid_cells: list = [0, 1, 39]
+    invalid_cells: list = []
     with_analog = True
     num_of_channels = 2
-    with_colabeling = True
+    with_colabeling = False
     vasc = VascOccAnalyzer(folder_and_file=folder_and_files,
                            invalid_cells=invalid_cells,
                            with_analog=with_analog,
