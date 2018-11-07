@@ -3,15 +3,7 @@ from attr.validators import instance_of
 import numpy as np
 import pandas as pd
 import pathlib
-import sys
-import peakutils
-from statsmodels.stats.multicomp import MultiComparison
-from statsmodels.stats.libqsturng import psturng
-import scipy.stats
 import matplotlib.pyplot as plt
-from matplotlib import patches
-from matplotlib import gridspec
-import mne
 import tifffile
 import os
 import itertools
@@ -20,7 +12,6 @@ from collections import namedtuple
 from datetime import datetime
 import colorama
 colorama.init()
-from ansimarkup import ansiprint as aprint
 import copy
 import warnings
 
@@ -204,15 +195,15 @@ def concat_vasc_occ_dataarrays(da_list: list):
                                             'neuron': crd_neuron,
                                             'time': crd_time},
                                     attrs=da.attrs)
-        new_da_list.append(reindexed_da)
-        num_of_neurons += len(da.neuron)
-
+        new_da_list.append(reindexed_da)        
+        num_of_neurons += len(da.neuron)    
+    
     return xr.concat(new_da_list, dim='neuron')
 
 
 if __name__ == '__main__':
     folder = '/data/David/Vascular occluder_ALL/SST-TD-GCaMP_VASCULAR_OCC'
-    glob = r'*results.npz'
+    glob = r'f*results.npz'
     assert pathlib.Path(folder).exists()
     frames_before_stim = 17484
     len_of_epoch_in_frames = 7000

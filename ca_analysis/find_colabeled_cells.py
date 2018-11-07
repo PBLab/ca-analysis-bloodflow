@@ -187,6 +187,7 @@ def batch_colabeled(foldername: pathlib.Path, verbose=False):
     the indices of the colabeled cells """
     result_files = foldername.rglob('*results.npz')
     for file in result_files:
+        print(f"Loading {file}...")
         name_without_channel = str(file.name)[:-22] + '.tif'
         try:
             matching_tif = next(file.parent.glob(name_without_channel))
@@ -197,7 +198,7 @@ def batch_colabeled(foldername: pathlib.Path, verbose=False):
             colabeled = ColabeledCells(tif=matching_tif, result_file=file,
                                        activity_ch=TiffChannels.ONE,
                                        morph_ch=TiffChannels.TWO,
-                                       cell_radius=4, verbose=verbose).find_colabeled()
+                                       cell_radius=5, verbose=verbose).find_colabeled()
             print(f"File {file} contained {colabeled} colabeled cells.")
 
 
