@@ -206,11 +206,11 @@ class CalciumAnalysisOverTime:
 
 
 if __name__ == '__main__':
-    results_folder = Path.home() / Path(r'data/David/TAC_together_nov18')
+    results_folder = Path(r'/data/David/TAC_together_nov18')
     assert results_folder.exists()
-    folder_and_files = {Path.home() / Path('data/David/NEW_crystal_skull_TAC_161018'): 'DAY*/*/*.tif',
-                        Path.home() / Path('data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
-    # folder_and_files = {Path.home() / Path('data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
+    # folder_and_files = {Path('/data/David/NEW_crystal_skull_TAC_161018'): 'DAY*/*/*.tif',
+    #                     Path('/data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
+    folder_and_files = {Path('/data/David/NEW_crystal_skull_TAC_161018'): 'DAY*/*/*.tif'}
     res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True, 
                                   folder_globs=folder_and_files)
     # regex = {'id_reg': r'_(\d+?)_X10',

@@ -14,7 +14,7 @@ import xarray as xr
 import colorama
 colorama.init()
 from ansimarkup import ansiprint as aprint
-
+import sklearn.cluster
 from ca_analysis.analog_trace import AnalogTraceAnalyzer
 from ca_analysis.dff_tools import scatter_spikes, plot_mean_vals, display_heatmap
 from ca_analysis.vasc_occ_parsing import concat_vasc_occ_dataarrays
@@ -42,20 +42,33 @@ class VascOccAnalyzer:
         that all rely on a single dF/F matrix as their input """
         self.data = self._concat_dataarrays()
         self.analyzed_data = {}
+        print(f"Total number of cells: {self.data.loc[{'epoch': epochs[0]}].shape[0]}")
+        print(f"Total number of co-labeled cells: {len(self.data.attrs['colabeled'])}")
         for epoch in epochs:
             cur_data = self.data.loc[{'epoch': epoch}]
-            dff = np.delete(cur_data.values, self.invalid_cells, axis=0)
-            all_spikes, num_peaks = self._find_spikes(dff)
-            self._calc_firing_rate(num_peaks, title)
-            self._scatter_spikes(dff, all_spikes, title, downsample_display=10)
-            self._rolling_window(cur_data, dff, all_spikes, epoch)
-            self._per_cell_analysis(num_peaks, title)
-            self._anova_on_mean_dff(dff, epoch)
-            if not self.with_analog:
-                downsample_factor = 1 if title == 'Labeled' else 6
-                display_heatmap(data=dff, epoch=title, downsample_factor=downsample_factor,
+            if 'colabeled' in self.data.attrs:
+                colabeled = cur_data.values[self.data.attrs['colabeled'], :]
+            else:
+                colabeled = np.zeros(())
+            dff = np.delete(cur_data.values.copy(), self.invalid_cells, axis=0)
+            all_spikes, all_num_peaks = self._find_spikes(dff)
+            self._calc_firing_rate(all_num_peaks, title)
+            self._scatter_spikes(dff, all_spikes, title, downsample_display=1)
+            self._rolling_window(cur_data, dff, all_spikes, title)
+            self._per_cell_analysis(all_num_peaks, title)
+            # self._anova_on_mean_dff(dff, epoch)
+            if colabeled.shape[0] > 0:
+                colabeled_spikes, colabeled_peaks = self._find_spikes(colabeled)
+                self._calc_firing_rate(colabeled_peaks, 'Colabeled')
+                self._scatter_spikes(colabeled, colabeled_spikes, 'Colabeled', downsample_display=1)
+                self._rolling_window(cur_data, colabeled, colabeled_spikes, 'Colabeled')
+                self._per_cell_analysis(colabeled_peaks, 'Colabeled')
+                self._kmeans_clustering(colabeled, self.data.attrs['colabeled'])
+            if self.with_analog:
+                # downsample_factor = 1 if title == 'Labeled' else 6
+                display_heatmap(data=dff, epoch=title, downsample_factor=8,
                                 fps=self.data.attrs['fps'])
-            self.analyzed_data[epoch] = (all_spikes, num_peaks)
+            self.analyzed_data[epoch] = (cur_data, all_spikes, all_num_peaks)
         return self.analyzed_data
 
     def _concat_dataarrays(self):
@@ -132,35 +145,48 @@ class VascOccAnalyzer:
         ax.set_title(f'Scatter plot of spikes for cells: {title}')
         plt.savefig(f'spike_scatter_{title}.pdf', transparent=True)
 
-    def _rolling_window(self, data, dff, all_spikes, epoch='All cells'):
+    def _rolling_window(self, data, dff, all_spikes, title='All cells'):
         fps = self.data.attrs['fps']
         x_axis = np.arange(all_spikes.shape[1])/fps
         window = int(fps)
         before_occ = data.attrs['frames_before_occ']
         during_occ = data.attrs['frames_during_occ']
-        fig_title = 'Rolling mean in epoch {epoch} over {over} ({win:.2f} sec window length)'
+        fig_title = 'Rolling mean for {title} over {over} ({win:.2f} sec window length)'
 
         ax_spikes, mean_val_spikes = plot_mean_vals(all_spikes, x_axis=x_axis, window=window, 
-                                                    title=fig_title.format(epoch=epoch, 
+                                                    title=fig_title.format(title=title,
                                                                            over='spike rate', 
                                                                            win=window/fps))
         ax_spikes.set_xlabel('Time (sec)')
         ax_spikes.set_ylabel('Mean Spike Rate')
         ax_spikes.plot(np.arange(before_occ, before_occ + during_occ) / fps,
                        np.full(during_occ, mean_val_spikes*3), 'r')
-        plt.savefig('mean_spike_rate.pdf', transparent=True)
+        plt.savefig(f'mean_spike_rate_{title}.pdf', transparent=True)
         ax_dff, mean_val_dff = plot_mean_vals(dff, x_axis=x_axis, window=int(fps),
-                                              title=fig_title.format(epoch=epoch, over='dF/F', 
+                                              title=fig_title.format(title=title, over='dF/F',
                                                                      win=window/fps))
         ax_dff.set_xlabel('Time (sec)')
         ax_dff.set_ylabel('Mean dF/F')
         ax_dff.plot(np.arange(before_occ, before_occ + during_occ) / fps,
                     np.full(during_occ, mean_val_dff*3), 'r')
-        plt.savefig(f'mean_dff_{epoch}.pdf', transparent=True)
+        plt.savefig(f'mean_dff_{title}.pdf', transparent=True)
 
     def _anova_on_mean_dff(self, dff, epoch='All cells'):
         """ Calculate a one-way anova over the mean dF/F trace of all cells """
         print(scipy.stats.f_oneway(*dff.T))
+
+    def _kmeans_clustering(self, dff, colabeled_idx):
+        """ Perform KMeans clustering to detect colabeled cells """
+        kmeans = sklearn.cluster.KMeans(n_clusters=2).fit(dff)
+        clustered = np.nonzero(kmeans.labels_)[0]
+        if len(clustered) > dff.shape[0] / 2:
+            clustered = np.where(kmeans.labels_ == 0)
+        print(f"The following cell indices were clustered as colabeled cells: {clustered}")
+        print(f"These are the 'true' colabeled cells: {colabeled_idx}")
+        fig, ax = plt.subplots()
+        x = np.atleast_2d(np.arange(len(clustered)))
+        ax.plot(dff[clustered, :].T + x)
+        ax.set_title('KMeans clustering for colabeled cells')
 
     def _per_cell_analysis(self, spike_freq_df, title='All cells'):
         """ Obtain a mean firing rate of each cell before, during and after the occlusion. Find
@@ -182,19 +208,19 @@ class VascOccAnalyzer:
 
 
 if __name__ == '__main__':
-    folder = pathlib.Path('/data/David/Vascular occluder_ALL/Thy_1_gcampF_vasc_occ_311018/right_hemi_(cca_left_with_vascular_occ)')
-    # folder = pathlib.Path('/data/David/Vascular occluder_ALL/SST-TD-GCaMP_VASCULAR_OCC')
+    # folder = pathlib.Path('/data/David/Vascular occluder_ALL/Thy_1_gcampF_vasc_occ_311018/right_hemi_(cca_left_with_vascular_occ)')
+    folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_270818_muscle_only')
     assert folder.exists()
     glob = r'vasc_occ_parsed.nc'
     folder_and_files = {folder: glob}
     invalid_cells: list = []
     with_analog = True
     num_of_channels = 2
-    with_colabeling = False
+    with_colabeling = True
     vasc = VascOccAnalyzer(folder_and_file=folder_and_files,
                            invalid_cells=invalid_cells,
                            with_analog=with_analog,
                            with_colabeling=with_colabeling)
-    vasc.run_extra_analysis()
+    data = vasc.run_extra_analysis()
     plt.show(block=True)
 

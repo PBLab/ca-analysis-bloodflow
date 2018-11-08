@@ -233,14 +233,14 @@ def concat_vasc_occ_dataarrays(da_list: list):
 
 
 if __name__ == '__main__':
-    folder = '/data/David/Vascular occluder_ALL/Thy_1_gcampF_vasc_occ_311018/right_hemi_(cca_left_with_vascular_occ)'
+    folder = '/data/David/Vascular occluder_ALL/vip_td_gcamp_270818_muscle_only'
     glob = r'f*results.npz'
     assert pathlib.Path(folder).exists()
-    frames_before_stim = 17484
-    len_of_epoch_in_frames = 7000
+    frames_before_stim = 2000
+    len_of_epoch_in_frames = 2000
     fps = 58.2
     with_analog = True
-    with_colabeling = False
+    with_colabeling = True
     display_each_fov = False
     serialize = True
     vasc = VascOccParser(foldername=folder, glob=glob,

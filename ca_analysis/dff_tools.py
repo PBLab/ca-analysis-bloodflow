@@ -182,8 +182,8 @@ def display_heatmap(data, ax=None, epoch='All cells', downsample_factor=8,
 
 def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Path, 
                                     indices=slice(None), num_to_display=20,
-                                    cell_radius=10, data_channel=TiffChannels.ONE,
-                                    number_of_channels=2):
+                                    cell_radius=5, data_channel=TiffChannels.ONE,
+                                    number_of_channels=2, title='Cell Excerpts Over Time'):
     """ 
     Display cells as they fluoresce during the recording time, each cell in its
     own row, over time.
@@ -205,7 +205,7 @@ def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Pat
         data = f.asarray(slice(data_channel.value, None, number_of_channels))
         fps = f.scanimage_metadata['FrameData']['SI.hRoiManager.scanFrameRate']
 
-    cell_coms = [coords[idx]['CoM'].astype(np.uint16) for idx in range(len(coords))]
+    cell_coms = [coords[idx]['CoM'].astype(np.uint16)-1 for idx in range(len(coords))]
     shape = data.shape[1:]
     masks = [skimage.draw.rectangle(cell, extent=cell_radius*2, shape=shape) for cell in cell_coms]
     cell_data = [data[:, mask[0], mask[1]] for mask in masks]
@@ -237,11 +237,11 @@ def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Pat
         ax.set_yticks([cell_radius])
         ax.set_yticklabels([cell_idx])
     
-    fig.suptitle('Cell Excerpts Over Time')
+    fig.suptitle(title)
     fig.subplots_adjust(hspace=0.05, wspace=0.05)
     fig.text(0.5, 0.05, 'Time (sec)', horizontalalignment='center')
     fig.text(0.07, 0.5, 'Cell ID', verticalalignment='center', rotation='vertical')
-    fig.savefig('mosaic.png', frameon=False, transparent=True)
+    fig.savefig(f'cell_mosaic_{title}.pdf', frameon=False, transparent=True)
 
 
 def draw_rois_over_cells(fname: pathlib.Path):
@@ -279,9 +279,15 @@ def draw_rois_over_cells(fname: pathlib.Path):
 
 
 if __name__ == '__main__':
-    tif = pathlib.Path.home() / pathlib.Path(r'data/Amos/occluder/4th_July18_VIP_Td_SynGCaMP_Occluder/fov1_mag_2p5_256PX_58p28HZ_vasc_occ_00001.tif')
-    result = pathlib.Path.home() / pathlib.Path(r'data/Amos/occluder/4th_July18_VIP_Td_SynGCaMP_Occluder/fov1_mag_2p5_256PX_58p28HZ_vasc_occ_00001_CHANNEL_1_results.npz')
-    tif = pathlib.Path.home() / pathlib.Path(r'data/David/vip_td_gcamp_vasc_occ_280818/fov_1_mag_2p5_256Px_60Hz_00001.tif')
-    # mask = display_cell_excerpts_over_time(result, tif)
-    draw_rois_over_cells(tif)
+    tif_folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_280818/')
+    tifs = tif_folder.rglob('f*0[1-9].tif')
+    for tif in tifs:
+        print(tif)
+        try:
+            result = next(tif_folder.rglob(tif.name[:-4] + '*results.npz'))
+        except StopIteration:
+            print("No results for prev TIF")
+            continue
+        print(f"Found: {result}")
+        mask = display_cell_excerpts_over_time(result, tif, title=tif.name)
     plt.show(block=True)

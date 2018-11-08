@@ -35,7 +35,6 @@ class SingleFovParser:
         self.analog_analyzed = AnalogTraceAnalyzer(tif_filename=str(self.analog_fname), 
                                                    analog_trace=analog_data,
                                                    framerate=self.metadata.fps,
-                                                   num_of_channels=self.metadata.num_of_channels,
                                                    start_time=self.metadata.start_time,
                                                    timestamps=self.metadata.timestamps)
         self.analog_analyzed.run()
