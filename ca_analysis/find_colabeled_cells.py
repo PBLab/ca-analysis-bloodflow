@@ -182,10 +182,10 @@ class ColabeledCells:
             warnings.warn(f"Permission error for folder {fname.parent}")
 
 
-def batch_colabeled(foldername: pathlib.Path, verbose=False):
+def batch_colabeled(foldername: pathlib.Path, glob='*results.npz', verbose=False):
     """ Batch process all stacks in folder to find and write to disk
     the indices of the colabeled cells """
-    result_files = foldername.rglob('*results.npz')
+    result_files = foldername.rglob(glob)
     for file in result_files:
         print(f"Loading {file} and its matching TIF...")
         name_without_channel = str(file.name)[:-22] + '.tif'
@@ -205,6 +205,7 @@ def batch_colabeled(foldername: pathlib.Path, verbose=False):
 if __name__ == '__main__':
     plt.show(block=True)
     # folder = pathlib.Path.home() / pathlib.Path(r'data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_anaesthetise')
-    folder = pathlib.Path('/data/David/Vascular occluder_ALL/SST-TD-GCaMP_VASCULAR_OCC')
+    folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_270818_muscle_only/')
     assert folder.exists()
-    batch_colabeled(folder, verbose=True)
+    glob = r'f*60Hz_00001*results.npz'
+    batch_colabeled(folder, glob=glob, verbose=True)

@@ -37,7 +37,7 @@ class VascOccAnalyzer:
     analyzed_data = attr.ib(init=False)
     meta_params = attr.ib(init=False)
 
-    def run_extra_analysis(self, epochs: tuple=('stand_spont',), title: str='All cells'):
+    def run_extra_analysis(self, epochs: tuple=('stand_spont',), title: str='All_cells'):
         """ Wrapper method to run several consecutive analysis scripts
         that all rely on a single dF/F matrix as their input """
         self.data = self._concat_dataarrays()
@@ -53,7 +53,7 @@ class VascOccAnalyzer:
             dff = np.delete(cur_data.values.copy(), self.invalid_cells, axis=0)
             all_spikes, all_num_peaks = self._find_spikes(dff)
             self._calc_firing_rate(all_num_peaks, title)
-            self._scatter_spikes(dff, all_spikes, title, downsample_display=1)
+            self._scatter_spikes(dff, all_spikes, title, downsample_display=10)
             self._rolling_window(cur_data, dff, all_spikes, title)
             self._per_cell_analysis(all_num_peaks, title)
             # self._anova_on_mean_dff(dff, epoch)
@@ -105,7 +105,7 @@ class VascOccAnalyzer:
                                      index=np.arange(len(idx_section1)))
         return all_spikes, num_of_spikes
 
-    def _calc_firing_rate(self, num_peaks: pd.DataFrame, epoch: str='All cells'):
+    def _calc_firing_rate(self, num_peaks: pd.DataFrame, epoch: str='All_cells'):
         """
         Sum all indices of peaks to find the average firing rate of cells in the three epochs
         :return:
@@ -126,14 +126,14 @@ class VascOccAnalyzer:
         finally:
             print(split_data.mean(level=1))
 
-    def _scatter_spikes(self, dff, all_spikes, title='All cells', downsample_display=10):
+    def _scatter_spikes(self, dff, all_spikes, title='All_cells', downsample_display=10):
         """
         Show a scatter plot of spikes in the three epochs
         :param dff: Numpy array of cells x dF/F values
         :param all_spikes: DataFrame with number of spikes per trial.
         :return:
         """
-        time = np.linspace(0, dff.shape[1]/self.data.attrs['fps'], num=dff.shape[1], dtype=np.int32)
+        time = np.linspace(0, dff.shape[1]/self.data.attrs['fps'], num=dff.shape[1], dtype=np.float64)
         fig, num_displayed_cells = scatter_spikes(dff, all_spikes, time_vec=time,
                                                   downsample_display=downsample_display)
         ax = fig.axes[0]
@@ -171,7 +171,7 @@ class VascOccAnalyzer:
                     np.full(during_occ, mean_val_dff*3), 'r')
         plt.savefig(f'mean_dff_{title}.pdf', transparent=True)
 
-    def _anova_on_mean_dff(self, dff, epoch='All cells'):
+    def _anova_on_mean_dff(self, dff, epoch='All_cells'):
         """ Calculate a one-way anova over the mean dF/F trace of all cells """
         print(scipy.stats.f_oneway(*dff.T))
 
@@ -208,8 +208,8 @@ class VascOccAnalyzer:
 
 
 if __name__ == '__main__':
-    # folder = pathlib.Path('/data/David/Vascular occluder_ALL/Thy_1_gcampF_vasc_occ_311018/right_hemi_(cca_left_with_vascular_occ)')
-    folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_270818_muscle_only')
+    folder = pathlib.Path.home() / pathlib.Path('data/David/Vascular occluder_ALL/Thy_1_gcampF_vasc_occ_311018/left_hemi_(cca_left_with_vascular_occ)')
+    # folder = pathlib.Path('/data/David/Vascular occluder_ALL/Thy_1_gcampF_vasc_occ_311018/')
     assert folder.exists()
     glob = r'vasc_occ_parsed.nc'
     folder_and_files = {folder: glob}

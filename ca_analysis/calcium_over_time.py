@@ -215,5 +215,5 @@ if __name__ == '__main__':
                                   folder_globs=folder_and_files)
     # regex = {'id_reg': r'_(\d+?)_X10',
     #          'cond_reg': r'^([a-zA-Z]+?)_[0-9]'}
-    # res.run_batch_of_timepoints()
-    res.generate_da_per_day()
+    res.run_batch_of_timepoints()
+    # res.generate_da_per_day()

@@ -8,8 +8,7 @@ import peakutils
 import matplotlib
 import matplotlib.gridspec
 import matplotlib.pyplot as plt
-from matplotlib import patches
-from matplotlib import gridspec
+from matplotlib.ticker import FormatStrFormatter
 import sklearn.metrics
 import skimage.draw
 import tifffile
@@ -103,6 +102,7 @@ def scatter_spikes(raw_data, spike_data, downsample_display=10, time_vec=None):
     ax.spines['right'].set_visible(False)
     ax.set_xlabel('Time (seconds)')
     ax.set_ylabel('Cell ID')
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%d'))
     return fig, num_displayed_cells
 
 

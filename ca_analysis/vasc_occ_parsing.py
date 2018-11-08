@@ -233,9 +233,9 @@ def concat_vasc_occ_dataarrays(da_list: list):
 
 
 if __name__ == '__main__':
-    folder = '/data/David/Vascular occluder_ALL/vip_td_gcamp_270818_muscle_only'
-    glob = r'f*results.npz'
-    assert pathlib.Path(folder).exists()
+    folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_270818_muscle_only/')
+    glob = r'f*60Hz_00001*results.npz'
+    assert folder.exists()
     frames_before_stim = 2000
     len_of_epoch_in_frames = 2000
     fps = 58.2
@@ -243,7 +243,7 @@ if __name__ == '__main__':
     with_colabeling = True
     display_each_fov = False
     serialize = True
-    vasc = VascOccParser(foldername=folder, glob=glob,
+    vasc = VascOccParser(foldername=str(folder), glob=glob,
                          frames_before_stim=frames_before_stim,
                          len_of_epoch_in_frames=len_of_epoch_in_frames,
                          fps=fps,
