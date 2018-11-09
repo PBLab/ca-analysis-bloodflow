@@ -41,6 +41,7 @@ class VascOccParser:
     with_colabeling = attr.ib(default=False, validator=instance_of(bool))
     serialize = attr.ib(default=True, validator=instance_of(bool))
     dff = attr.ib(init=False)
+    colabel_idx = attr.ib(init=False)
     frames_after_stim = attr.ib(init=False)
     start_time = attr.ib(init=False)
     timestamps = attr.ib(init=False)
@@ -48,7 +49,6 @@ class VascOccParser:
     sliced_fluo = attr.ib(init=False)
     OccMetadata = attr.ib(init=False)
     data_files = attr.ib(init=False)
-    colabel_idx = attr.ib(init=False)
 
     def __attrs_post_init__(self):
         self.OccMetadata = namedtuple('OccMetadata', ['before', 'during', 'after'])
@@ -61,7 +61,7 @@ class VascOccParser:
             self.dff = self.sliced_fluo.loc['all'].values
         elif self.with_colabeling:
             self.dff = self._load_dff()
-            self.colabel_idx = self._load_colabeled_idx()
+            colabel_idx = self._load_colabeled_idx()
         else:
             self.dff = calc_dff_batch(self.data_files['caiman'])
 
@@ -79,14 +79,14 @@ class VascOccParser:
                                                timestamps=self.timestamps,
                                                occluder=True, occ_metadata=occ_metadata)
             analog_trace.run()
-            copied_trace = copy.deepcopy(analog_trace)  # for some reason,
             # multiplying the trace by the dff changes analog_trace. To overcome
             # this weird issue we're copying it.
-            list_of_sliced_fluo.append(analog_trace * dff)  # overloaded __mul__
-        print("Concatenating FOVs into a single data structure...")
-        self.sliced_fluo: xr.DataArray = concat_vasc_occ_dataarrays(list_of_sliced_fluo)
+            copied_trace = copy.deepcopy(analog_trace)  # for some reason,
+            list_of_sliced_fluo.append(copied_trace * dff)  # overloaded __mul__
         if self.with_colabeling:
             self.colabel_idx = self._load_colabeled_idx()
+        print("Concatenating FOVs into a single data structure...")
+        self.sliced_fluo: xr.DataArray = concat_vasc_occ_dataarrays(list_of_sliced_fluo)
         if self.serialize:
             print("Writing to disk...")
             self._serialize_results(row['tif'].parent)
@@ -98,8 +98,7 @@ class VascOccParser:
         self.sliced_fluo.attrs['frames_during_occ'] = self.len_of_epoch_in_frames
         self.sliced_fluo.attrs['frames_after_occ'] = self.frames_after_stim
         if self.with_colabeling:
-            self.sliced_fluo.attrs['colabeled'] = self.colabel_idx
-
+            self.sliced_fluo.attrs['colabeld'] = self.colabel_idx
         self.sliced_fluo.to_netcdf(str(foldername / 'vasc_occ_parsed.nc'), mode='w')  # TODO: compress
 
     def _find_all_files(self):
@@ -162,6 +161,7 @@ class VascOccParser:
         for _, row in self.data_files.iterrows():
             cur_data = np.load(row.caiman)['F_dff']
             cur_idx = np.load(row.colabeled)
+            assert cur_idx.max() <= cur_data.shape[0]
             cur_idx += num_of_cells
             colabel_idx.append(cur_idx)
             num_of_cells += cur_data.shape[0]
@@ -234,7 +234,7 @@ def concat_vasc_occ_dataarrays(da_list: list):
 
 if __name__ == '__main__':
     folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_270818_muscle_only/')
-    glob = r'f*60Hz_00001*results.npz'
+    glob = r'f*60Hz*MUSCLE*_00001*results.npz'
     assert folder.exists()
     frames_before_stim = 2000
     len_of_epoch_in_frames = 2000

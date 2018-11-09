@@ -36,7 +36,6 @@ class ColabeledCells:
     verbose = attr.ib(default=False, validator=instance_of(bool))
     colabeled_idx = attr.ib(init=False)
     unlabeled_idx = attr.ib(init=False)
-    raw_data = attr.ib(init=False)
     num_of_channels = attr.ib(init=False)
     act_data = attr.ib(init=False)
     morph_data = attr.ib(init=False)
@@ -115,7 +114,7 @@ class ColabeledCells:
         # Start by reading the center of mass coordinates of CaImAn components
         res_file = np.load(self.result_file)
         all_crd = res_file['crd']
-        if res_file['idx_components'].any():  # newer .npz files are already "filtered" and so this line isn't needed
+        if 'params' not in res_file:  # newer .npz files are already "filtered" and so this line isn't needed
             all_crd = all_crd[res_file['idx_components']]  # filters bad components
         centroids_functional = np.array([data['CoM'] for data in all_crd])
         assert centroids_functional.shape[1] == 2  # two columns, x and y
@@ -207,5 +206,5 @@ if __name__ == '__main__':
     # folder = pathlib.Path.home() / pathlib.Path(r'data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_anaesthetise')
     folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_270818_muscle_only/')
     assert folder.exists()
-    glob = r'f*60Hz_00001*results.npz'
+    glob = r'f*60Hz*results.npz'
     batch_colabeled(folder, glob=glob, verbose=True)

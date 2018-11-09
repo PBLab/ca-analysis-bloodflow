@@ -43,7 +43,8 @@ class VascOccAnalyzer:
         self.data = self._concat_dataarrays()
         self.analyzed_data = {}
         print(f"Total number of cells: {self.data.loc[{'epoch': epochs[0]}].shape[0]}")
-        print(f"Total number of co-labeled cells: {len(self.data.attrs['colabeled'])}")
+        if self.with_colabeling:
+            print(f"Total number of co-labeled cells: {len(self.data.attrs['colabeled'])}")
         for epoch in epochs:
             cur_data = self.data.loc[{'epoch': epoch}]
             if 'colabeled' in self.data.attrs:
@@ -56,8 +57,9 @@ class VascOccAnalyzer:
             self._scatter_spikes(dff, all_spikes, title, downsample_display=10)
             self._rolling_window(cur_data, dff, all_spikes, title)
             self._per_cell_analysis(all_num_peaks, title)
+            self._corr_dff(dff, [10, 20, 30, 60, 100, 110])
             # self._anova_on_mean_dff(dff, epoch)
-            if colabeled.shape[0] > 0:
+            if colabeled:
                 colabeled_spikes, colabeled_peaks = self._find_spikes(colabeled)
                 self._calc_firing_rate(colabeled_peaks, 'Colabeled')
                 self._scatter_spikes(colabeled, colabeled_spikes, 'Colabeled', downsample_display=1)
@@ -206,17 +208,39 @@ class VascOccAnalyzer:
         ax.plot(spike_freq_df.loc[:, 'before':'after'].T, '-o')
         ax.set_title(f'Per-cell analysis of {title}')
 
+    def _corr_dff(self, dff, idx_list):
+        corr = np.corrcoef(dff)
+        fig, ax = plt.subplots()
+        ax.imshow(corr)
+        ax.set_title('Correlation between all neurons')
+        for cell in idx_list:
+            p_across = patches.Rectangle((0, cell-0.5),
+                                         width=corr.shape[0],
+                                         height=1,
+                                         facecolor='red', alpha=0.2, edgecolor='red')
+            p_upright = patches.Rectangle((cell-0.5, 0),
+                                          width=1,
+                                          height=corr.shape[0],
+                                          facecolor='red', alpha=0.2, edgecolor='red')
+
+            ax.add_artist(p_across)
+            ax.add_artist(p_upright)
+        print("OK")
+
+
+
 
 if __name__ == '__main__':
-    folder = pathlib.Path.home() / pathlib.Path('data/David/Vascular occluder_ALL/Thy_1_gcampF_vasc_occ_311018/left_hemi_(cca_left_with_vascular_occ)')
-    # folder = pathlib.Path('/data/David/Vascular occluder_ALL/Thy_1_gcampF_vasc_occ_311018/')
+    # folder = pathlib.Path.home() / pathlib.Path('data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_280818')
+    # folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_280818')
+    folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_270818_muscle_only/')
     assert folder.exists()
     glob = r'vasc_occ_parsed.nc'
     folder_and_files = {folder: glob}
     invalid_cells: list = []
     with_analog = True
     num_of_channels = 2
-    with_colabeling = True
+    with_colabeling = False
     vasc = VascOccAnalyzer(folder_and_file=folder_and_files,
                            invalid_cells=invalid_cells,
                            with_analog=with_analog,
