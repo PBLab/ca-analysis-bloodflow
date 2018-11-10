@@ -98,7 +98,7 @@ class VascOccParser:
         self.sliced_fluo.attrs['frames_during_occ'] = self.len_of_epoch_in_frames
         self.sliced_fluo.attrs['frames_after_occ'] = self.frames_after_stim
         if self.with_colabeling:
-            self.sliced_fluo.attrs['colabeld'] = self.colabel_idx
+            self.sliced_fluo.attrs['colabeled'] = self.colabel_idx
         self.sliced_fluo.to_netcdf(str(foldername / 'vasc_occ_parsed.nc'), mode='w')  # TODO: compress
 
     def _find_all_files(self):

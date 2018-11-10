@@ -59,7 +59,7 @@ class VascOccAnalyzer:
             self._per_cell_analysis(all_num_peaks, title)
             self._corr_dff(dff, [10, 20, 30, 60, 100, 110])
             # self._anova_on_mean_dff(dff, epoch)
-            if colabeled:
+            if 'colabeled' in self.data.attrs:
                 colabeled_spikes, colabeled_peaks = self._find_spikes(colabeled)
                 self._calc_firing_rate(colabeled_peaks, 'Colabeled')
                 self._scatter_spikes(colabeled, colabeled_spikes, 'Colabeled', downsample_display=1)
@@ -235,12 +235,12 @@ if __name__ == '__main__':
     # folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_280818')
     folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_270818_muscle_only/')
     assert folder.exists()
-    glob = r'vasc_occ_parsed.nc'
+    glob = r'vasc_occ_parsed_muscle.nc'
     folder_and_files = {folder: glob}
     invalid_cells: list = []
     with_analog = True
     num_of_channels = 2
-    with_colabeling = False
+    with_colabeling = True
     vasc = VascOccAnalyzer(folder_and_file=folder_and_files,
                            invalid_cells=invalid_cells,
                            with_analog=with_analog,

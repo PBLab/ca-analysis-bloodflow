@@ -45,7 +45,7 @@ class CalciumReview:
     the function at the bottom of that list.
     """
     folder = attr.ib(validator=instance_of(pathlib.Path))
-    glob = attr.ib(default=r'data_of_day_*.nc')
+    glob = attr.ib(default=r'*data_of_day_*.nc')
     files = attr.ib(init=False)
     days = attr.ib(init=False)
     conditions = attr.ib(init=False)
@@ -99,7 +99,7 @@ class CalciumReview:
 
     def apply_analysis_funcs(self, funcs: list, epoch: str):
         """ Call the list of methods given to save time and memory """
-        norm_factor = 1
+        norm1, norm2 = 1, 1
         for day, raw_datum in dict(sorted(self.raw_data.items())).items():
             print(f"Analyzing day {day}...")
             selected_first = self._filter_da(raw_datum, condition=self.conditions[0], epoch=epoch)
@@ -109,9 +109,9 @@ class CalciumReview:
                 cond1_mean, cond1_sem = cond1.mean(), cond1.std(ddof=1) / np.sqrt(cond1.shape[0])
                 cond2 = getattr(dff_tools, func.value)(selected_second)
                 cond2_mean, cond2_sem = cond2.mean(), cond2.std(ddof=1) / np.sqrt(cond2.shape[0])
-                if func == AvailableFuncs.AUC and day == 0:
-                    norm1 = cond1_mean
-                    norm2 = cond2_mean
+                # if func == AvailableFuncs.AUC and day == 0:
+                #     norm1 = cond1_mean
+                #     norm2 = cond2_mean
                 t, p = stats.ttest_ind(cond1, cond2, equal_var=False)
                 df_dict = {col: data for col, data in zip(self.df_columns,
                     [cond1_mean/norm1, cond1_sem/norm1, cond2_mean/norm2, cond2_sem/norm2, t, p])}
@@ -141,13 +141,13 @@ class CalciumReview:
 
 
 if __name__ == '__main__':
-    folder = pathlib.Path.home() / pathlib.Path(r'data/David/TAC_together_nov18')
+    folder = pathlib.Path(r'/data/David/TAC_together_nov18')
     #     crystal_skull_TAC_180719   NEW_crystal_skull_TAC_161018   TAC_together_nov18
     assert folder.exists()
     ca = CalciumReview(folder)
     analysis_methods = [AvailableFuncs.AUC, AvailableFuncs.MEAN,
                         AvailableFuncs.SPIKERATE]
-    epoch = 'spont'
+    epoch = 'stand_stim'
     ca.apply_analysis_funcs(analysis_methods, epoch)
     ca.plot_df(ca.funcs_dict[AvailableFuncs.AUC], 
                f'AUC of Fluo Traces, Epoch: {epoch}')
