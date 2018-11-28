@@ -57,7 +57,7 @@ class VascOccAnalyzer:
             self._scatter_spikes(dff, all_spikes, title, downsample_display=10)
             self._rolling_window(cur_data, dff, all_spikes, title)
             self._per_cell_analysis(all_num_peaks, title)
-            self._corr_dff(dff, [10, 20, 30, 60, 100, 110])
+            self._corr_dff(dff, self.data.attrs['colabeled'])
             # self._anova_on_mean_dff(dff, epoch)
             if 'colabeled' in self.data.attrs:
                 colabeled_spikes, colabeled_peaks = self._find_spikes(colabeled)
@@ -183,6 +183,7 @@ class VascOccAnalyzer:
         clustered = np.nonzero(kmeans.labels_)[0]
         if len(clustered) > dff.shape[0] / 2:
             clustered = np.where(kmeans.labels_ == 0)
+        print("~~~~~~~~~~~~~~~~~\nKMeans:")
         print(f"The following cell indices were clustered as colabeled cells: {clustered}")
         print(f"These are the 'true' colabeled cells: {colabeled_idx}")
         fig, ax = plt.subplots()
@@ -225,26 +226,24 @@ class VascOccAnalyzer:
 
             ax.add_artist(p_across)
             ax.add_artist(p_upright)
-        print("OK")
-
-
 
 
 if __name__ == '__main__':
     # folder = pathlib.Path.home() / pathlib.Path('data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_280818')
     # folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_280818')
-    folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_270818_muscle_only/')
+    folder = pathlib.Path('/data/David/Vascular occluder_ALL/SST-TD-GCaMP_VASCULAR_OCC')
     assert folder.exists()
-    glob = r'vasc_occ_parsed_muscle.nc'
+    glob = r'vasc_occ_parsed.nc'
     folder_and_files = {folder: glob}
     invalid_cells: list = []
     with_analog = True
     num_of_channels = 2
     with_colabeling = True
+    epoch = ('stand_spont', )
     vasc = VascOccAnalyzer(folder_and_file=folder_and_files,
                            invalid_cells=invalid_cells,
                            with_analog=with_analog,
                            with_colabeling=with_colabeling)
-    data = vasc.run_extra_analysis()
+    data = vasc.run_extra_analysis(epochs=epoch)
     plt.show(block=True)
 

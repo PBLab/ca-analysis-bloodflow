@@ -1,4 +1,6 @@
 import pathlib
+import sys
+sys.path.append('/data/MatlabCode/PBLabToolkit/CalciumDataAnalysis/python-ca-analysis-bloodflow')
 
 import numpy as np
 import pandas as pd
@@ -6,7 +8,8 @@ import xarray as xr
 from ansimarkup import ansiprint as aprint
 import peakutils
 import matplotlib
-import matplotlib.gridspec
+import matplotlib.gridspec as gridspec
+from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
 import sklearn.metrics
@@ -54,7 +57,10 @@ def locate_spikes_peakutils(data, fps=30.03, thresh=0.65):
     min_dist = int(fps)
     for row, cell in enumerate(data):
         peaks = peakutils.indexes(cell, thres=thresh, min_dist=min_dist)
-        all_spikes[row, peaks] = 1
+        if len(peaks) > 0:
+            all_spikes[row, peaks] = 1
+        else:
+            print("No spikes found.")
     
     return all_spikes
 
@@ -73,7 +79,7 @@ def calc_mean_spike_num(data, fps=30.03, thresh=0.75):
     return mean_of_spikes
 
 
-def scatter_spikes(raw_data, spike_data, downsample_display=10, time_vec=None):
+def scatter_spikes(raw_data, spike_data=None, downsample_display=10, time_vec=None):
     """
     Shows a scatter plots of spike locations on each individual fluorescent trace.
     Parameters:
@@ -87,17 +93,17 @@ def scatter_spikes(raw_data, spike_data, downsample_display=10, time_vec=None):
     """
     if time_vec is None:
         time_vec = np.arange(raw_data.shape[1])
-    x, y = np.nonzero(spike_data)
     fig, ax = plt.subplots()
     downsampled_data = raw_data[::downsample_display]
     num_displayed_cells = downsampled_data.shape[0]
     ax.plot(time_vec,
             (downsampled_data + np.arange(num_displayed_cells)[:, np.newaxis]).T)
-    peakvals = raw_data * spike_data
-    peakvals[peakvals == 0] = np.nan
-    ax.plot(time_vec,
-            (peakvals[::downsample_display] + np.arange(num_displayed_cells)[:, np.newaxis]).T,
-            'r.', linewidth=0.1)
+    if spike_data is not None:
+        peakvals = raw_data * spike_data
+        peakvals[peakvals == 0] = np.nan
+        ax.plot(time_vec,
+                (peakvals[::downsample_display] + np.arange(num_displayed_cells)[:, np.newaxis]).T,
+                'r.', linewidth=0.1)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.set_xlabel('Time (seconds)')
@@ -180,6 +186,29 @@ def display_heatmap(data, ax=None, epoch='All cells', downsample_factor=8,
     ax.set_title(f"dF/F Heatmap for epoch {epoch}")
 
 
+def extract_cells_from_tif(results_file: pathlib.Path, tif: pathlib.Path, 
+                           indices=slice(None), num=20,
+                           cell_radius=5, data_channel=TiffChannels.ONE,
+                           number_of_channels=2,) -> np.ndarray:
+    """ Load a raw TIF stack and extract an array of cells. The first dimension is
+    the cell index, the second is time and the other two are the x-y images.
+    Returns this 4D array.
+    """
+    res_data = np.load(results_file)
+    relevant_indices = res_data['idx_components'][indices][:num]
+    coords = res_data['crd'][relevant_indices]
+
+    with tifffile.TiffFile(tif, movie=True) as f:
+        data = f.asarray(slice(data_channel.value, None, number_of_channels))
+        fps = f.scanimage_metadata['FrameData']['SI.hRoiManager.scanFrameRate']
+
+    cell_coms = [coords[idx]['CoM'].astype(np.uint16)-cell_radius for idx in range(len(coords))]
+    shape = data.shape[1:]
+    masks = [skimage.draw.rectangle(cell, extent=cell_radius*2, shape=shape) for cell in cell_coms]
+    cell_data = [data[:, mask[0], mask[1]] for mask in masks]
+    return np.array(cell_data), fps
+
+
 def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Path, 
                                     indices=slice(None), num_to_display=20,
                                     cell_radius=5, data_channel=TiffChannels.ONE,
@@ -197,50 +226,57 @@ def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Pat
         data_channel (Tiffchannels):  The channel containing the functional data.
         number_of_channels (int): Number of data channels.
     """
-    res_data = np.load(results_file)
-    relevant_indices = res_data['idx_components'][indices][:num_to_display]
-    coords = res_data['crd'][relevant_indices]
+    cell_data, fps = extract_cells_from_tif(results_file, tif, indices, num_to_display,
+                                            cell_radius, data_channel, number_of_channels)
 
-    with tifffile.TiffFile(tif, movie=True) as f:
-        data = f.asarray(slice(data_channel.value, None, number_of_channels))
-        fps = f.scanimage_metadata['FrameData']['SI.hRoiManager.scanFrameRate']
-
-    cell_coms = [coords[idx]['CoM'].astype(np.uint16)-1 for idx in range(len(coords))]
-    shape = data.shape[1:]
-    masks = [skimage.draw.rectangle(cell, extent=cell_radius*2, shape=shape) for cell in cell_coms]
-    cell_data = [data[:, mask[0], mask[1]] for mask in masks]
-    
-    # Start plotting
-    idx_sample_start = np.linspace(start=0, stop=data.shape[0], endpoint=False,
+    # Start plotting the cell excerpts, the first column is left currently blank
+    idx_sample_start = np.linspace(start=0, stop=cell_data.shape[1], endpoint=False,
                                    num=num_to_display, dtype=np.uint64)
-    idx_sample_end = idx_sample_start + np.uint64(5)
+    idx_sample_end = idx_sample_start + np.uint64(20)
     w, h = matplotlib.figure.figaspect(1.)
-    fig, axes = plt.subplots(len(cell_data), num_to_display, figsize=(w, h))
-    for row_idx, (ax, cell) in enumerate(zip(axes, cell_data)):
+    fig = plt.figure(figsize=(w, h))
+    gs = gridspec.GridSpec(len(cell_data), num_to_display + 2, figure=fig, wspace=0.01, hspace=0.01)
+    for row_idx, cell in enumerate(cell_data):
+        ax_mean = plt.subplot(gs[row_idx, 0])
+        mean_cell = cell.mean(0)
+        vmin, vmax = mean_cell.min(), mean_cell.max()
+        ax_mean.imshow(mean_cell, cmap='gray', vmin=vmin, vmax=vmax)
+        ax_mean.set_xticks([])
+
         for col_idx, (frame_idx_start, frame_idx_end) in enumerate(zip(idx_sample_start,
-                                                                       idx_sample_end)):
-            ax[col_idx].imshow(cell[frame_idx_start:frame_idx_end, ...].mean(0), cmap='gray')
-            ax[col_idx].spines['top'].set_visible(False)
-            ax[col_idx].spines['bottom'].set_visible(False)
-            ax[col_idx].spines['left'].set_visible(False)
-            ax[col_idx].spines['right'].set_visible(False)
-            ax[col_idx].set_xticks([])
-            ax[col_idx].set_yticks([])
-            ax[col_idx].set_frame_on(False)
+                                                                       idx_sample_end), 2):
+            ax = plt.subplot(gs[row_idx, col_idx])
+            ax.imshow(cell[frame_idx_start:frame_idx_end, ...].mean(0), cmap='gray',
+                               vmin=vmin, vmax=vmax)
+            ax.spines['top'].set_visible(False)
+            ax.spines['bottom'].set_visible(False)
+            ax.spines['left'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_frame_on(False)
+
     # Add labels to row and column at the edge
-    for sample_idx, ax in zip(idx_sample_start, axes[-1, :]):
+    for gs_idx, sample_idx in enumerate(idx_sample_start, 2):
+        ax = plt.subplot(gs[-1, gs_idx])
         ax.set_xticks([cell_radius])
         label = f'{sample_idx/fps:.1f}'
         ax.set_xticklabels([label])
+        ticklabel = ax.get_xticklabels()
+        ticklabel[0].set_fontsize(6)
     
-    for cell_idx, ax in zip(np.arange(1, len(cell_data) + 1), axes[:, 0]):
+    for cell_idx in range(1, len(cell_data)+1):
+        ax = plt.subplot(gs[cell_idx, 0])
         ax.set_yticks([cell_radius])
         ax.set_yticklabels([cell_idx])
     
+    ax = plt.subplot(gs[-1, 0])
+    ax.set_xlabel('Mean')
+    ax.set_xticks([])
+    
     fig.suptitle(title)
-    fig.subplots_adjust(hspace=0.05, wspace=0.05)
-    fig.text(0.5, 0.05, 'Time (sec)', horizontalalignment='center')
-    fig.text(0.07, 0.5, 'Cell ID', verticalalignment='center', rotation='vertical')
+    fig.text(0.55, 0.04, 'Time (sec)', horizontalalignment='center')
+    fig.text(0.04, 0.5, 'Cell ID', verticalalignment='center', rotation='vertical')
     fig.savefig(f'cell_mosaic_{title}.pdf', frameon=False, transparent=True)
 
 
@@ -279,15 +315,12 @@ def draw_rois_over_cells(fname: pathlib.Path):
 
 
 if __name__ == '__main__':
-    tif_folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_280818/')
-    tifs = tif_folder.rglob('f*0[1-9].tif')
-    for tif in tifs:
-        print(tif)
-        try:
-            result = next(tif_folder.rglob(tif.name[:-4] + '*results.npz'))
-        except StopIteration:
-            print("No results for prev TIF")
-            continue
-        print(f"Found: {result}")
-        mask = display_cell_excerpts_over_time(result, tif, title=tif.name)
+    results_file = '/data/David/NEW_crystal_skull_TAC_161018/DAY_7_ALL/147_HYPO_DAY_7/147_HYPO_DAY_7_FOV_3_00001_CHANNEL_1_results.npz'
+    tif = '/data/David/NEW_crystal_skull_TAC_161018/DAY_7_ALL/147_HYPO_DAY_7/147_HYPO_DAY_7_FOV_3_00001.tif'
+    data_channel = TiffChannels.TWO
+    number_of_chans = 2
+    display_cell_excerpts_over_time(results_file=pathlib.Path(results_file),
+                                    tif=pathlib.Path(tif),
+                                    data_channel=data_channel,
+                                    number_of_channels=number_of_chans)    
     plt.show(block=True)

@@ -15,7 +15,7 @@ import re
 import itertools
 from scipy import stats
 
-import dff_tools
+from ca_analysis import dff_tools
 
 
 class Condition(Enum):
@@ -95,7 +95,7 @@ class CalciumReview:
         except KeyError:
             print(f"The day {day} is invalid. Valid days are {self.days}.")
         else:
-            return self._filter_da(unselected_data, condition=condition, epoch=epoch)
+            return self._filter_da(unselected_data, condition=condition.value, epoch=epoch)
 
     def apply_analysis_funcs(self, funcs: list, epoch: str):
         """ Call the list of methods given to save time and memory """
@@ -147,11 +147,11 @@ if __name__ == '__main__':
     ca = CalciumReview(folder)
     analysis_methods = [AvailableFuncs.AUC, AvailableFuncs.MEAN,
                         AvailableFuncs.SPIKERATE]
-    epoch = 'stand_stim'
+    epoch = 'spont'
     ca.apply_analysis_funcs(analysis_methods, epoch)
     ca.plot_df(ca.funcs_dict[AvailableFuncs.AUC], 
                f'AUC of Fluo Traces, Epoch: {epoch}')
     ca.plot_df(ca.funcs_dict[AvailableFuncs.SPIKERATE],
                f'Spike Rate of Fluo Traces, Epoch: {epoch}')
         
-    plt.show()
+    plt.show(block=True)

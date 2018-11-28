@@ -99,7 +99,7 @@ class CalciumAnalysisOverTime:
         Main method to analyze all FOVs in all timepoints in all experiments. 
         Generally used for TAC experiments, which have multiple FOVs per mouse, and 
         an experiment design which spans multiple days.
-        The script expects a filename containing the following "fself.fov_analysis_files.append(None)ields":
+        The script expects a filename containing the following "self.fov_analysis_files.append(fields)":
             Mouse ID (digits at the beginning of filename)
             Either 'HYPER' or 'HYPO'
             'DAY_0/1/n'
@@ -115,20 +115,21 @@ class CalciumAnalysisOverTime:
         self.list_of_fovs = []
         self._find_all_relevant_files()
         assert len(self.fluo_files) == len(self.analog_files) == len(self.result_files)
-
+        files = list(zip(self.fluo_files, self.result_files, self.analog_files))
+        files = ((*file, regex) for file in files)
         for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
             print(f"Parsing {file_fluo}")
             fov = self._analyze_single_fov(file_fluo, file_result, file_analog, **regex)
             self.list_of_fovs.append(str(fov.metadata.fname)[:-4] + ".nc")
         self.generate_da_per_day()
 
-    def _analyze_single_fov(self, fname_fluo, fname_results, fname_analog, **regex):
+    def _analyze_single_fov(self, fname_fluo, results_fname, fname_analog, **regex):
         """ Helper function to go file by file, each with its fluorescence and analog data,
         and run the single FOV parsing on it """
 
         meta = FluoMetadata(fname_fluo, **regex)
         meta.get_metadata()
-        fov = SingleFovParser(analog_fname=fname_analog, fluo_fname=fname_results,
+        fov = SingleFovParser(analog_fname=fname_analog, results_fname=results_fname,
                               metadata=meta)
         fov.parse()
         if self.serialize:
@@ -206,11 +207,11 @@ class CalciumAnalysisOverTime:
 
 
 if __name__ == '__main__':
-    results_folder = Path(r'/data/David/TAC_together_nov18')
+    results_folder = Path(r'/data/David/crystal_skull_TAC_180719')
     assert results_folder.exists()
     # folder_and_files = {Path('/data/David/NEW_crystal_skull_TAC_161018'): 'DAY*/*/*.tif',
     #                     Path('/data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
-    folder_and_files = {Path('/data/David/NEW_crystal_skull_TAC_161018'): '*/*/*.tif'}
+    folder_and_files = {Path('/data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
     res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True, 
                                   folder_globs=folder_and_files)
     # regex = {'id_reg': r'_(\d+?)_X10',
