@@ -1,6 +1,8 @@
 import pathlib
+from typing import Tuple
 import sys
 sys.path.append('/data/MatlabCode/PBLabToolkit/CalciumDataAnalysis/python-ca-analysis-bloodflow')
+
 
 import numpy as np
 import pandas as pd
@@ -189,10 +191,10 @@ def display_heatmap(data, ax=None, epoch='All cells', downsample_factor=8,
 def extract_cells_from_tif(results_file: pathlib.Path, tif: pathlib.Path, 
                            indices=slice(None), num=20,
                            cell_radius=5, data_channel=TiffChannels.ONE,
-                           number_of_channels=2,) -> np.ndarray:
+                           number_of_channels=2,) -> Tuple[np.ndarray, float]:
     """ Load a raw TIF stack and extract an array of cells. The first dimension is
     the cell index, the second is time and the other two are the x-y images.
-    Returns this 4D array.
+    Returns this 4D array, as well as the framerate of the acquisition.
     """
     res_data = np.load(results_file)
     if 'params' in res_data.keys():
@@ -205,7 +207,8 @@ def extract_cells_from_tif(results_file: pathlib.Path, tif: pathlib.Path,
         data = f.asarray(slice(data_channel.value, None, number_of_channels))
         fps = f.scanimage_metadata['FrameData']['SI.hRoiManager.scanFrameRate']
 
-    cell_coms = [coords[idx]['CoM'].astype(np.uint16)-cell_radius for idx in range(len(coords))]
+    coms_untouched = np.array([coords[idx]['CoM'] for idx in range(len(coords))], dtype=np.int16)
+    cell_coms = np.clip(coms_untouched - cell_radius, 0, np.iinfo(np.int16).max)
     shape = data.shape[1:]
     masks = [skimage.draw.rectangle(cell, extent=cell_radius*2, shape=shape) for cell in cell_coms]
     cell_data = [data[:, mask[0], mask[1]] for mask in masks]
@@ -297,7 +300,10 @@ def draw_rois_over_cells(fname: pathlib.Path):
         return
     
     full_dict = np.load(results_file)
-    rel_crds = full_dict['crd'][full_dict['idx_components']]
+    if "params" in full_dict:
+        rel_crds = full_dict['crd']
+    else:
+        rel_crds = full_dict['crd'][full_dict['idx_components']]
     fig, ax_img = plt.subplots()
     print("Reading TIF")
     data = tifffile.imread(str(fname)).mean(0)
@@ -318,8 +324,8 @@ def draw_rois_over_cells(fname: pathlib.Path):
 
 
 if __name__ == '__main__':
-    results_file = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_spont_20181017_00001_CHANNEL_2_results.npz'
-    tif = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_spont_20181017_00001.tif'
+    results_file = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003_CHANNEL_2_results.npz'
+    tif = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003.tif'
     data_channel = TiffChannels.TWO
     number_of_chans = 2
     display_cell_excerpts_over_time(results_file=pathlib.Path(results_file),
