@@ -1,5 +1,5 @@
 import pathlib
-from typing import Tuple
+from typing import Tuple, List
 import sys
 sys.path.append('/data/MatlabCode/PBLabToolkit/CalciumDataAnalysis/python-ca-analysis-bloodflow')
 
@@ -207,12 +207,18 @@ def extract_cells_from_tif(results_file: pathlib.Path, tif: pathlib.Path,
         data = f.asarray(slice(data_channel.value, None, number_of_channels))
         fps = f.scanimage_metadata['FrameData']['SI.hRoiManager.scanFrameRate']
 
-    coms_untouched = np.array([coords[idx]['CoM'] for idx in range(len(coords))], dtype=np.int16)
-    cell_coms = np.clip(coms_untouched - cell_radius, 0, np.iinfo(np.int16).max)
-    shape = data.shape[1:]
-    masks = [skimage.draw.rectangle(cell, extent=cell_radius*2, shape=shape) for cell in cell_coms]
+    masks = extract_mask_from_result_file(coords, data.shape[1:], cell_radius)
     cell_data = [data[:, mask[0], mask[1]] for mask in masks]
     return np.array(cell_data), fps
+
+
+def extract_mask_from_result_file(coords, img_shape, cell_radius) -> List[np.ndarray]:
+    """ Takes the coordinates ['crd' key] from a loaded results.npz file
+    and extract masks around cells from it """
+    coms_untouched = np.array([coords[idx]['CoM'] for idx in range(len(coords))], dtype=np.int16)
+    cell_coms = np.clip(coms_untouched - cell_radius, 0, np.iinfo(np.int16).max)
+    masks = [skimage.draw.rectangle(cell, extent=cell_radius*2, shape=img_shape) for cell in cell_coms]
+    return masks
 
 
 def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Path, 
@@ -328,8 +334,10 @@ if __name__ == '__main__':
     tif = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003.tif'
     data_channel = TiffChannels.TWO
     number_of_chans = 2
-    display_cell_excerpts_over_time(results_file=pathlib.Path(results_file),
-                                    tif=pathlib.Path(tif),
-                                    data_channel=data_channel,
-                                    number_of_channels=number_of_chans)    
+    # display_cell_excerpts_over_time(results_file=pathlib.Path(results_file),
+    #                                 tif=pathlib.Path(tif),
+    #                                 data_channel=data_channel,
+    #                                 number_of_channels=number_of_chans)
+
+    draw_rois_over_cells(pathlib.Path(tif[:-4] + '_CHANNEL_2.tif'))
     plt.show(block=True)
