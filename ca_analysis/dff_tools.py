@@ -14,6 +14,7 @@ import matplotlib.gridspec as gridspec
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
+import matplotlib.patches
 import sklearn.metrics
 import skimage.draw
 import tifffile
@@ -197,7 +198,7 @@ def extract_cells_from_tif(results_file: pathlib.Path, tif: pathlib.Path,
     Returns this 4D array, as well as the framerate of the acquisition.
     """
     res_data = np.load(results_file)
-    if 'params' in res_data.keys():
+    if len(res_data['idx_components']) == len(res_data['crd']):  # new file
         coords = res_data['crd'][:num]
     else:
         relevant_indices = res_data['idx_components'][indices][:num]
@@ -207,14 +208,18 @@ def extract_cells_from_tif(results_file: pathlib.Path, tif: pathlib.Path,
         data = f.asarray(slice(data_channel.value, None, number_of_channels))
         fps = f.scanimage_metadata['FrameData']['SI.hRoiManager.scanFrameRate']
 
-    masks = extract_mask_from_result_file(coords, data.shape[1:], cell_radius)
+    masks = extract_mask_from_coords(coords, data.shape[1:], cell_radius)
     cell_data = [data[:, mask[0], mask[1]] for mask in masks]
     return np.array(cell_data), fps
 
 
-def extract_mask_from_result_file(coords, img_shape, cell_radius) -> List[np.ndarray]:
+def extract_mask_from_coords(coords, img_shape, cell_radius) -> List[List[np.ndarray]]:
     """ Takes the coordinates ['crd' key] from a loaded results.npz file
-    and extract masks around cells from it """
+    and extract masks around cells from it.
+    Returns a list with a length of all detected cells. Each element in that
+    list is a 2-element list containing two arrays with the row and column
+    coordinates of that rectangle. To be used as data[mask[0], mask[1]].
+    """
     coms_untouched = np.array([coords[idx]['CoM'] for idx in range(len(coords))], dtype=np.int16)
     cell_coms = np.clip(coms_untouched - cell_radius, 0, np.iinfo(np.int16).max)
     masks = [skimage.draw.rectangle(cell, extent=cell_radius*2, shape=img_shape) for cell in cell_coms]
@@ -292,11 +297,12 @@ def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Pat
     fig.savefig(f'cell_mosaic_{title}.pdf', frameon=False, transparent=True)
 
 
-def draw_rois_over_cells(fname: pathlib.Path):
+def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5):
     """ 
     Draw ROIs around cells in the FOV, and mark their number (ID).
     Parameters:
         fname (pathlib.Path): Deinterleaved TIF filename.
+        cell_radius (int): Number of pixels in a cell's radius
     """
     assert fname.exists()
     try:
@@ -306,7 +312,7 @@ def draw_rois_over_cells(fname: pathlib.Path):
         return
     
     full_dict = np.load(results_file)
-    if "params" in full_dict:
+    if len(full_dict['idx_components']) == len(full_dict['crd']):
         rel_crds = full_dict['crd']
     else:
         rel_crds = full_dict['crd'][full_dict['idx_components']]
@@ -315,23 +321,20 @@ def draw_rois_over_cells(fname: pathlib.Path):
     data = tifffile.imread(str(fname)).mean(0)
     ax_img.imshow(data, cmap='gray')
     colors = [f'C{idx}' for idx in range(10)]
-    for idx, item in enumerate(rel_crds):
-        cur_coor = item['coordinates']
-        # assert bounding box size
-        bbox_x = np.abs(item['bbox'][0] - item['bbox'][2])
-        bbox_y = np.abs(item['bbox'][1] - item['bbox'][3])
-        if bbox_x * bbox_y == 0.:
-            continue
-        # Drop nans and draw
-        cur_coor = cur_coor[~np.isnan(cur_coor)].reshape((-1, 2))
-        ax_img.plot(cur_coor[:, 0], cur_coor[:, 1], colors[idx % 10])
-        min_c, max_c = cur_coor[:, 0].max(), cur_coor[:, 1].max()
-        ax_img.text(min_c, max_c, str(idx+1), color='w')
+    masks = extract_mask_from_coords(rel_crds, data.shape, cell_radius)
+    for idx, mask in enumerate(masks):
+        origin = mask[1].min(), mask[0].min()
+        rect = matplotlib.patches.Rectangle(origin, *mask[0].shape,
+                                            edgecolor=colors[idx % 10], facecolor='none',
+                                            linewidth=0.5)
+        ax_img.add_patch(rect)
+        ax_img.text(*origin, str(idx+1), color='w')
 
 
 if __name__ == '__main__':
-    results_file = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003_CHANNEL_2_results.npz'
+    # results_file = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003_CHANNEL_2_results.npz'
     tif = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003.tif'
+    # tif = '/data/David/crystal_skull_TAC_180719/626_HYPER_DAY_0/626_HYPER_DAY_0__EXP_STIM__FOV_1_00001_CHANNEL_1.tif'
     data_channel = TiffChannels.TWO
     number_of_chans = 2
     # display_cell_excerpts_over_time(results_file=pathlib.Path(results_file),
@@ -339,5 +342,5 @@ if __name__ == '__main__':
     #                                 data_channel=data_channel,
     #                                 number_of_channels=number_of_chans)
 
-    draw_rois_over_cells(pathlib.Path(tif[:-4] + '_CHANNEL_2.tif'))
+    draw_rois_over_cells(pathlib.Path(tif), cell_radius=5)
     plt.show(block=True)
