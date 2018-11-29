@@ -297,12 +297,13 @@ def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Pat
     fig.savefig(f'cell_mosaic_{title}.pdf', frameon=False, transparent=True)
 
 
-def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5):
+def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None):
     """ 
     Draw ROIs around cells in the FOV, and mark their number (ID).
     Parameters:
         fname (pathlib.Path): Deinterleaved TIF filename.
         cell_radius (int): Number of pixels in a cell's radius
+        ax_img (Axes): matplotlib Axes object to draw on. If None - will be created
     """
     assert fname.exists()
     try:
@@ -316,7 +317,9 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5):
         rel_crds = full_dict['crd']
     else:
         rel_crds = full_dict['crd'][full_dict['idx_components']]
-    fig, ax_img = plt.subplots()
+
+    if not ax_img:
+        fig, ax_img = plt.subplots()
     print("Reading TIF")
     data = tifffile.imread(str(fname)).mean(0)
     ax_img.imshow(data, cmap='gray')
@@ -331,16 +334,40 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5):
         ax_img.text(*origin, str(idx+1), color='w')
 
 
+def show_side_by_side(tifs: List[pathlib.Path], results: List[pathlib.Path],
+                      cell_radius=5, ):
+    """ Shows a figure where each row is an image of a FOV,
+    and all corresponding calcium traces. The image also draws
+    a rectangle around each cell
+    """
+    assert len(tifs) == len(results)
+    num_of_rows = len(tifs)
+    fig, axes = plt.subplots(num_of_rows, 2)
+
+    for tif, result, ax in zip(tifs, results, axes):
+        draw_rois_over_cells(tif, cell_radius, ax)
+
+
+def deinterleave(fname: str, data_channel: int, num_of_channels: int=2):
+    """ Takes a multichannel TIF and writes back to disk the channel with
+    the relevant data. """
+    data_pre_split = tifffile.imread(fname)
+    new_fname = fname[:-4] + f'_CHANNEL_{data_channel}.tif'
+    try:
+        tifffile.imsave(new_fname, data_pre_split[data_channel-1::num_of_channels],
+                        bigtiff=True)
+    except PermissionError:
+        raise
+    return new_fname
+
+
 if __name__ == '__main__':
     # results_file = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003_CHANNEL_2_results.npz'
-    tif = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003.tif'
-    # tif = '/data/David/crystal_skull_TAC_180719/626_HYPER_DAY_0/626_HYPER_DAY_0__EXP_STIM__FOV_1_00001_CHANNEL_1.tif'
-    data_channel = TiffChannels.TWO
-    number_of_chans = 2
-    # display_cell_excerpts_over_time(results_file=pathlib.Path(results_file),
-    #                                 tif=pathlib.Path(tif),
-    #                                 data_channel=data_channel,
-    #                                 number_of_channels=number_of_chans)
-
-    draw_rois_over_cells(pathlib.Path(tif), cell_radius=5)
+    # tif = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003.tif'
+    folder = pathlib.Path('/data/David/crystal_skull_TAC_180719/626_HYPER_DAY_0/')
+    tifs = list(folder.glob('*CHANNEL_1.tif'))
+    for tif in tifs:
+        deinterleave(str(tif), 1, 2)
+    # results = list(folder.glob('*results.npz'))
+    # show_side_by_side(tifs, results, )
     plt.show(block=True)
