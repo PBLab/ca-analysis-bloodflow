@@ -195,8 +195,11 @@ def extract_cells_from_tif(results_file: pathlib.Path, tif: pathlib.Path,
     Returns this 4D array.
     """
     res_data = np.load(results_file)
-    relevant_indices = res_data['idx_components'][indices][:num]
-    coords = res_data['crd'][relevant_indices]
+    if 'params' in res_data.keys():
+        coords = res_data['crd'][:num]
+    else:
+        relevant_indices = res_data['idx_components'][indices][:num]
+        coords = res_data['crd'][relevant_indices]
 
     with tifffile.TiffFile(tif, movie=True) as f:
         data = f.asarray(slice(data_channel.value, None, number_of_channels))
@@ -265,10 +268,10 @@ def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Pat
         ticklabel = ax.get_xticklabels()
         ticklabel[0].set_fontsize(6)
     
-    for cell_idx in range(1, len(cell_data)+1):
+    for cell_idx in range(len(cell_data)):
         ax = plt.subplot(gs[cell_idx, 0])
         ax.set_yticks([cell_radius])
-        ax.set_yticklabels([cell_idx])
+        ax.set_yticklabels([cell_idx+1])
     
     ax = plt.subplot(gs[-1, 0])
     ax.set_xlabel('Mean')
@@ -284,7 +287,7 @@ def draw_rois_over_cells(fname: pathlib.Path):
     """ 
     Draw ROIs around cells in the FOV, and mark their number (ID).
     Parameters:
-        fname (pathlib.Path): Original TIF filename.
+        fname (pathlib.Path): Deinterleaved TIF filename.
     """
     assert fname.exists()
     try:
@@ -315,8 +318,8 @@ def draw_rois_over_cells(fname: pathlib.Path):
 
 
 if __name__ == '__main__':
-    results_file = '/data/David/NEW_crystal_skull_TAC_161018/DAY_7_ALL/147_HYPO_DAY_7/147_HYPO_DAY_7_FOV_3_00001_CHANNEL_1_results.npz'
-    tif = '/data/David/NEW_crystal_skull_TAC_161018/DAY_7_ALL/147_HYPO_DAY_7/147_HYPO_DAY_7_FOV_3_00001.tif'
+    results_file = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_spont_20181017_00001_CHANNEL_2_results.npz'
+    tif = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_spont_20181017_00001.tif'
     data_channel = TiffChannels.TWO
     number_of_chans = 2
     display_cell_excerpts_over_time(results_file=pathlib.Path(results_file),
