@@ -141,7 +141,7 @@ class CalciumReview:
 
 
 if __name__ == '__main__':
-    folder = pathlib.Path(r'/data/David/TAC_together_nov18')
+    folder = pathlib.Path(r'/data/David/thy1_test_R_L')
     #     crystal_skull_TAC_180719   NEW_crystal_skull_TAC_161018   TAC_together_nov18
     assert folder.exists()
     ca = CalciumReview(folder)

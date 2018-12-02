@@ -94,6 +94,7 @@ def scatter_spikes(raw_data, spike_data=None, downsample_display=10, time_vec=No
         time_vec (np.ndarray): 1D array with the x-axis values (time). If None, will
                                use simple range(0, max) integer values.
     """
+
     if time_vec is None:
         time_vec = np.arange(raw_data.shape[1])
     fig, ax = plt.subplots()
@@ -318,9 +319,8 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None):
     else:
         rel_crds = full_dict['crd'][full_dict['idx_components']]
 
-    if not ax_img:
+    if ax_img is None:
         fig, ax_img = plt.subplots()
-    print("Reading TIF")
     data = tifffile.imread(str(fname)).mean(0)
     ax_img.imshow(data, cmap='gray')
     colors = [f'C{idx}' for idx in range(10)]
@@ -335,17 +335,34 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None):
 
 
 def show_side_by_side(tifs: List[pathlib.Path], results: List[pathlib.Path],
-                      cell_radius=5, ):
+                      cell_radius=5, figsize=(36, 32)):
     """ Shows a figure where each row is an image of a FOV,
     and all corresponding calcium traces. The image also draws
     a rectangle around each cell
     """
     assert len(tifs) == len(results)
     num_of_rows = len(tifs)
-    fig, axes = plt.subplots(num_of_rows, 2)
+
+    fig, axes = plt.subplots(num_of_rows, 2, figsize=figsize)
+    if num_of_rows == 1:
+        axes = [axes]
 
     for tif, result, ax in zip(tifs, results, axes):
-        draw_rois_over_cells(tif, cell_radius, ax)
+        data = np.load(result)
+        dff = data['F_dff']
+        fps = data['params'].tolist()['fr']
+        time_vec = np.arange(dff.shape[1])/fps
+        draw_rois_over_cells(tif, cell_radius, ax[0])
+        ax[1].plot(time_vec,
+                   (dff + np.arange(dff.shape[0])[:, np.newaxis]).T)
+        ax[1].spines['top'].set_visible(False)
+        ax[1].spines['right'].set_visible(False)
+        ax[1].set_xlabel('Time (seconds)')
+        ax[1].set_ylabel('Cell ID')
+        ax[1].yaxis.set_major_formatter(FormatStrFormatter('%d'))
+
+    fig.subplots_adjust(left=0.03, right=0.97, top=0.97, bottom=0.03)
+    return
 
 
 def deinterleave(fname: str, data_channel: int, num_of_channels: int=2):
@@ -365,9 +382,7 @@ if __name__ == '__main__':
     # results_file = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003_CHANNEL_2_results.npz'
     # tif = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003.tif'
     folder = pathlib.Path('/data/David/crystal_skull_TAC_180719/626_HYPER_DAY_0/')
-    tifs = list(folder.glob('*CHANNEL_1.tif'))
-    for tif in tifs:
-        deinterleave(str(tif), 1, 2)
-    # results = list(folder.glob('*results.npz'))
-    # show_side_by_side(tifs, results, )
+    tifs = list(folder.glob('6*00001_CHANNEL_1.tif'))
+    results = list(folder.glob('*results.npz'))
+    show_side_by_side(tifs[:1], results[:1])
     plt.show(block=True)
