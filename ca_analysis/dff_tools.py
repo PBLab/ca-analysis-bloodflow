@@ -151,15 +151,10 @@ def calc_auc(data, norm_factor=1):
     Uses a simple trapezoidal rule, and subtracts the offset of each cell before 
     the computation.
     """
-    x = np.arange(data.shape[1])
-    all_auc = []
-    for cell in data:
-        no_offset = cell - cell.min()
-        auc = sklearn.metrics.auc(x, no_offset)
-        result = auc / (data.shape[1] * norm_factor)
-        all_auc.append(result)
-    all_auc = np.array(all_auc) 
-    return all_auc
+    offsets = data.min(axis=1)[:, np.newaxis]
+    no_offset = data - offsets
+    auc = no_offset.mean(axis=1)
+    return auc
 
 def calc_mean_dff(data):
     """ Return the mean dF/F value, and the SEM of all neurons in the data matrix.
@@ -167,7 +162,7 @@ def calc_mean_dff(data):
     """
     min_vec = np.atleast_2d(data.min(axis=1)).T
     data_no_offset = data - min_vec
-    return data_no_offset.mean(1)
+    return data_no_offset.mean(axis=1)
 
 
 def display_heatmap(data, ax=None, epoch='All cells', downsample_factor=8,

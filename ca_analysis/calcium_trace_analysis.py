@@ -63,8 +63,8 @@ class CalciumReview:
          """
         self.files = []
         self.raw_data = {}
-        all_files = folder.rglob(self.glob)
-        day_reg = re.compile(r'of_day_(\d+).nc')
+        all_files = folder.glob(self.glob)
+        day_reg = re.compile(r'.+?of_day_(\d+).nc')
         parsed_days = []
         print("Found the following files:")
         for file in all_files:
@@ -141,10 +141,10 @@ class CalciumReview:
 
 
 if __name__ == '__main__':
-    folder = pathlib.Path(r'/data/David/thy1_test_R_L')
+    folder = pathlib.Path(r'/data/David/thy1_test_R_L/mouse_110_treadmill_regular_pos')
     #     crystal_skull_TAC_180719   NEW_crystal_skull_TAC_161018   TAC_together_nov18
     assert folder.exists()
-    ca = CalciumReview(folder)
+    ca = CalciumReview(folder, 'data*.nc')
     analysis_methods = [AvailableFuncs.AUC, AvailableFuncs.MEAN,
                         AvailableFuncs.SPIKERATE]
     epoch = 'spont'
@@ -154,4 +154,4 @@ if __name__ == '__main__':
     ca.plot_df(ca.funcs_dict[AvailableFuncs.SPIKERATE],
                f'Spike Rate of Fluo Traces, Epoch: {epoch}')
         
-    plt.show(block=True)
+    plt.show(block=False)

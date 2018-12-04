@@ -63,8 +63,8 @@ class CalciumAnalysisOverTime:
     fluo_files = attr.ib(init=False)
     result_files = attr.ib(init=False)
     analog_files = attr.ib(init=False)
-    sliced_fluo = attr.ib(init=False)
     list_of_fovs = attr.ib(init=False)
+    concat = attr.ib(init=False)
 
     def _find_all_relevant_files(self):
         self.fluo_files = []
@@ -72,8 +72,6 @@ class CalciumAnalysisOverTime:
         self.result_files = []
         for folder, globstr in self.folder_globs.items():
             for file in folder.rglob(globstr):
-                if 'CHANNEL' in str(file):
-                    pass
                 try:
                     analog_file = next(folder.rglob(f'{str(file.name)[:-4]}*analog.txt'))
                 except StopIteration:
@@ -115,8 +113,6 @@ class CalciumAnalysisOverTime:
         self.list_of_fovs = []
         self._find_all_relevant_files()
         assert len(self.fluo_files) == len(self.analog_files) == len(self.result_files)
-        files = list(zip(self.fluo_files, self.result_files, self.analog_files))
-        files = ((*file, regex) for file in files)
         for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
             print(f"Parsing {file_fluo}")
             fov = self._analyze_single_fov(file_fluo, file_result, file_analog, **regex)
@@ -153,7 +149,7 @@ class CalciumAnalysisOverTime:
         try:  # coming from run_batch_of_timepoints()
             all_files = self.list_of_fovs
         except AttributeError:
-            all_files = [folder.rglob(globstr) for folder in self.folder_globs]
+            all_files = [folder.glob(globstr) for folder in self.folder_globs]
             all_files = itertools.chain(*all_files)
 
         for file in all_files:
@@ -177,8 +173,9 @@ class CalciumAnalysisOverTime:
         fname_to_save = 'data_of_day_'
         for day, file_list in fovs_by_day.items():
             try:
-                next(self.results_folder.glob(fname_to_save + str(day) + '.nc'))
-            except StopIteration:   #.nc file doesn't exist
+                file = next(self.results_folder.glob(fname_to_save + str(day) + '.nc'))
+                print(f"Found {str(file)}, not concatenating")
+            except StopIteration:   # .nc file doesn't exist
                 print(f"Concatenating day {day}")
                 data_per_day = []
                 for file in file_list:
@@ -190,7 +187,8 @@ class CalciumAnalysisOverTime:
                 concat.attrs['fps'] = self._get_metadata(data_per_day, 'fps', 30)
                 concat.attrs['stim_window'] = self._get_metadata(data_per_day, 'stim_window', 1.5)
                 concat.attrs['day'] = day
-                concat.name = day
+                concat.name = str(day)
+                self.concat = concat
                 concat.to_netcdf(str(self.results_folder / f"{fname_to_save + str(day)}.nc"), mode='w')
 
     def _get_metadata(self, list_of_da: list, key: str, default):
@@ -207,15 +205,14 @@ class CalciumAnalysisOverTime:
 
 
 if __name__ == '__main__':
-    results_folder = Path(r'/data/David/thy1_test_R_L')
+    results_folder = Path(r'/data/David/thy1_test_R_L/mouse_110_treadmill_regular_pos')
     assert results_folder.exists()
     # folder_and_files = {Path('/data/David/NEW_crystal_skull_TAC_161018'): 'DAY*/*/*.tif',
     #                     Path('/data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
-    folder_and_files = {Path('/data/David/thy1_test_R_L'): '*.tif'}
+    folder_and_files = {Path('/data/David/thy1_test_R_L/mouse_110_treadmill_regular_pos'): '*.tif'}
     res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True, 
                                   folder_globs=folder_and_files)
-    regex = {'cond_reg': r'FOV1_(\w+?)_30HZ'}
-    # regex = {'id_reg': r'_(\d+?)_X10',
-    #          'cond_reg': r'^([a-zA-Z]+?)_[0-9]'}
-    # res.run_batch_of_timepoints(**regex)
-    res.generate_da_per_day()
+    # regex = {'cond_reg': r'FOV1_(\w+?)_30HZ'}
+    regex = {'cond_reg': r'_mouse_110_(\w+?)_30HZ'}
+    res.run_batch_of_timepoints(**regex)
+    # res.generate_da_per_day('FOV1_*ONLY_Regular pos*.nc')
