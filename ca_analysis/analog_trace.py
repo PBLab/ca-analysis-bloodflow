@@ -93,7 +93,7 @@ class AnalogTraceAnalyzer:
                 else:
                     idx_juxta.append(val)
         else:
-            idx_juxta =[]
+            idx_juxta = []
         return idx_true_stim, np.array(idx_juxta)
 
     def __populate_stims(self, true_stim: np.ndarray, juxta: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:

@@ -49,17 +49,19 @@ class CalciumAnalysisOverTime:
     """ Analysis class that parses the output of CaImAn "results.npz" files.
     Usage: run the "run_batch_of_timepoints" method, which will go over all FOVs
     that were recorded in this experiment.
-    The "file_glob" variable is a list of glob strings in that folder. The simplest
-    case is ['*.tif'], but it allows you to parse files from different folders inside
-    one main folder by specifying the folder name in the glob string.
+    "folder_globs" is a dictionary of folder name and glob strings, which allows
+    you to analyze several directories of data, each with its own glob pattern.
     If serialize is True, it will write to disk each FOV's DataArray, as well
     as the concatenated DataArray to make future processing faster.
-    If you've already serialized your data, use "load_batch_of_timepoints" to continue
-    the downstream analysis of your files.
+    If you've already serialized your data, use "generate_da_per_day" to continue
+    the downstream analysis of your files by concatenating all relevant files into
+    one large database which can be analyzed with downstream scripts that may be
+    found in "calcium_trace_analysis.py".
     """
     results_folder = attr.ib(validator=instance_of(Path))
     folder_globs = attr.ib(default={Path('.'): '*.tif'}, validator=instance_of(dict))
     serialize = attr.ib(default=False, validator=instance_of(bool))
+    with_analog = attr.ib(default=True, validator=instance_of(bool))
     fluo_files = attr.ib(init=False)
     result_files = attr.ib(init=False)
     analog_files = attr.ib(init=False)
@@ -70,25 +72,34 @@ class CalciumAnalysisOverTime:
         self.fluo_files = []
         self.analog_files = []
         self.result_files = []
+        summary_str = "Found {num} files:\nFluo: {fluo}\nAnalog: {analog}\nCaImAn: {caiman}"
         for folder, globstr in self.folder_globs.items():
             for file in folder.rglob(globstr):
+                num_of_files_found = 1
                 try:
                     analog_file = next(folder.rglob(f'{str(file.name)[:-4]}*analog.txt'))
+                    num_of_files_found += 1
                 except StopIteration:
-                    print(f"File {file} has no analog counterpart.")
-                    continue
+                    if self.with_analog:
+                        print(f"File {file} has no analog counterpart.")
+                        continue
+                    else:
+                        analog_file = None
                 try:
                     result_file = next(folder.rglob(f'{str(file.name)[:-4]}*results.npz'))
+                    num_of_files_found += 1
                 except StopIteration:
                     print(f"File {file} has no result.npz couterpart.")
                     continue
                 try:
                     fov_analysis_file = next(folder.rglob(f'{str(file.name)[:-4]}*.nc'))
                 except StopIteration:  # FOV wasn't already analyzed
-                    print(f"Found triplet of files:\nfluo: {file},\nanalog: {analog_file}\nresults: {result_file}")
+                    print(summary_str.format(num=num_of_files_found, fluo=file,
+                                             analog=analog_file, caiman=result_file))
                     self.fluo_files.append(file)
-                    self.analog_files.append(analog_file)
                     self.result_files.append(result_file)
+                    if self.with_analog:
+                        self.analog_files.append(analog_file)
 
         print("\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C")
 
@@ -112,21 +123,32 @@ class CalciumAnalysisOverTime:
         """
         self.list_of_fovs = []
         self._find_all_relevant_files()
-        assert len(self.fluo_files) == len(self.analog_files) == len(self.result_files)
-        for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
-            print(f"Parsing {file_fluo}")
-            fov = self._analyze_single_fov(file_fluo, file_result, file_analog, **regex)
-            self.list_of_fovs.append(str(fov.metadata.fname)[:-4] + ".nc")
+        assert len(self.fluo_files) == len(self.result_files)
+        if self.with_analog:
+            assert len(self.fluo_files) == len(self.analog_files)
+            for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
+                print(f"Parsing {file_fluo}")
+                fov = self._analyze_single_fov(file_fluo, file_result, fname_analog=file_analog,
+                                               with_analog=True, **regex)
+                self.list_of_fovs.append(str(fov.metadata.fname)[:-4] + ".nc")
+        else:
+            for file_fluo, file_result in zip(self.fluo_files, self.result_files):
+                print(f"Parsing {file_fluo}")
+                fov = self._analyze_single_fov(file_fluo, file_result,
+                                               with_analog=False, **regex)
+                self.list_of_fovs.append(str(fov.metadata.fname)[:-4] + ".nc")
+
         self.generate_da_per_day()
 
-    def _analyze_single_fov(self, fname_fluo, results_fname, fname_analog, **regex):
-        """ Helper function to go file by file, each with its fluorescence and analog data,
-        and run the single FOV parsing on it """
+    def _analyze_single_fov(self, fname_fluo, results_fname, fname_analog=Path('.'),
+                            with_analog=True, **regex):
+        """ Helper function to go file by file, each with its own fluorescence and
+        possibly analog data, and run the single FOV parsing on it """
 
         meta = FluoMetadata(fname_fluo, **regex)
         meta.get_metadata()
         fov = SingleFovParser(analog_fname=fname_analog, results_fname=results_fname,
-                              metadata=meta)
+                              metadata=meta, with_analog=with_analog)
         fov.parse()
         if self.serialize:
             fov.add_metadata_and_serialize()
@@ -136,7 +158,7 @@ class CalciumAnalysisOverTime:
         """ 
         Parse .nc files that were generated from the previous analysis
         and chain all "DAY_X" DataArrays together into a single list. 
-        This list is then concatenated in to a single DataARray, creating a 
+        This list is then concatenated in to a single DataArray, creating a
         large data structure for each experimental day.
         If we arrived here from "run_batch_of_timepoints()", the data is already
         present in self.list_of_fovs. Otherwise, we have to manually find the 
@@ -205,13 +227,13 @@ class CalciumAnalysisOverTime:
 
 
 if __name__ == '__main__':
-    results_folder = Path(r'/data/David/thy1_test_R_L/mouse_110_treadmill_regular_pos')
+    results_folder = Path(r'/data/David/thy1_test_R_L/mouse_110_no_treadmill')
     assert results_folder.exists()
     # folder_and_files = {Path('/data/David/NEW_crystal_skull_TAC_161018'): 'DAY*/*/*.tif',
     #                     Path('/data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
-    folder_and_files = {Path('/data/David/thy1_test_R_L/mouse_110_treadmill_regular_pos'): '*.tif'}
+    folder_and_files = {Path('/data/David/thy1_test_R_L/mouse_110_no_treadmill'): '*NO_STIM*.tif'}
     res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True, 
-                                  folder_globs=folder_and_files)
+                                  folder_globs=folder_and_files, with_analog=False)
     # regex = {'cond_reg': r'FOV1_(\w+?)_30HZ'}
     regex = {'cond_reg': r'_mouse_110_(\w+?)_30HZ'}
     res.run_batch_of_timepoints(**regex)
