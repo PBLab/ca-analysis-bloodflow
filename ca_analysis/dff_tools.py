@@ -78,7 +78,7 @@ def calc_mean_spike_num(data, fps=30.03, thresh=0.75):
     :return: Number of spikes for each neuron
     """
     all_spikes = locate_spikes_peakutils(data, fps, thresh)
-    mean_of_spikes = all_spikes.sum(axis=1) / data.shape[1]
+    mean_of_spikes = np.nanmean(all_spikes, axis=1)
     return mean_of_spikes
 
 
@@ -151,9 +151,9 @@ def calc_auc(data, norm_factor=1):
     Uses a simple trapezoidal rule, and subtracts the offset of each cell before 
     the computation.
     """
-    offsets = data.min(axis=1)[:, np.newaxis]
+    offsets = np.nanmin(data, axis=1)[:, np.newaxis]
     no_offset = data - offsets
-    auc = no_offset.mean(axis=1)
+    auc = np.nanmean(no_offset, axis=1)
     return auc
 
 def calc_mean_dff(data):
@@ -162,7 +162,7 @@ def calc_mean_dff(data):
     """
     min_vec = np.atleast_2d(data.min(axis=1)).T
     data_no_offset = data - min_vec
-    return data_no_offset.mean(axis=1)
+    return np.nanmean(data_no_offset, axis=1)
 
 
 def display_heatmap(data, ax=None, epoch='All cells', downsample_factor=8,
@@ -251,8 +251,8 @@ def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Pat
     gs = gridspec.GridSpec(len(cell_data), num_to_display + 2, figure=fig, wspace=0.01, hspace=0.01)
     for row_idx, cell in enumerate(cell_data):
         ax_mean = plt.subplot(gs[row_idx, 0])
-        mean_cell = cell.mean(0)
-        vmin, vmax = mean_cell.min(), mean_cell.max()
+        mean_cell = np.nanmean(cell, axis=0)
+        vmin, vmax = np.nanmin(mean_cell), np.nanmax(mean_cell)
         ax_mean.imshow(mean_cell, cmap='gray', vmin=vmin, vmax=vmax)
         ax_mean.set_xticks([])
 
