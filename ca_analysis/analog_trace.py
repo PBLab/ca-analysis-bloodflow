@@ -104,8 +104,8 @@ class AnalogTraceAnalyzer:
         :param juxta: Indices for a juxta stimulus
         :return: None
         """
-        stim_vec = np.zeros(self.analog_trace.shape[0], dtype=np.uint8)
-        juxta_vec = np.zeros(self.analog_trace.shape[0], dtype=np.uint8)
+        stim_vec = np.full(self.analog_trace.shape[0], np.nan)
+        juxta_vec = np.full(self.analog_trace.shape[0], np.nan)
         for idx in true_stim:
             last_idx = int(idx + (self.response_window + self.buffer_after_stim) * self.sample_rate)
             stim_vec[idx:last_idx] = 1
@@ -117,31 +117,32 @@ class AnalogTraceAnalyzer:
         return stim_vec, juxta_vec
     
     def __populate_occluder(self):
-        self.before_occ_vec = np.zeros_like(self.timestamps, dtype=np.uint8)
-        self.occluder_vec = np.zeros_like(self.timestamps, dtype=np.uint8)
-        self.after_occ_vec = np.zeros_like(self.timestamps, dtype=np.uint8)
+        self.before_occ_vec = np.full(self.timestamps.shape, np.nan)
+        self.occluder_vec = np.full(self.timestamps.shape, np.nan)
+        self.after_occ_vec = np.full(self.timestamps.shape, np.nan)
         
         tot_len_during = self.occ_metadata.before + self.occ_metadata.during
-        self.before_occ_vec[:self.occ_metadata.before] = np.uint8(1)
-        self.occluder_vec[self.occ_metadata.before:tot_len_during] = np.uint8(1)
-        self.after_occ_vec[tot_len_during:] = np.uint8(1)
+        self.before_occ_vec[:self.occ_metadata.before] = 1
+        self.occluder_vec[self.occ_metadata.before:tot_len_during] = 1
+        self.after_occ_vec[tot_len_during:] = 1
 
     def __populate_run(self) -> np.ndarray:
         """
         Wherever the analog voltage passes the threshold, assign a 1 value
         :return: None
         """
-        run_vec = np.zeros(self.analog_trace.shape[0], dtype=np.uint8)
+        run_vec = np.full(self.analog_trace.shape[0], np.nan)
         run_vec[self.analog_trace.run > self.move_thresh] = 1
         return run_vec
 
     def __populate_spont(self, stim_vec: np.ndarray, juxta_vec: np.ndarray) -> np.ndarray:
         """
-        Wherever the juxta and stim vectors are zero - write 1
+        Wherever the juxta and stim vectors are zero - write 1, else write nan.
         :return: None
         """
-        all_stims = stim_vec + juxta_vec
-        spont_vec = np.logical_not(all_stims).astype(np.uint8)
+        all_stims = np.nan_to_num(stim_vec) + np.nan_to_num(juxta_vec)
+        spont_vec = np.logical_not(all_stims)
+        spont_vec = np.where(spont_vec, 1, np.nan)
         return spont_vec
 
     def __convert_to_series(self):
@@ -164,7 +165,7 @@ class AnalogTraceAnalyzer:
         try:
             self.framerate = d['FrameData']['SI.hRoiManager.scanFrameRate']
         except (NameError, TypeError):
-            self.framerate = 15.24
+            self.framerate = 30.03
         finally:
             self.start_time = str(datetime.fromtimestamp(os.path.getmtime(self.tif_filename)))
 
@@ -172,11 +173,11 @@ class AnalogTraceAnalyzer:
         self.timestamps = np.array(timestamps)
 
     def __init_vecs(self):
-        self.stim_vec = np.zeros_like(self.timestamps, dtype=np.uint8)
-        self.juxta_vec = np.zeros_like(self.timestamps, dtype=np.uint8)
-        self.run_vec = np.zeros_like(self.timestamps, dtype=np.uint8)
-        self.spont_vec = np.zeros_like(self.timestamps, dtype=np.uint8)
-        self.stand_vec = np.zeros_like(self.timestamps, dtype=np.uint8)
+        self.stim_vec = np.full(self.timestamps.shape, np.nan)
+        self.juxta_vec = np.full(self.timestamps.shape, np.nan)
+        self.run_vec = np.full(self.timestamps.shape, np.nan)
+        self.spont_vec = np.full(self.timestamps.shape, np.nan)
+        self.stand_vec = np.full(self.timestamps.shape, np.nan)
 
     def __fit_frames_to_analog(self, stim_vec: np.ndarray, juxta_vec: np.ndarray,
                                run_vec: np.ndarray, spont_vec: np.ndarray):
@@ -185,12 +186,13 @@ class AnalogTraceAnalyzer:
         end_idx = starting_idx + samples_per_frame
 
         for frame_idx, (start, end) in enumerate(zip(starting_idx, end_idx)):
-            self.stim_vec[frame_idx] = 1 if stim_vec[start:end].mean() > 0.5 else 0
-            self.juxta_vec[frame_idx] = 1 if juxta_vec[start:end].mean() > 0.5 else 0
-            self.run_vec[frame_idx] = 1 if run_vec[start:end].mean() > 0.5 else 0
-            self.spont_vec[frame_idx] = 1 if spont_vec[start:end].mean() > 0.5 else 0
+            self.stim_vec[frame_idx] = 1 if stim_vec[start:end].nanmean() > 0.5 else np.nan
+            self.juxta_vec[frame_idx] = 1 if juxta_vec[start:end].nanmean() > 0.5 else np.nan
+            self.run_vec[frame_idx] = 1 if run_vec[start:end].nanmean() > 0.5 else np.nan
+            self.spont_vec[frame_idx] = 1 if spont_vec[start:end].nanmean() > 0.5 else np.nan
 
-        self.stand_vec = np.logical_not(self.run_vec).astype(np.uint8)
+        stand_vec = np.logical_not(np.nan_to_num(self.run_vec))
+        self.stand_vec = np.where(stand_vec, 1, np.nan)
 
     def __mul__(self, other: np.ndarray) -> xr.DataArray:
         """

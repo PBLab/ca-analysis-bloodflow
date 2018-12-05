@@ -73,9 +73,9 @@ class SingleFovParser:
             raw_data = raw_data[..., np.newaxis, np.newaxis, np.newaxis]
             assert len(raw_data.shape) == 6
             coords = {}
+            coords['epoch'] = self.fluo_analyzed['epoch'].values
             coords['neuron'] = self.fluo_analyzed['neuron'].values
             coords['time'] = self.metadata.timestamps
-            coords['epoch'] = self.fluo_analyzed['epoch'].values
             coords['mouse_id'] = np.array([self.metadata.mouse_id])
             coords['fov'] = np.array([self.metadata.fov])
             coords['condition'] = np.array([self.metadata.condition])

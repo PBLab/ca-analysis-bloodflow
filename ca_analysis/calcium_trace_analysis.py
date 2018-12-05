@@ -141,13 +141,13 @@ class CalciumReview:
 
 
 if __name__ == '__main__':
-    folder = pathlib.Path(r'/data/David/thy1_test_R_L/mouse_110_no_treadmill')
+    folder = pathlib.Path(r'/data/David/thy1_test_R_L/mouse_110_treadmill_rotate_pos')
     #     crystal_skull_TAC_180719   NEW_crystal_skull_TAC_161018   TAC_together_nov18
     assert folder.exists()
     ca = CalciumReview(folder, 'data*.nc')
     analysis_methods = [AvailableFuncs.AUC, AvailableFuncs.MEAN,
                         AvailableFuncs.SPIKERATE]
-    epoch = 'spont'
+    epoch = 'stand_spont'
     ca.apply_analysis_funcs(analysis_methods, epoch)
     ca.plot_df(ca.funcs_dict[AvailableFuncs.AUC], 
                f'AUC of Fluo Traces, Epoch: {epoch}')
