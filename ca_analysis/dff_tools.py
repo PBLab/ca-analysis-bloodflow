@@ -277,7 +277,7 @@ def display_cell_excerpts_over_time(results_file: pathlib.Path, tif: pathlib.Pat
         ax.set_xticklabels([label])
         ticklabel = ax.get_xticklabels()
         ticklabel[0].set_fontsize(6)
-    
+
     for cell_idx in range(len(cell_data)):
         ax = plt.subplot(gs[cell_idx, 0])
         ax.set_yticks([cell_radius])

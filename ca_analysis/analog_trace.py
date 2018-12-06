@@ -3,7 +3,7 @@ import numpy as np
 import attr
 from attr.validators import instance_of
 import re
-from typing import Tuple
+from typing import Tuple, Any, Union
 from tifffile import TiffFile
 import xarray as xr
 from itertools import product
@@ -23,11 +23,9 @@ class AnalogTraceAnalyzer:
     """
     tif_filename = attr.ib(validator=instance_of(str))  # Timelapse (doesn't need to be separated)
     analog_trace = attr.ib(validator=instance_of(pd.DataFrame))  # .txt file from ScanImage
-
     timestamps = attr.ib(validator=instance_of(np.ndarray))
     framerate = attr.ib(validator=instance_of(float))
     start_time = attr.ib(validator=instance_of(str))
-
     response_window = attr.ib(default=0.5, validator=instance_of(float))  # sec
     buffer_after_stim = attr.ib(default=1., validator=instance_of(float))  # sec
     move_thresh = attr.ib(default=0.25, validator=instance_of(float))  # V
@@ -186,10 +184,10 @@ class AnalogTraceAnalyzer:
         end_idx = starting_idx + samples_per_frame
 
         for frame_idx, (start, end) in enumerate(zip(starting_idx, end_idx)):
-            self.stim_vec[frame_idx] = 1 if stim_vec[start:end].nanmean() > 0.5 else np.nan
-            self.juxta_vec[frame_idx] = 1 if juxta_vec[start:end].nanmean() > 0.5 else np.nan
-            self.run_vec[frame_idx] = 1 if run_vec[start:end].nanmean() > 0.5 else np.nan
-            self.spont_vec[frame_idx] = 1 if spont_vec[start:end].nanmean() > 0.5 else np.nan
+            self.stim_vec[frame_idx] = 1 if np.nanmean(stim_vec[start:end]) > 0.5 else np.nan
+            self.juxta_vec[frame_idx] = 1 if np.nanmean(juxta_vec[start:end]) > 0.5 else np.nan
+            self.run_vec[frame_idx] = 1 if np.nanmean(run_vec[start:end]) > 0.5 else np.nan
+            self.spont_vec[frame_idx] = 1 if np.nanmean(spont_vec[start:end]) > 0.5 else np.nan
 
         stand_vec = np.logical_not(np.nan_to_num(self.run_vec))
         self.stand_vec = np.where(stand_vec, 1, np.nan)
@@ -250,7 +248,7 @@ if __name__ == '__main__':
     analog_file = r'/data/David/602_new_baseline_imaging_201217/602_HYPER_DAY_0__EXP_STIM__FOV_2(2)_mag_5_bidirectional_2048_512_30Hz_00001_analog.txt'
     data = np.load(npz_file)
     filename = r'/data/David/602_new_baseline_imaging_201217/602_HYPO_DAY_0__EXP_STIM__FOV_2_00001.tif'
-    analog = pd.read_csv(analog_file, sep=r'\t', header=None,
+    analog = pd.read_csv(analog_file, sep='\t', header=None,
                          names=['stimulus', 'run'])
     an_trace = AnalogTraceAnalyzer(tif_filename=filename, analog_trace=analog)
     an_trace.run()

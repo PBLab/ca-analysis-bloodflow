@@ -133,9 +133,9 @@ class CalciumReview:
     def _filter_da(self, data, condition, epoch):
         """ Filter a DataArray by the given condition and epoch.
          Returns a numpy array in the shape of cells x time """
-        selected = data.sel(condition=condition, epoch=epoch, drop=True).values
-        relevant_idx = np.where(np.isfinite(selected))
-        num_of_cells = len(np.unique(relevant_idx[0]))  # first dim is "neuron"
+        selected = np.squeeze(data.sel(condition=condition, epoch=epoch, drop=True).values)
+        relevant_idx = np.isfinite(selected).any(axis=1)
+        num_of_cells = relevant_idx.sum()
         selected = selected[relevant_idx].reshape((num_of_cells, -1))
         return selected
 
