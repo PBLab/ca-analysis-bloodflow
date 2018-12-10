@@ -58,13 +58,11 @@ def locate_spikes_peakutils(data, fps=30.03, thresh=0.65):
     assert len(data.shape) == 2 and data.shape[0] > 0
     all_spikes = np.zeros_like(data)
     min_dist = int(fps)
-    for row, cell in enumerate(data):
+    nan_to_zero = np.nan_to_num(data)
+    for row, cell in enumerate(nan_to_zero):
         peaks = peakutils.indexes(cell, thres=thresh, min_dist=min_dist)
         if len(peaks) > 0:
             all_spikes[row, peaks] = 1
-        else:
-            print("No spikes found.")
-    
     return all_spikes
 
 
@@ -146,7 +144,7 @@ def plot_mean_vals(data, x_axis=None, window=30, title='Rolling Mean',
     return ax, mean_val[0].mean()
 
 
-def calc_auc(data, norm_factor=1):
+def calc_auc(data):
     """ Return the normalized area under the curve of all neurons in the data matrix.
     Uses a simple trapezoidal rule, and subtracts the offset of each cell before 
     the computation.

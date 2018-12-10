@@ -227,14 +227,14 @@ class CalciumAnalysisOverTime:
 
 
 if __name__ == '__main__':
-    results_folder = Path(r'/data/David/thy1_test_R_L/mouse_110_treadmill_rotate_pos')
+    results_folder = Path(r'/data/David/thy1_test_R_L/110_new_051218')
     assert results_folder.exists()
     # folder_and_files = {Path('/data/David/NEW_crystal_skull_TAC_161018'): 'DAY*/*/*.tif',
     #                     Path('/data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
-    folder_and_files = {Path('/data/David/thy1_test_R_L/mouse_110_treadmill_rotate_pos'): '*.tif'}
+    folder_and_files = {Path('/data/David/thy1_test_R_L/110_new_051218'): '*mill_NO_STIM_*.tif'}
     res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True, 
                                   folder_globs=folder_and_files, with_analog=True)
     # regex = {'cond_reg': r'FOV1_(\w+?)_30HZ'}
-    regex = {'cond_reg': r'e_110_(\w+?)_30HZ'}
-    res.run_batch_of_timepoints(**regex)
-    # res.generate_da_per_day('*.nc')
+    regex = {'cond_reg': r'110_NEW_(\w+?)_30HZ'}
+    # res.run_batch_of_timepoints(**regex)
+    res.generate_da_per_day('*.nc')

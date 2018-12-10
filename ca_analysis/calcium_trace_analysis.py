@@ -141,10 +141,10 @@ class CalciumReview:
 
 
 if __name__ == '__main__':
-    folder = pathlib.Path(r'/data/David/thy1_test_R_L/mouse_110_treadmill_rotate_pos')
+    folder = pathlib.Path(r'/data/David/thy1_test_R_L/110_new_051218')
     #     crystal_skull_TAC_180719   NEW_crystal_skull_TAC_161018   TAC_together_nov18
     assert folder.exists()
-    ca = CalciumReview(folder, 'data*.nc')
+    ca = CalciumReview(folder, '*data*.nc')
     analysis_methods = [AvailableFuncs.AUC, AvailableFuncs.MEAN,
                         AvailableFuncs.SPIKERATE]
     epoch = 'stand_spont'
