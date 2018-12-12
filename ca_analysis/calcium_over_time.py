@@ -105,8 +105,8 @@ class CalciumAnalysisOverTime:
 
     def run_batch_of_timepoints(self, **regex):
         """
-        Main method to analyze all FOVs in all timepoints in all experiments. 
-        Generally used for TAC experiments, which have multiple FOVs per mouse, and 
+        Main method to analyze all FOVs in all timepoints in all experiments.
+        Generally used for TAC experiments, which have multiple FOVs per mouse, and
         an experiment design which spans multiple days.
         The script expects a filename containing the following "self.fov_analysis_files.append(fields)":
             Mouse ID (digits at the beginning of filename)
@@ -115,10 +115,10 @@ class CalciumAnalysisOverTime:
             'FOV_n'
         After creating a xr.DataArray out of each file, the script will write this DataArray to
         disk (only if it doesn't exist yet, and only if self.serialize is True) to make future processing faster.
-        Finally, it will take all created DataArrays and concatenate them into a single DataArray, 
+        Finally, it will take all created DataArrays and concatenate them into a single DataArray,
         that can also be written to disk using the "serialize" attribute.
         The `**regex` kwargs-like parameter is used to manually set the regex
-        that will parse the metadata from the file name. The default regexes are 
+        that will parse the metadata from the file name. The default regexes are
         described above. Valid keys are "id_reg", "fov_reg", "cond_reg" and "day_reg".
         """
         self.list_of_fovs = []
@@ -155,13 +155,13 @@ class CalciumAnalysisOverTime:
         return fov
 
     def generate_da_per_day(self, globstr='*FOV*.nc'):
-        """ 
+        """
         Parse .nc files that were generated from the previous analysis
-        and chain all "DAY_X" DataArrays together into a single list. 
+        and chain all "DAY_X" DataArrays together into a single list.
         This list is then concatenated in to a single DataArray, creating a
         large data structure for each experimental day.
         If we arrived here from "run_batch_of_timepoints()", the data is already
-        present in self.list_of_fovs. Otherwise, we have to manually find the 
+        present in self.list_of_fovs. Otherwise, we have to manually find the
         files using a default glob string that runs on each folder in
         self.folder_globs.
         Saves all day-data into self.results_folder.
@@ -227,14 +227,14 @@ class CalciumAnalysisOverTime:
 
 
 if __name__ == '__main__':
-    results_folder = Path(r'/data/David/thy1_test_R_L/110_new_051218')
+    results_folder = Path(r'/data/David/thy1_test_R_L/NEW_mouse_x10')
     assert results_folder.exists()
     # folder_and_files = {Path('/data/David/NEW_crystal_skull_TAC_161018'): 'DAY*/*/*.tif',
     #                     Path('/data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
-    folder_and_files = {Path('/data/David/thy1_test_R_L/110_new_051218'): '*mill_NO_STIM_*.tif'}
-    res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True, 
+    folder_and_files = {Path('/data/David/thy1_test_R_L/NEW_mouse_x10'): '*mill_STIM_*.tif'}
+    res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True,
                                   folder_globs=folder_and_files, with_analog=True)
     # regex = {'cond_reg': r'FOV1_(\w+?)_30HZ'}
-    regex = {'cond_reg': r'110_NEW_(\w+?)_30HZ'}
+    regex = {'cond_reg': r'420_(\w+?)_30HZ'}
     # res.run_batch_of_timepoints(**regex)
-    res.generate_da_per_day('*.nc')
+    res.generate_da_per_day('*mill_STIM*.nc')
