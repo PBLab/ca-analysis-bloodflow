@@ -10,6 +10,7 @@ sys.path.append(
 import numpy as np
 import pandas as pd
 import xarray as xr
+import seaborn as sns
 from ansimarkup import ansiprint as aprint
 import peakutils
 import matplotlib

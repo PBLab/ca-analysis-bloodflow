@@ -1,9 +1,11 @@
 from collections import namedtuple
 from typing import List, Tuple
+import itertools
 
 import numpy as np
 import pandas as pd
 import xarray as xr
+import seaborn as sns
 import attr
 from attr.validators import instance_of
 import sys
@@ -144,6 +146,7 @@ class SingleFovViz:
     axes_for_dff = attr.ib(default=14, validator=instance_of(int))
     fig = attr.ib(init=False)
     analog_vectors = attr.ib(init=False)
+    epochs_to_display = attr.ib(init=False)
 
     def __attrs_post_init__(self):
         self.analog_vectors = [
@@ -158,6 +161,8 @@ class SingleFovViz:
             self.analog_vectors.append(
                 np.nan_to_num(self.fov.analog_analyzed.occluder_vec)
             )
+        all_epochs = itertools.product(['stand', 'run'], ['stim', 'spont', 'juxta'])
+        self.epochs_to_display = ['_'.join(epoch) for epoch in all_epochs]
 
     def draw(self):
         """ Main method of the class.
@@ -182,7 +187,7 @@ class SingleFovViz:
             auc_axes = plt.subplot(
                 gs[cur_used_axes + leftover_axes : cur_used_axes + (2 * leftover_axes)]
             )
-            self._summarize_stats_in_epochs([spikes_axes, auc_axes])
+            self._summarize_stats_in_epochs(auc_axes, spikes_axes)
         if self.save:
             self.fig.savefig(
                 str(self.fov.metadata.fname)[:-4] + "_summary.pdf",
@@ -257,13 +262,22 @@ class SingleFovViz:
 
         return idx
 
-    def _summarize_stats_in_epochs(self, axes: List[matplotlib.Axes]):
+    def _summarize_stats_in_epochs(self, ax_auc: matplotlib.Axes, ax_spikes: matplotlib.Axes):
         """ Add axes to the main plot showing the dF/F statistics in the
         different epochs """
-        pass
+
+        df_auc = pd.DataFrame(np.full((400, len(self.epochs_to_display)), np.nan), columns=self.epochs_to_display)
+        df_spikes = df_auc.copy()
+        for epoch in self.epochs_to_display:
+            cur_data = filter_da(self.fov.fluo_analyzed, condition=self.fov.metadata.condition, epoch=epoch)
+            df_auc[epoch][:] = dff_tools.calc_auc(cur_data)
+            df_spikes[epoch][:] = dff_tools.calc_mean_spike_num(cur_data, fps=self.fov.metadata.fps)
+
+        sns.boxenplot(data=df_auc, palette='husl', ax=ax_auc)
+        sns.boxenplot(data=df_spikes, palette='husl', ax=ax_spikes)
 
 
-def filter_da(data, condition, epoch):
+def filter_da(data: xr.DataArray, condition: str, epoch: str) -> np.ndarray:
         """ Filter a DataArray by the given condition and epoch.
          Returns a numpy array in the shape of cells x time """
         selected = np.squeeze(
