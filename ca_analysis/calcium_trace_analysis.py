@@ -16,6 +16,7 @@ import itertools
 from scipy import stats
 
 from ca_analysis import dff_tools
+from ca_analysis.single_fov_analysis import filter_da
 
 
 class Condition(Enum):
@@ -102,7 +103,7 @@ class CalciumReview:
         except KeyError:
             print(f"The day {day} is invalid. Valid days are {self.days}.")
         else:
-            return self._filter_da(
+            return filter_da(
                 unselected_data, condition=condition.value, epoch=epoch
             )
 
@@ -111,10 +112,10 @@ class CalciumReview:
         norm1, norm2 = 1, 1
         for day, raw_datum in dict(sorted(self.raw_data.items())).items():
             print(f"Analyzing day {day}...")
-            selected_first = self._filter_da(
+            selected_first = filter_da(
                 raw_datum, condition=self.conditions[0], epoch=epoch
             )
-            selected_second = self._filter_da(
+            selected_second = filter_da(
                 raw_datum, condition=self.conditions[1], epoch=epoch
             )
             for func in funcs:
@@ -174,17 +175,6 @@ class CalciumReview:
         ax.set_xticks(df.index.values)
         ax.set_xlabel("Days")
         ax.set_title(title)
-
-    def _filter_da(self, data, condition, epoch):
-        """ Filter a DataArray by the given condition and epoch.
-         Returns a numpy array in the shape of cells x time """
-        selected = np.squeeze(
-            data.sel(condition=condition, epoch=epoch, drop=True).values
-        )
-        relevant_idx = np.isfinite(selected).any(axis=1)
-        num_of_cells = relevant_idx.sum()
-        selected = selected[relevant_idx].reshape((num_of_cells, -1))
-        return selected
 
 
 if __name__ == "__main__":

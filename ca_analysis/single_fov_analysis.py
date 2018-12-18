@@ -176,8 +176,13 @@ class SingleFovViz:
             )
             [scatter_ax.add_artist(p) for p in gen_patches]
             used_idx = self._draw_analog_plots(gs, colors)
-            cur_used_plots = self.axes_for_dff + used_idx
-            self._summarize_stats_in_epochs()
+            cur_used_axes = self.axes_for_dff + used_idx
+            leftover_axes = (num_of_axes - cur_used_axes) // 2
+            spikes_axes = plt.subplot(gs[cur_used_axes : cur_used_axes + leftover_axes])
+            auc_axes = plt.subplot(
+                gs[cur_used_axes + leftover_axes : cur_used_axes + (2 * leftover_axes)]
+            )
+            self._summarize_stats_in_epochs([spikes_axes, auc_axes])
         if self.save:
             self.fig.savefig(
                 str(self.fov.metadata.fname)[:-4] + "_summary.pdf",
@@ -235,8 +240,7 @@ class SingleFovViz:
         labels = ["Air puff", "Juxtaposed\npuff", "Run time", "CCA\nocclusion times"]
 
         for idx, (label, data, color) in enumerate(
-            zip(labels, self.analog_vectors, colors),
-            self.axes_for_dff
+            zip(labels, self.analog_vectors, colors), self.axes_for_dff
         ):
             cur_ax = plt.subplot(gs[idx, :])
             cur_ax.plot(data, color=color)
@@ -253,10 +257,23 @@ class SingleFovViz:
 
         return idx
 
-    def _summarize_stats_in_epochs(self):
+    def _summarize_stats_in_epochs(self, axes: List[matplotlib.Axes]):
         """ Add axes to the main plot showing the dF/F statistics in the
         different epochs """
         pass
+
+
+def filter_da(data, condition, epoch):
+        """ Filter a DataArray by the given condition and epoch.
+         Returns a numpy array in the shape of cells x time """
+        selected = np.squeeze(
+            data.sel(condition=condition, epoch=epoch, drop=True).values
+        )
+        relevant_idx = np.isfinite(selected).any(axis=1)
+        num_of_cells = relevant_idx.sum()
+        selected = selected[relevant_idx].reshape((num_of_cells, -1))
+        return selected
+
 
 
 if __name__ == "__main__":
