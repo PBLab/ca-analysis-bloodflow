@@ -94,7 +94,8 @@ class VascOccAnalyzer:
 
     def _find_spikes(self, dff: np.ndarray):
         """ Calculates a dataframe, each row being a cell, with three columns - before, during and after
-        the occlusion. The numbers for each cell are normalized for the length of the epoch."""
+        the occlusion. The numbers for each cell are normalized for the length of the epoch.
+        TODO: NEEDS REFACTORING TO WORK WITH DFF_TOOLS.LOCATE_SPIKES_PEAKUTILS """
         idx_section1 = []
         idx_section2 = []
         idx_section3 = []

@@ -25,6 +25,8 @@ import scipy.ndimage
 
 from ca_analysis import caiman_funcs_for_comparison
 from ca_analysis.find_colabeled_cells import TiffChannels
+from ca_analysis.single_fov_analysis import SingleFovParser
+from ca_analysis.analog_trace import AnalogTraceAnalyzer
 
 
 def calc_dff(file) -> np.ndarray:
@@ -55,19 +57,22 @@ def calc_dff_batch(files):
     return np.concatenate(all_data)
 
 
-def locate_spikes_peakutils(data, fps=30.03, thresh=0.65):
+def locate_spikes_peakutils(data, fps=30.03, thresh=0.75):
     """
     Find spikes from a dF/F matrix using the peakutils package.
     The fps parameter is used to calculate the minimum allowed distance \
-    between consecutive spikes.
+    between consecutive spikes, and to disqualify cells which had no
+    evident dF/F peaks, which result in too many false-positives.
     """
     assert len(data.shape) == 2 and data.shape[0] > 0
     all_spikes = np.zeros_like(data)
     min_dist = int(fps)
     nan_to_zero = np.nan_to_num(data)
+    max_spike_num = int(data.shape[1] // fps)
     for row, cell in enumerate(nan_to_zero):
         peaks = peakutils.indexes(cell, thres=thresh, min_dist=min_dist)
-        if len(peaks) > 0:
+        num_of_peaks = len(peaks)
+        if (num_of_peaks > 0) and (num_of_peaks < max_spike_num):
             all_spikes[row, peaks] = 1
     return all_spikes
 
@@ -86,7 +91,9 @@ def calc_mean_spike_num(data, fps=30.03, thresh=0.75):
     return mean_of_spikes
 
 
-def scatter_spikes(raw_data, spike_data=None, downsample_display=10, time_vec=None):
+def scatter_spikes(
+    raw_data, spike_data=None, downsample_display=10, time_vec=None, ax=None
+):
     """
     Shows a scatter plots of spike locations on each individual fluorescent trace.
     Parameters:
@@ -97,11 +104,15 @@ def scatter_spikes(raw_data, spike_data=None, downsample_display=10, time_vec=No
                                   This is the downsampling factor.
         time_vec (np.ndarray): 1D array with the x-axis values (time). If None, will
                                use simple range(0, max) integer values.
+        ax (plt.Axes): Axes to plot the graph on. If none, the function will generate one.
     """
 
     if time_vec is None:
         time_vec = np.arange(raw_data.shape[1])
-    fig, ax = plt.subplots()
+    if not ax:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
     downsampled_data = raw_data[::downsample_display]
     num_displayed_cells = downsampled_data.shape[0]
     ax.plot(
@@ -427,11 +438,6 @@ def deinterleave(fname: str, data_channel: int, num_of_channels: int = 2):
         raise
     return new_fname
 
-
-def visualize_analog_and_dff_data(
-    dff: np.ndarray, fps: float, analog_data: AnalogTraceAnalyzer, occluder=None
-):
-    """ Display the dF/F data with the analog, and perhaps occluder, data."""
 
 
 if __name__ == "__main__":

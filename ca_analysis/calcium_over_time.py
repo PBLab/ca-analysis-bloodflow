@@ -148,8 +148,9 @@ class CalciumAnalysisOverTime:
         meta = FluoMetadata(fname_fluo, **regex)
         meta.get_metadata()
         fov = SingleFovParser(analog_fname=fname_analog, results_fname=results_fname,
-                              metadata=meta, with_analog=with_analog)
+                              metadata=meta, with_analog=with_analog, summarize_in_plot=True)
         fov.parse()
+        plt.close()
         if self.serialize:
             fov.add_metadata_and_serialize()
         return fov
@@ -227,14 +228,14 @@ class CalciumAnalysisOverTime:
 
 
 if __name__ == '__main__':
-    results_folder = Path(r'/data/David/thy1_test_R_L/NEW_mouse_x10')
+    results_folder = Path(r'/export/home/pblab/data/David/NEW_crystal_skull_TAC_161018/')
     assert results_folder.exists()
-    # folder_and_files = {Path('/data/David/NEW_crystal_skull_TAC_161018'): 'DAY*/*/*.tif',
-    #                     Path('/data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
-    folder_and_files = {Path('/data/David/thy1_test_R_L/NEW_mouse_x10'): '*mill_STIM_*.tif'}
+    folder_and_files = {Path('/export/home/pblab/data/David/NEW_crystal_skull_TAC_161018'): 'DAY*/*/*.tif'}
+                        # Path('/data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
+    # folder_and_files = {Path('/data/David/thy1_test_R_L/NEW_mouse_x10'): '*mill_STIM_*.tif'}
     res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True,
                                   folder_globs=folder_and_files, with_analog=True)
     # regex = {'cond_reg': r'FOV1_(\w+?)_30HZ'}
-    regex = {'cond_reg': r'420_(\w+?)_30HZ'}
-    # res.run_batch_of_timepoints(**regex)
-    res.generate_da_per_day('*mill_STIM*.nc')
+    # regex = {'cond_reg': r'420_(\w+?)_30HZ'}
+    res.run_batch_of_timepoints()
+    # res.generate_da_per_day('*mill_STIM*.nc')
