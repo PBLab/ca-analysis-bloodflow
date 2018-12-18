@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import List, Tuple
+from typing import List, Tuple, Union
 import itertools
 
 import numpy as np
@@ -161,32 +161,32 @@ class SingleFovViz:
             self.analog_vectors.append(
                 np.nan_to_num(self.fov.analog_analyzed.occluder_vec)
             )
-        all_epochs = itertools.product(['stand', 'run'], ['stim', 'spont', 'juxta'])
-        self.epochs_to_display = ['_'.join(epoch) for epoch in all_epochs]
+        all_epochs = itertools.product(["stand", "run"], ["stim", "spont", "juxta"])
+        self.epochs_to_display = ["_".join(epoch) for epoch in all_epochs]
 
     def draw(self):
         """ Main method of the class.
         Generates a summary figure containing the data inside that
         FOV """
-        num_of_axes = 20 if self.fov.with_analog else self.axes_for_dff
+        num_of_axes = 23 if self.fov.with_analog else self.axes_for_dff
         self.fig = plt.figure(figsize=(24, 12))
         if self.fov.analog_analyzed.occluder:
             num_of_axes += 1
-        gs = gridspec.GridSpec(num_of_axes, 1)
+        gs = gridspec.GridSpec(num_of_axes, 2)
         scatter_ax = plt.subplot(gs[: self.axes_for_dff, :])
         self._scat_spikes(scatter_ax)
+        scatter_ax.xaxis.tick_top()
+        scatter_ax.xaxis.set_label_position("top")
+        scatter_ax.spines["top"].set_visible(True)
+        scatter_ax.spines["bottom"].set_visible(False)
         if self.fov.with_analog:
             gen_patches, colors = self._create_rect_patches(
                 self.fov.metadata.fps, self.fov.fluo_trace.shape[1]
             )
             [scatter_ax.add_artist(p) for p in gen_patches]
-            used_idx = self._draw_analog_plots(gs, colors)
-            cur_used_axes = self.axes_for_dff + used_idx
-            leftover_axes = (num_of_axes - cur_used_axes) // 2
-            spikes_axes = plt.subplot(gs[cur_used_axes : cur_used_axes + leftover_axes])
-            auc_axes = plt.subplot(
-                gs[cur_used_axes + leftover_axes : cur_used_axes + (2 * leftover_axes)]
-            )
+            cur_used_axes = self._draw_analog_plots(gs, colors)
+            auc_axes = plt.subplot(gs[cur_used_axes + 1 :, 0])
+            spikes_axes = plt.subplot(gs[cur_used_axes + 1 :, 1])
             self._summarize_stats_in_epochs(auc_axes, spikes_axes)
         if self.save:
             self.fig.savefig(
@@ -249,7 +249,7 @@ class SingleFovViz:
         ):
             cur_ax = plt.subplot(gs[idx, :])
             cur_ax.plot(data, color=color)
-            cur_ax.set_ylabel(label, rotation=45)
+            cur_ax.set_ylabel(label, rotation=45, fontsize=8)
             cur_ax.set_xlabel("")
             cur_ax.set_xticks([])
             cur_ax.set_ylim(-0.05, 1.05)
@@ -262,32 +262,51 @@ class SingleFovViz:
 
         return idx
 
-    def _summarize_stats_in_epochs(self, ax_auc: matplotlib.Axes, ax_spikes: matplotlib.Axes):
+    def _summarize_stats_in_epochs(self, ax_auc: plt.Axes, ax_spikes: plt.Axes):
         """ Add axes to the main plot showing the dF/F statistics in the
         different epochs """
 
-        df_auc = pd.DataFrame(np.full((400, len(self.epochs_to_display)), np.nan), columns=self.epochs_to_display)
+        df_auc = pd.DataFrame(
+            np.full((400, len(self.epochs_to_display)), np.nan),
+            columns=self.epochs_to_display,
+        )
         df_spikes = df_auc.copy()
         for epoch in self.epochs_to_display:
-            cur_data = filter_da(self.fov.fluo_analyzed, condition=self.fov.metadata.condition, epoch=epoch)
-            df_auc[epoch][:] = dff_tools.calc_auc(cur_data)
-            df_spikes[epoch][:] = dff_tools.calc_mean_spike_num(cur_data, fps=self.fov.metadata.fps)
+            cur_data = filter_da(self.fov.fluo_analyzed, epoch=epoch)
+            if cur_data.shape == (0,):
+                continue
+            auc = dff_tools.calc_auc(cur_data)
+            df_auc[epoch][: len(auc)] = auc
+            spikes = dff_tools.calc_mean_spike_num(cur_data, fps=self.fov.metadata.fps)
+            df_spikes[epoch][: len(spikes)] = spikes
 
-        sns.boxenplot(data=df_auc, palette='husl', ax=ax_auc)
-        sns.boxenplot(data=df_spikes, palette='husl', ax=ax_spikes)
+        sns.boxenplot(data=df_auc, palette="husl", ax=ax_auc)
+        sns.boxenplot(data=df_spikes, palette="husl", ax=ax_spikes)
+        for ax in [ax_auc, ax_spikes]:
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            ax.set_xlabel("Epoch")
+        ax_auc.set_ylabel("AUC")
+        ax_spikes.set_ylabel("Spikes per second")
 
 
-def filter_da(data: xr.DataArray, condition: str, epoch: str) -> np.ndarray:
-        """ Filter a DataArray by the given condition and epoch.
+def filter_da(
+    data: xr.DataArray, epoch: str, condition: Union[str, None] = None
+) -> np.ndarray:
+    """ Filter a DataArray by the given condition and epoch.
          Returns a numpy array in the shape of cells x time """
+    if condition:
         selected = np.squeeze(
             data.sel(condition=condition, epoch=epoch, drop=True).values
         )
-        relevant_idx = np.isfinite(selected).any(axis=1)
-        num_of_cells = relevant_idx.sum()
+    else:
+        selected = np.squeeze(data.sel(epoch=epoch, drop=True).values)
+    relevant_idx = np.isfinite(selected).any(axis=1)
+    num_of_cells = relevant_idx.sum()
+    if num_of_cells > 0:
         selected = selected[relevant_idx].reshape((num_of_cells, -1))
         return selected
-
+    return np.array([])
 
 
 if __name__ == "__main__":
