@@ -301,6 +301,7 @@ def filter_da(
         )
     else:
         selected = np.squeeze(data.sel(epoch=epoch, drop=True).values)
+    selected = np.atleast_2d(selected)
     relevant_idx = np.isfinite(selected).any(axis=1)
     num_of_cells = relevant_idx.sum()
     if num_of_cells > 0:
@@ -310,12 +311,12 @@ def filter_da(
 
 
 if __name__ == "__main__":
-    home = pathlib.Path("/export/home/pblab")
+    home = pathlib.Path("/export/home/pblab/")
     # home = pathlib.Path('/')
     folder = home / pathlib.Path(
-        r"data/David/NEW_crystal_skull_TAC_161018/DAY_0_ALL/619_HYPO_DAY_0/"
+        r"data/David/NEW_crystal_skull_TAC_161018/DAY_14_ALL/147_HYPER_DAY_14/"
     )
-    fov = 1
+    fov = 3
     analog_fname = next(folder.glob(f"*FOV_{fov}*analog.txt"))
     results_fname = next(folder.glob(f"*FOV_{fov}*results.npz"))
     orig_fname = next(folder.glob(f"*FOV_{fov}*01.tif"))

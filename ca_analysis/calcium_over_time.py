@@ -172,7 +172,7 @@ class CalciumAnalysisOverTime:
         try:  # coming from run_batch_of_timepoints()
             all_files = self.list_of_fovs
         except AttributeError:
-            all_files = [folder.glob(globstr) for folder in self.folder_globs]
+            all_files = [folder.rglob(globstr) for folder in self.folder_globs]
             all_files = itertools.chain(*all_files)
 
         for file in all_files:
@@ -235,7 +235,8 @@ if __name__ == '__main__':
     # folder_and_files = {Path('/data/David/thy1_test_R_L/NEW_mouse_x10'): '*mill_STIM_*.tif'}
     res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True,
                                   folder_globs=folder_and_files, with_analog=True)
-    # regex = {'cond_reg': r'FOV1_(\w+?)_30HZ'}
+    # regex = {'cond_reg': r'FOV1_(\w+?)_3:304
+    # HZ'}
     # regex = {'cond_reg': r'420_(\w+?)_30HZ'}
-    res.run_batch_of_timepoints()
-    # res.generate_da_per_day('*mill_STIM*.nc')
+    # res.run_batch_of_timepoints()
+    res.generate_da_per_day()
