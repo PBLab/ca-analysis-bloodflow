@@ -39,7 +39,7 @@ class AnalogTraceAnalyzer:
     stand_vec = attr.ib(init=False)
     occluder_vec = attr.ib(init=False)
     before_occ_vec = attr.ib(init=False)
-    after_occ_vec = attr.ib(init=False)    
+    after_occ_vec = attr.ib(init=False)
 
     def __attrs_post_init__(self):
         if self.occ_metadata is None:
@@ -113,12 +113,12 @@ class AnalogTraceAnalyzer:
             juxta_vec[idx:last_idx] = 1
 
         return stim_vec, juxta_vec
-    
+
     def __populate_occluder(self):
         self.before_occ_vec = np.full(self.timestamps.shape, np.nan)
         self.occluder_vec = np.full(self.timestamps.shape, np.nan)
         self.after_occ_vec = np.full(self.timestamps.shape, np.nan)
-        
+
         tot_len_during = self.occ_metadata.before + self.occ_metadata.during
         self.before_occ_vec[:self.occ_metadata.before] = 1
         self.occluder_vec[self.occ_metadata.before:tot_len_during] = 1

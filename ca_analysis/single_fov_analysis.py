@@ -280,8 +280,8 @@ class SingleFovViz:
             spikes = dff_tools.calc_mean_spike_num(cur_data, fps=self.fov.metadata.fps)
             df_spikes[epoch][: len(spikes)] = spikes
 
-        sns.boxenplot(data=df_auc, palette="husl", ax=ax_auc)
-        sns.boxenplot(data=df_spikes, palette="husl", ax=ax_spikes)
+        sns.boxenplot(data=df_auc, ax=ax_auc)
+        sns.boxenplot(data=df_spikes, ax=ax_spikes)
         for ax in [ax_auc, ax_spikes]:
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)

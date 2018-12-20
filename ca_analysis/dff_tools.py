@@ -5,7 +5,9 @@ import sys
 sys.path.append(
     "/data/MatlabCode/PBLabToolkit/CalciumDataAnalysis/python-ca-analysis-bloodflow"
 )
-
+sys.path.append(
+    "/export/home/pblab/data/MatlabCode/PBLabToolkit/CalciumDataAnalysis/python-ca-analysis-bloodflow"
+)
 
 import numpy as np
 import pandas as pd
@@ -26,7 +28,8 @@ import scipy.ndimage
 
 from ca_analysis import caiman_funcs_for_comparison
 from ca_analysis.find_colabeled_cells import TiffChannels
-from ca_analysis.single_fov_analysis import SingleFovParser
+
+# from ca_analysis.single_fov_analysis import SingleFovParser
 from ca_analysis.analog_trace import AnalogTraceAnalyzer
 
 
@@ -440,12 +443,120 @@ def deinterleave(fname: str, data_channel: int, num_of_channels: int = 2):
     return new_fname
 
 
+def rank_dff_by_stim(dff: np.ndarray, spikes: np.ndarray, stim: np.ndarray, fps: float):
+    """ Draws a plot of neurons ranked by the correlation they exhibit between
+    a spike an air puff.
+
+    Parameters:
+    :param dff np.ndarray: Array of (cell x time) containing dF/F values of cells over time.
+    :param spikes np.ndarray: Array of (cell x time) containing 1 wherever the cell fired
+    and 0 otherwise. Result of ``locate_spikes_peakutils``.
+    :param stim np.ndarray: A vector with the length of the experiment containing 1 wherever
+    the stimulus occurred.
+    :param float fps: Frames per second
+    """
+    stim_edges = np.concatenate((np.diff(np.nan_to_num(stim)), [0]))
+    assert len(stim_edges) == dff.shape[1]
+    ends_of_stim_idx = np.where(stim_edges == 1)[0]
+    frame_diffs = np.full((dff.shape[0], len(ends_of_stim_idx)), np.nan)
+    dff_diffs = frame_diffs.copy()
+    spike_placeholder = np.zeros_like(spikes)
+    spikes_idx = np.array(
+        np.where(spikes == 1)
+    )  # two rows, 'time' columns. First row is row indices, second row is column index (i.e. time).
+    for idx, (stim_start, stim_end) in enumerate(
+        zip(ends_of_stim_idx[:-1], ends_of_stim_idx[1:])
+    ):
+        cur_spikes = spikes_idx.astype(np.float64)
+        cur_spikes[
+            :, (cur_spikes[1, :] < stim_start) | (cur_spikes[1, :] > stim_end)
+        ] = np.nan
+        cur_spikes = (
+            cur_spikes[np.isfinite(cur_spikes)].reshape((2, -1)).astype(np.int64)
+        )
+        cur_spikes_df = pd.DataFrame({"row": cur_spikes[0], "column": cur_spikes[1]})
+        first_spikes = cur_spikes_df.groupby(by="row", as_index=True).min()
+        frame_diffs[first_spikes.index, idx] = (first_spikes.column - stim_start) / fps
+        dff_diffs[first_spikes.index, idx] = dff[
+            first_spikes.index, first_spikes.column
+        ]
+
+    frame_diffs = (
+        pd.DataFrame(frame_diffs).reset_index().rename(columns={"index": "Cell number"})
+    )
+    frame_diffs = pd.melt(
+        frame_diffs,
+        id_vars="Cell number",
+        var_name="Stimulus number",
+        value_name="Delay [sec]",
+    )
+
+    dff_diffs = (
+        pd.DataFrame(dff_diffs).reset_index().rename(columns={"index": "Cell number"})
+    )
+    dff_diffs = pd.melt(
+        dff_diffs,
+        id_vars="Cell number",
+        var_name="Stimulus number",
+        value_name="dF/F at delay",
+    )
+
+    data = pd.concat((frame_diffs, dff_diffs['dF/F at delay'].to_frame()), axis=1, sort=False)
+    # Change a couple of things around for seaborn plottings
+    data["Cell number"] = data["Cell number"].astype(np.int32).astype("category")
+    data["Stimulus number"] = data["Stimulus number"].astype("category")
+    order = np.array(data.groupby('Cell number', sort=True).mean().sort_values('Delay [sec]').index)
+
+    fig, ax_frame = plt.subplots()
+    fig2, ax_dff = plt.subplots()
+    fig3, ax_corr = plt.subplots()
+    sns.barplot(
+        data=data,
+        x="Cell number",
+        y="Delay [sec]",
+        estimator=np.nanmean,
+        ax=ax_frame,
+        order=order,
+    )
+    sns.barplot(
+        data=data,
+        x="Cell number",
+        y="dF/F at delay",
+        estimator=np.nanmean,
+        ax=ax_dff,
+        order=order,
+    )
+    sns.scatterplot(
+        data=data,
+        x='Delay [sec]',
+        y='dF/F at delay',
+        ax=ax_corr,
+    )
+    ax_frame.set_title(
+        "Average minimal delay between spikes and stimulus for all neurons"
+    )
+    ax_dff.set_title("Average dF/F value during the spike")
+
 
 if __name__ == "__main__":
     # results_file = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003_CHANNEL_2_results.npz'
     # tif = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003.tif'
-    folder = pathlib.Path("/data/David/crystal_skull_TAC_180719/626_HYPER_DAY_0/")
-    tifs = list(folder.glob("6*00001_CHANNEL_1.tif"))
-    results = list(folder.glob("*results.npz"))
-    show_side_by_side(tifs[:1], results[:1])
+    folder = pathlib.Path(
+        "/export/home/pblab/data/David/NEW_crystal_skull_TAC_161018/DAY_21_ALL/147_HYPO_DAY_21"
+    )
+    results = pathlib.Path("147_HYPO_DAY_21_FOV_1_00001_CHANNEL_1_results.npz")
+    tif = pathlib.Path("147_HYPO_DAY_21_FOV_1_00001.tif")
+    analog = pathlib.Path("147_HYPO_DAY_21_FOV_1_00001_analog.txt")
+    df = pd.read_table(
+        folder / analog, header=None, names=["stimulus", "run"], index_col=False
+    )
+    timestamps = np.arange(9000) / 30.03
+    with np.load(folder / results) as data:
+        dff = data["F_dff"]
+    spikes = locate_spikes_peakutils(dff)
+    analog = AnalogTraceAnalyzer(str(tif), df, timestamps, 30.03, "0")
+    analog.run()
+
+    rank_dff_by_stim(dff, spikes, analog.stim_vec, 30.03)
+
     plt.show(block=True)
