@@ -9,6 +9,7 @@
 *.pyc
 *.npz
 *.npy
+*.html
 *.png
 .vscode/
 .idea/*

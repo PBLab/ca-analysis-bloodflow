@@ -22,9 +22,9 @@ sys.path.append(
 )
 from matplotlib import gridspec
 
-from ca_analysis.analog_trace import AnalogTraceAnalyzer
-from ca_analysis.fluo_metadata import FluoMetadata
-from ca_analysis import dff_tools
+from calcium_bflow_analysis.analog_trace import AnalogTraceAnalyzer
+from calcium_bflow_analysis.fluo_metadata import FluoMetadata
+from calcium_bflow_analysis import dff_tools
 
 
 @attr.s(slots=True)

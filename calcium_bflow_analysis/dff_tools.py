@@ -26,11 +26,11 @@ import skimage.draw
 import tifffile
 import scipy.ndimage
 
-from ca_analysis import caiman_funcs_for_comparison
-from ca_analysis.find_colabeled_cells import TiffChannels
+from calcium_bflow_analysis import caiman_funcs_for_comparison
+from calcium_bflow_analysis.find_colabeled_cells import TiffChannels
 
-# from ca_analysis.single_fov_analysis import SingleFovParser
-from ca_analysis.analog_trace import AnalogTraceAnalyzer
+# from calcium_bflow_analysis.single_fov_analysis import SingleFovParser
+from calcium_bflow_analysis.analog_trace import AnalogTraceAnalyzer
 
 
 def calc_dff(file) -> np.ndarray:

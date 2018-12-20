@@ -16,8 +16,8 @@ colorama.init()
 import copy
 import warnings
 
-from ca_analysis.analog_trace import AnalogTraceAnalyzer
-from ca_analysis.dff_tools import (
+from calcium_bflow_analysis.analog_trace import AnalogTraceAnalyzer
+from calcium_bflow_analysis.dff_tools import (
     calc_dff,
     calc_dff_batch,
     scatter_spikes,

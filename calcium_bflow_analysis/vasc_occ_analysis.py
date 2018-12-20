@@ -16,9 +16,9 @@ import colorama
 colorama.init()
 from ansimarkup import ansiprint as aprint
 import sklearn.cluster
-from ca_analysis.analog_trace import AnalogTraceAnalyzer
-from ca_analysis.dff_tools import scatter_spikes, plot_mean_vals, display_heatmap
-from ca_analysis.vasc_occ_parsing import concat_vasc_occ_dataarrays
+from calcium_bflow_analysis.analog_trace import AnalogTraceAnalyzer
+from calcium_bflow_analysis.dff_tools import scatter_spikes, plot_mean_vals, display_heatmap
+from calcium_bflow_analysis.vasc_occ_parsing import concat_vasc_occ_dataarrays
 
 
 @attr.s

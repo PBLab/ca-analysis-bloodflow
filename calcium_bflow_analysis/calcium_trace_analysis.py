@@ -15,8 +15,8 @@ import re
 import itertools
 from scipy import stats
 
-from ca_analysis import dff_tools
-from ca_analysis.single_fov_analysis import filter_da
+from calcium_bflow_analysis import dff_tools
+from calcium_bflow_analysis.single_fov_analysis import filter_da
 
 
 class Condition(Enum):
