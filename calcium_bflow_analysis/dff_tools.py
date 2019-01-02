@@ -541,22 +541,25 @@ def rank_dff_by_stim(dff: np.ndarray, spikes: np.ndarray, stim: np.ndarray, fps:
 if __name__ == "__main__":
     # results_file = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003_CHANNEL_2_results.npz'
     # tif = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003.tif'
-    folder = pathlib.Path(
-        "/export/home/pblab/data/David/NEW_crystal_skull_TAC_161018/DAY_21_ALL/147_HYPO_DAY_21"
-    )
-    results = pathlib.Path("147_HYPO_DAY_21_FOV_1_00001_CHANNEL_1_results.npz")
-    tif = pathlib.Path("147_HYPO_DAY_21_FOV_1_00001.tif")
-    analog = pathlib.Path("147_HYPO_DAY_21_FOV_1_00001_analog.txt")
-    df = pd.read_table(
-        folder / analog, header=None, names=["stimulus", "run"], index_col=False
-    )
-    timestamps = np.arange(9000) / 30.03
-    with np.load(folder / results) as data:
-        dff = data["F_dff"]
-    spikes = locate_spikes_peakutils(dff)
-    analog = AnalogTraceAnalyzer(str(tif), df, timestamps, 30.03, "0")
-    analog.run()
+    # folder = pathlib.Path(
+    #     "/export/home/pblab/data/David/NEW_crystal_skull_TAC_161018/DAY_21_ALL/147_HYPO_DAY_21"
+    # )
+    # results = pathlib.Path("147_HYPO_DAY_21_FOV_1_00001_CHANNEL_1_results.npz")
+    # tif = pathlib.Path("147_HYPO_DAY_21_FOV_1_00001.tif")
+    # analog = pathlib.Path("147_HYPO_DAY_21_FOV_1_00001_analog.txt")
+    # df = pd.read_table(
+    #     folder / analog, header=None, names=["stimulus", "run"], index_col=False
+    # )
+    # timestamps = np.arange(9000) / 30.03
+    # with np.load(folder / results) as data:
+    #     dff = data["F_dff"]
+    # spikes = locate_spikes_peakutils(dff)
+    # analog = AnalogTraceAnalyzer(str(tif), df, timestamps, 30.03, "0")
+    # analog.run()
 
-    rank_dff_by_stim(dff, spikes, analog.stim_vec, 30.03)
+    # rank_dff_by_stim(dff, spikes, analog.stim_vec, 30.03)
+    tif = pathlib.Path('/data/David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001.tif')
+    results = pathlib.Path('/data/David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001_CHANNEL_2_results.npz')
+    show_side_by_side([tif], [results], 2)
 
     plt.show(block=True)
