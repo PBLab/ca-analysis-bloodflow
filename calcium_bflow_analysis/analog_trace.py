@@ -298,10 +298,10 @@ if __name__ == "__main__":
     home = pathlib.Path("/mnt/qnap")
     # home = pathlib.Path("/data")
     # home = pathlib.Path("/export/home/pblab/data")
-    npz_file = str(home / r"David/602_new_baseline_imaging_201217/602_HYPO_DAY_0__EXP_STIM__FOV_2_00001_CHANNEL_1_results.npz")
-    analog_file = str(home / r"David/602_new_baseline_imaging_201217/602_HYPER_DAY_0__EXP_STIM__FOV_2(2)_mag_5_bidirectional_2048_512_30Hz_00001_analog.txt")
+    npz_file = str(home / r"David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001_CHANNEL_2_results.npz")
+    analog_file = str(home / r"David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001_analog.txt")
     data = np.load(npz_file)
-    filename = str(home / r"David/602_new_baseline_imaging_201217/602_HYPO_DAY_0__EXP_STIM__FOV_2_00001.tif")
+    filename = str(home / r"David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001.tif")
     analog = pd.read_csv(analog_file, sep="\t", header=None, names=["stimulus", "run"])
     an_trace = AnalogTraceAnalyzer(
         tif_filename=filename,
