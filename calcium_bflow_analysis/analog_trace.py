@@ -1,3 +1,4 @@
+import pathlib
 import pandas as pd
 import numpy as np
 import attr
@@ -21,13 +22,18 @@ class AnalogTraceAnalyzer:
         AnalogTraceAnalyzer(tif_filename, analog_trace).run()
     # TODO: ADD SUPPORT FOR COLABELING INDICES
     """
-    tif_filename = attr.ib(validator=instance_of(str))  # Timelapse (doesn't need to be separated)
-    analog_trace = attr.ib(validator=instance_of(pd.DataFrame))  # .txt file from ScanImage
+
+    tif_filename = attr.ib(
+        validator=instance_of(str)
+    )  # Timelapse (doesn't need to be separated)
+    analog_trace = attr.ib(
+        validator=instance_of(pd.DataFrame)
+    )  # .txt file from ScanImage
     timestamps = attr.ib(validator=instance_of(np.ndarray))
     framerate = attr.ib(validator=instance_of(float))
     start_time = attr.ib(validator=instance_of(str))
     response_window = attr.ib(default=0.5, validator=instance_of(float))  # sec
-    buffer_after_stim = attr.ib(default=1., validator=instance_of(float))  # sec
+    buffer_after_stim = attr.ib(default=1.0, validator=instance_of(float))  # sec
     move_thresh = attr.ib(default=0.25, validator=instance_of(float))  # V
     sample_rate = attr.ib(default=1000, validator=instance_of(int))  # Hz
     occluder = attr.ib(default=False, validator=instance_of(bool))
@@ -43,7 +49,7 @@ class AnalogTraceAnalyzer:
 
     def __attrs_post_init__(self):
         if self.occ_metadata is None:
-            occ = namedtuple('Occluder', ('before', 'during'))
+            occ = namedtuple("Occluder", ("before", "during"))
             self.occ_metadata = occ(100, 200)
 
     def run(self):
@@ -70,16 +76,26 @@ class AnalogTraceAnalyzer:
         diffs_stim = np.where(self.analog_trace.stimulus > 4)[0]
         if len(diffs_stim) > 0:
             diffs_stim_con = np.concatenate((np.atleast_1d(diffs_stim[0]), diffs_stim))
-            idx_true_stim = np.concatenate((np.atleast_1d(diffs_stim[0]),
-                                            diffs_stim[np.diff(diffs_stim_con) > self.sample_rate * 10]))
+            idx_true_stim = np.concatenate(
+                (
+                    np.atleast_1d(diffs_stim[0]),
+                    diffs_stim[np.diff(diffs_stim_con) > self.sample_rate * 10],
+                )
+            )
 
         else:
             idx_true_stim = np.array([])
         diffs_juxta = np.where(self.analog_trace.stimulus > 2.2)[0]
         if len(diffs_juxta) > 0:
-            diffs_juxta_con = np.concatenate((np.atleast_1d(diffs_juxta[0]), diffs_juxta))
-            idx_juxta_full = np.concatenate((np.atleast_1d(diffs_juxta[0]),
-                                             diffs_juxta[np.diff(diffs_juxta_con) > self.sample_rate * 10]))
+            diffs_juxta_con = np.concatenate(
+                (np.atleast_1d(diffs_juxta[0]), diffs_juxta)
+            )
+            idx_juxta_full = np.concatenate(
+                (
+                    np.atleast_1d(diffs_juxta[0]),
+                    diffs_juxta[np.diff(diffs_juxta_con) > self.sample_rate * 10],
+                )
+            )
 
             # Separate between stimulus and juxta pulses
             idx_juxta = []
@@ -94,7 +110,9 @@ class AnalogTraceAnalyzer:
             idx_juxta = []
         return idx_true_stim, np.array(idx_juxta)
 
-    def __populate_stims(self, true_stim: np.ndarray, juxta: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def __populate_stims(
+        self, true_stim: np.ndarray, juxta: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         For each peak, "mark" the following frames as the response frames for that
         stimulus
@@ -105,11 +123,15 @@ class AnalogTraceAnalyzer:
         stim_vec = np.full(self.analog_trace.shape[0], np.nan)
         juxta_vec = np.full(self.analog_trace.shape[0], np.nan)
         for idx in true_stim:
-            last_idx = int(idx + (self.response_window + self.buffer_after_stim) * self.sample_rate)
+            last_idx = int(
+                idx + (self.response_window + self.buffer_after_stim) * self.sample_rate
+            )
             stim_vec[idx:last_idx] = 1
 
         for idx in juxta:
-            last_idx = int(idx + (self.response_window + self.buffer_after_stim) * self.sample_rate)
+            last_idx = int(
+                idx + (self.response_window + self.buffer_after_stim) * self.sample_rate
+            )
             juxta_vec[idx:last_idx] = 1
 
         return stim_vec, juxta_vec
@@ -120,8 +142,8 @@ class AnalogTraceAnalyzer:
         self.after_occ_vec = np.full(self.timestamps.shape, np.nan)
 
         tot_len_during = self.occ_metadata.before + self.occ_metadata.during
-        self.before_occ_vec[:self.occ_metadata.before] = 1
-        self.occluder_vec[self.occ_metadata.before:tot_len_during] = 1
+        self.before_occ_vec[: self.occ_metadata.before] = 1
+        self.occluder_vec[self.occ_metadata.before : tot_len_during] = 1
         self.after_occ_vec[tot_len_during:] = 1
 
     def __populate_run(self) -> np.ndarray:
@@ -133,7 +155,9 @@ class AnalogTraceAnalyzer:
         run_vec[self.analog_trace.run > self.move_thresh] = 1
         return run_vec
 
-    def __populate_spont(self, stim_vec: np.ndarray, juxta_vec: np.ndarray) -> np.ndarray:
+    def __populate_spont(
+        self, stim_vec: np.ndarray, juxta_vec: np.ndarray
+    ) -> np.ndarray:
         """
         Wherever the juxta and stim vectors are zero - write 1, else write nan.
         :return: None
@@ -158,14 +182,16 @@ class AnalogTraceAnalyzer:
         with TiffFile(self.tif_filename) as f:
             d = f.scanimage_metadata
             # ser = f.series[0]
-            num_frames = len(f.pages)//2
+            num_frames = len(f.pages) // 2
 
         try:
-            self.framerate = d['FrameData']['SI.hRoiManager.scanFrameRate']
+            self.framerate = d["FrameData"]["SI.hRoiManager.scanFrameRate"]
         except (NameError, TypeError):
             self.framerate = 30.03
         finally:
-            self.start_time = str(datetime.fromtimestamp(os.path.getmtime(self.tif_filename)))
+            self.start_time = str(
+                datetime.fromtimestamp(os.path.getmtime(self.tif_filename))
+            )
 
         timestamps = np.arange(num_frames)
         self.timestamps = np.array(timestamps)
@@ -177,20 +203,35 @@ class AnalogTraceAnalyzer:
         self.spont_vec = np.full(self.timestamps.shape, np.nan)
         self.stand_vec = np.full(self.timestamps.shape, np.nan)
 
-    def __fit_frames_to_analog(self, stim_vec: np.ndarray, juxta_vec: np.ndarray,
-                               run_vec: np.ndarray, spont_vec: np.ndarray):
-        samples_per_frame = int(np.ceil(self.sample_rate/self.framerate))
-        starting_idx = np.linspace(0, len(stim_vec), num=len(self.timestamps), dtype=np.int64, endpoint=False)
+    def __fit_frames_to_analog(
+        self,
+        stim_vec: np.ndarray,
+        juxta_vec: np.ndarray,
+        run_vec: np.ndarray,
+        spont_vec: np.ndarray,
+    ):
+        samples_per_frame = int(np.ceil(self.sample_rate / self.framerate))
+        starting_idx = np.linspace(
+            0, len(stim_vec), num=len(self.timestamps), dtype=np.int64, endpoint=False
+        )
         end_idx = starting_idx + samples_per_frame
 
         for frame_idx, (start, end) in enumerate(zip(starting_idx, end_idx)):
-            self.stim_vec[frame_idx] = 1 if np.nanmean(stim_vec[start:end]) > 0.5 else np.nan
-            self.juxta_vec[frame_idx] = 1 if np.nanmean(juxta_vec[start:end]) > 0.5 else np.nan
-            self.run_vec[frame_idx] = 1 if np.nanmean(run_vec[start:end]) > 0.5 else np.nan
-            self.spont_vec[frame_idx] = 1 if np.nanmean(spont_vec[start:end]) > 0.5 else np.nan
+            self.stim_vec[frame_idx] = (
+                1.0 if np.nanmean(stim_vec[start:end]) > 0.5 else np.nan
+            )
+            self.juxta_vec[frame_idx] = (
+                1.0 if np.nanmean(juxta_vec[start:end]) > 0.5 else np.nan
+            )
+            self.run_vec[frame_idx] = (
+                1.0 if np.nanmean(run_vec[start:end]) > 0.5 else np.nan
+            )
+            self.spont_vec[frame_idx] = (
+                1.0 if np.nanmean(spont_vec[start:end]) > 0.5 else np.nan
+            )
 
         stand_vec = np.logical_not(np.nan_to_num(self.run_vec))
-        self.stand_vec = np.where(stand_vec, 1, np.nan)
+        self.stand_vec = np.where(stand_vec, 1.0, np.nan)
 
     def __mul__(self, other: np.ndarray) -> xr.DataArray:
         """
@@ -204,51 +245,69 @@ class AnalogTraceAnalyzer:
         coords_of_neurons = np.arange(other.shape[0])
 
         # To find all possible combinations of running and stimulus we run a Cartesian product
-        dims = ['epoch', 'neuron', 'time']
-        movement = ['run', 'stand', None]
-        puff = ['stim', 'juxta', 'spont', None]
+        dims = ["epoch", "neuron", "time"]
+        movement = ["run", "stand", None]
+        puff = ["stim", "juxta", "spont", None]
         ones = np.ones_like(self.timestamps, dtype=np.uint8)
         move_data = [self.run_vec, self.stand_vec, ones]
         puff_data = [self.stim_vec, self.juxta_vec, self.spont_vec, ones]
         coords = [movement, puff]
         data = [move_data, puff_data]
         if self.occluder:
-            occluder = ['before_occ', 'during_occ', 'after_occ', None]
+            occluder = ["before_occ", "during_occ", "after_occ", None]
             coords.append(occluder)
-            occ_data = [self.before_occ_vec, self.occluder_vec, self.after_occ_vec, ones]
+            occ_data = [
+                self.before_occ_vec,
+                self.occluder_vec,
+                self.after_occ_vec,
+                ones,
+            ]
             data.append(occ_data)
         all_coords = []
         all_data = []
         for coord, datum in zip(product(*coords), product(*data)):
             try:
-                all_coords.append('_'.join((filter(None.__ne__, coord))))
+                all_coords.append("_".join((filter(None.__ne__, coord))))
             except IndexError:
                 pass
             # Filter "None"s and multiply to find the joint area
             prod = np.array([x for x in datum if type(x) is pd.Series]).prod(axis=0)
             all_data.append(prod)
 
-        all_coords[-1] = 'all'  # last item is ''
+        all_coords[-1] = "all"  # last item is ''
 
-        da = xr.DataArray(np.zeros((len(all_coords), other.shape[0], other.shape[1])),
-                          coords=[('epoch', all_coords), ('neuron', coords_of_neurons),
-                                  ('time', np.arange(other.shape[1]) / self.framerate)],
-                          dims=dims)  # self.timestamps
+        da = xr.DataArray(
+            np.zeros((len(all_coords), other.shape[0], other.shape[1])),
+            coords=[
+                ("epoch", all_coords),
+                ("neuron", coords_of_neurons),
+                ("time", np.arange(other.shape[1]) / self.framerate),
+            ],
+            dims=dims,
+        )  # self.timestamps
 
         for coor, vec in zip(all_coords, all_data):
             da.loc[coor] = other * np.atleast_2d(vec)
 
-        da.attrs['fps'] = self.framerate
-        da.attrs['stim_window'] = self.response_window + self.buffer_after_stim
+        da.attrs["fps"] = self.framerate
+        da.attrs["stim_window"] = self.response_window + self.buffer_after_stim
         return da
 
 
-if __name__ == '__main__':
-    npz_file = r'/data/David/602_new_baseline_imaging_201217/602_HYPO_DAY_0__EXP_STIM__FOV_2_00001_CHANNEL_1_results.npz'
-    analog_file = r'/data/David/602_new_baseline_imaging_201217/602_HYPER_DAY_0__EXP_STIM__FOV_2(2)_mag_5_bidirectional_2048_512_30Hz_00001_analog.txt'
+if __name__ == "__main__":
+    home = pathlib.Path("/mnt/qnap")
+    # home = pathlib.Path("/data")
+    # home = pathlib.Path("/export/home/pblab/data")
+    npz_file = str(home / r"David/602_new_baseline_imaging_201217/602_HYPO_DAY_0__EXP_STIM__FOV_2_00001_CHANNEL_1_results.npz")
+    analog_file = str(home / r"David/602_new_baseline_imaging_201217/602_HYPER_DAY_0__EXP_STIM__FOV_2(2)_mag_5_bidirectional_2048_512_30Hz_00001_analog.txt")
     data = np.load(npz_file)
-    filename = r'/data/David/602_new_baseline_imaging_201217/602_HYPO_DAY_0__EXP_STIM__FOV_2_00001.tif'
-    analog = pd.read_csv(analog_file, sep='\t', header=None,
-                         names=['stimulus', 'run'])
-    an_trace = AnalogTraceAnalyzer(tif_filename=filename, analog_trace=analog)
+    filename = str(home / r"David/602_new_baseline_imaging_201217/602_HYPO_DAY_0__EXP_STIM__FOV_2_00001.tif")
+    analog = pd.read_csv(analog_file, sep="\t", header=None, names=["stimulus", "run"])
+    an_trace = AnalogTraceAnalyzer(
+        tif_filename=filename,
+        analog_trace=analog,
+        timestamps=np.arange(9000) / 30.03,
+        framerate=30.03,
+        start_time="0",
+    )
     an_trace.run()
