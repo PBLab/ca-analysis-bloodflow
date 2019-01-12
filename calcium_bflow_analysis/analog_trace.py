@@ -12,12 +12,17 @@ import os
 from datetime import datetime
 from collections import namedtuple
 
+# Constant values for the analog acquisiton
+TYPICAL_JUXTA_VALUE = -480
+TYPICAL_PUFF_VALUE = -27180
 
 @attr.s(slots=True)
 class AnalogTraceAnalyzer:
     """
     Fit and match the analog trace corresponding to the puffs and running of the mouse with the neuronal trace.
 
+    analog_trace is a DataFrame with its first column being the air puff data,
+    and second being the run vector data.
     Usage:
         AnalogTraceAnalyzer(tif_filename, analog_trace).run()
     # TODO: ADD SUPPORT FOR COLABELING INDICES
@@ -32,7 +37,7 @@ class AnalogTraceAnalyzer:
     timestamps = attr.ib(validator=instance_of(np.ndarray))
     framerate = attr.ib(validator=instance_of(float))
     start_time = attr.ib(validator=instance_of(str))
-    response_window = attr.ib(default=0.5, validator=instance_of(float))  # sec
+    puff_length = attr.ib(default=1.0, validator=instance_of(float))  # sec
     buffer_after_stim = attr.ib(default=1.0, validator=instance_of(float))  # sec
     move_thresh = attr.ib(default=0.25, validator=instance_of(float))  # V
     sample_rate = attr.ib(default=1000, validator=instance_of(int))  # Hz
@@ -54,7 +59,7 @@ class AnalogTraceAnalyzer:
 
     def run(self):
         # Analog peak detection
-        true_stim, juxta = self.__find_peaks()
+        true_stim, juxta = self._find_peaks()
         stim_vec, juxta_vec = self.__populate_stims(true_stim, juxta)
         run_vec = self.__populate_run()
         spont_vec = self.__populate_spont(stim_vec, juxta_vec)
@@ -66,6 +71,39 @@ class AnalogTraceAnalyzer:
         self.__init_vecs()
         self.__fit_frames_to_analog(stim_vec, juxta_vec, run_vec, spont_vec)
         self.__convert_to_series()
+
+    def _find_peaks(self) -> Tuple[np.ndarray, np.ndarray]:
+        """ Find the starts of the puff events and mark their duration.
+        Returns a vector length of which is the same size as the TIF data,
+        with 1 wherever the a puff or a juxta puff occurred, and 0 elsewhere.
+        """
+        max_puff_length = int(self.framerate * self.puff_length)
+        buffer_after_stim_frames = int(self.framerate * self.buffer_after_stim)
+        diffs_all = np.where(np.diff(self.analog_trace.stimulus) < -100)[0]
+        diffs_true = np.where(np.diff(self.analog_trace.stimulus) < -1000)[0]
+        intersect = np.in1d(diffs_all, diffs_true)
+        true_puff_idx = diffs_all[intersect]
+        juxta_puff_idx = diffs_all[~intersect]
+        if len(true_puff_idx) > 0:
+            true_puff_times = self._iter_over_puff_times(true_puff_idx)
+        if len(juxta_puff_idx) > 0:
+            juxta_puff_times = self._iter_over_puff_times(juxta_puff_idx)
+
+        return true_puff_times, juxta_puff_times
+
+    def _iter_over_puff_times(self, puff_idx):
+        max_puff_length = int(self.framerate * self.puff_length)
+        buffer_after_stim_frames = int(self.framerate * self.buffer_after_stim)
+        puff_times = np.zeros_like(self.analog_trace.stimulus)
+        puff_limits = np.where(np.diff(puff_idx) > max_puff_length)[0]
+        start_puff_indices = puff_limits + 1
+        start_puff_indices = np.concatenate(([0], start_puff_indices))
+        end_puff_indices = np.concatenate((puff_limits, [len(puff_idx)-1]))
+        for start_of_puff, end_of_puff in zip(start_puff_indices, end_puff_indices):
+            puff_times[puff_idx[start_of_puff]:(puff_idx[end_of_puff] + buffer_after_stim_frames)] = 1
+
+        return puff_times
+
 
     def __find_peaks(self) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -295,14 +333,15 @@ class AnalogTraceAnalyzer:
 
 
 if __name__ == "__main__":
-    home = pathlib.Path("/mnt/qnap")
-    # home = pathlib.Path("/data")
+    # home = pathlib.Path("/mnt/qnap")
+    home = pathlib.Path("/data")
     # home = pathlib.Path("/export/home/pblab/data")
     npz_file = str(home / r"David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001_CHANNEL_2_results.npz")
-    analog_file = str(home / r"David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001_analog.txt")
+    # analog_file = str(home / r"David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001_analog.txt")
+    analog_file = str(home / 'Hagai/puff_and_run_1.txt')
     data = np.load(npz_file)
     filename = str(home / r"David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001.tif")
-    analog = pd.read_csv(analog_file, sep="\t", header=None, names=["stimulus", "run"])
+    analog = pd.read_table(analog_file, sep=",", header=None, names=["stimulus", "run"])
     an_trace = AnalogTraceAnalyzer(
         tif_filename=filename,
         analog_trace=analog,
