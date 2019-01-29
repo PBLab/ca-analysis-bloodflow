@@ -228,17 +228,16 @@ class CalciumAnalysisOverTime:
 
 
 if __name__ == '__main__':
-    home = Path('/')
-    # home = Path('/export/home/pblab')
-    results_folder = home / Path(r'data/David/test_New_head_bar/LH/')
+    home = Path('/')  # Cortex
+    # home = Path('/export/home/pblab')  # Stromboli
+    foldername = 'data/David/new_mickey_thin_skull'
+    results_folder = home / Path(foldername)
     assert results_folder.exists()
-    folder_and_files = {home / Path('data/David/test_New_head_bar/LH/'): '*.tif'}
-                        # Path('/data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
-    # folder_and_files = {Path('/data/David/thy1_test_R_L/NEW_mouse_x10'): '*mill_STIM_*.tif'}
+    folder_and_files = {home / Path(foldername): '*.tif'}
     res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True,
                                   folder_globs=folder_and_files, with_analog=True)
     # regex = {'cond_reg': r'FOV1_(\w+?)_3:304
     # HZ'}
     # regex = {'cond_reg': r'420_(\w+?)_30HZ'}
     res.run_batch_of_timepoints()
-    # res.generate_da_per_day()
+    res.generate_da_per_day()

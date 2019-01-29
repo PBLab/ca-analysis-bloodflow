@@ -22,9 +22,9 @@ sys.path.append(
 )
 from matplotlib import gridspec
 
-from calcium_bflow_analysis.analog_trace import AnalogTraceAnalyzer
-from calcium_bflow_analysis.fluo_metadata import FluoMetadata
-from calcium_bflow_analysis import dff_tools
+from analog_trace import AnalogTraceAnalyzer
+from fluo_metadata import FluoMetadata
+import dff_tools
 
 
 @attr.s(slots=True)
@@ -58,7 +58,7 @@ class SingleFovParser:
             return
 
         if self.with_analog:
-            analog_data = pd.read_table(
+            analog_data = pd.read_csv(
                 self.analog_fname,
                 header=None,
                 names=["stimulus", "run"],
