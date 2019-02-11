@@ -32,18 +32,18 @@ class FluoMetadata:
         self.day = int(self._get_meta_using_regex(self.day_reg))
         self.fov = int(self._get_meta_using_regex(self.fov_reg))
         self.condition = str(self._get_meta_using_regex(self.cond_reg)).upper()
-    
+
     def _get_si_meta(self):
         """ Parse the metadata from the SI-generated file """
         try:
             with tifffile.TiffFile(str(self.fname)) as f:
                 si_meta = f.scanimage_metadata
                 self.fps = si_meta['FrameData']['SI.hRoiManager.scanFrameRate']
-                active_chans = si_meta['FrameData']['SI.hChannels.channelsActive']
-                if type(active_chans) is int:
+                save_chans = si_meta['FrameData']['SI.hChannels.channelSave']
+                if type(save_chans) is int:
                     self.num_of_channels = 1
                 else:
-                    self.num_of_channels = len(active_chans)
+                    self.num_of_channels = len(save_chans)
                 self.start_time = str(datetime.fromtimestamp(os.path.getmtime(str(self.fname))))
                 length = len(f.pages)//self.num_of_channels
                 self.timestamps = np.arange(length)/self.fps

@@ -230,7 +230,7 @@ class CalciumAnalysisOverTime:
 if __name__ == '__main__':
     home = Path('/')  # Cortex
     # home = Path('/export/home/pblab')  # Stromboli
-    foldername = 'data/David/new_mickey_thin_skull'
+    foldername = 'data/Amit_QNAP/Calcium_FXS/x25'
     results_folder = home / Path(foldername)
     assert results_folder.exists()
     folder_and_files = {home / Path(foldername): '*.tif'}
@@ -240,4 +240,4 @@ if __name__ == '__main__':
     # HZ'}
     # regex = {'cond_reg': r'420_(\w+?)_30HZ'}
     res.run_batch_of_timepoints()
-    res.generate_da_per_day()
+    # res.generate_da_per_day()

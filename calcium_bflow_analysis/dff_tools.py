@@ -426,7 +426,7 @@ def show_side_by_side(
         ax[1].yaxis.set_major_formatter(FormatStrFormatter("%d"))
 
     fig.subplots_adjust(left=0.03, right=0.97, top=0.97, bottom=0.03)
-    return
+    return fig
 
 
 def deinterleave(fname: str, data_channel: int, num_of_channels: int = 2):
@@ -558,8 +558,7 @@ if __name__ == "__main__":
     # analog.run()
 
     # rank_dff_by_stim(dff, spikes, analog.stim_vec, 30.03)
-    tif = pathlib.Path('/data/David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001.tif')
-    results = pathlib.Path('/data/David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001_CHANNEL_2_results.npz')
-    show_side_by_side([tif], [results], 2)
-
-    plt.show(block=True)
+    tif = pathlib.Path('/data/David/new_mickey_thin_skull/fov2_mag_2_256px_30hz_uni_ch1_blood_ch2_neurons_00001_CHANNEL_2.tif')
+    results = pathlib.Path('/data/David/new_mickey_thin_skull/fov2_mag_2_256px_30hz_uni_ch1_blood_ch2_neurons_00001_CHANNEL_2_results.npz')
+    fig = show_side_by_side([tif], [results], cell_radius=5, figsize=(20,16))
+    plt.show(block=False)

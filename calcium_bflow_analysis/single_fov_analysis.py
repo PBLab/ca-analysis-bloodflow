@@ -47,7 +47,6 @@ class SingleFovParser:
         """ Main method to parse a single duo of analog and fluorescent data """
         with np.load(str(self.results_fname), "r+") as self.all_fluo_results:
             self.fluo_trace = self.all_fluo_results["F_dff"]
-            print(self.fluo_trace.shape)
         try:
             if not self.fluo_trace:  # no cells detected
                 self.fluo_trace = np.array([])

@@ -59,8 +59,7 @@ class AnalogTraceAnalyzer:
 
     def run(self):
         # Analog peak detection
-        true_stim, juxta = self._find_peaks()
-        stim_vec, juxta_vec = self.__populate_stims(true_stim, juxta)
+        stim_vec, juxta_vec = self._find_peaks()
         run_vec = self.__populate_run()
         spont_vec = self.__populate_spont(stim_vec, juxta_vec)
         if self.occluder:
@@ -84,6 +83,8 @@ class AnalogTraceAnalyzer:
         intersect = np.in1d(diffs_all, diffs_true)
         true_puff_idx = diffs_all[intersect]
         juxta_puff_idx = diffs_all[~intersect]
+        true_puff_times = np.zeros_like(self.analog_trace.stimulus)
+        juxta_puff_times = np.zeros_like(self.analog_trace.stimulus)
         if len(true_puff_idx) > 0:
             true_puff_times = self._iter_over_puff_times(true_puff_idx)
         if len(juxta_puff_idx) > 0:
@@ -103,76 +104,6 @@ class AnalogTraceAnalyzer:
             puff_times[puff_idx[start_of_puff]:(puff_idx[end_of_puff] + buffer_after_stim_frames)] = 1
 
         return puff_times
-
-
-    def __find_peaks(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Find the indices in which a peak occurred, and discern between peaks
-        that were real stimuli and juxta peaks
-        :return: Two numpy arrays with the stimulus and juxta peak indices
-        """
-        diffs_stim = np.where(self.analog_trace.stimulus > 4)[0]
-        if len(diffs_stim) > 0:
-            diffs_stim_con = np.concatenate((np.atleast_1d(diffs_stim[0]), diffs_stim))
-            idx_true_stim = np.concatenate(
-                (
-                    np.atleast_1d(diffs_stim[0]),
-                    diffs_stim[np.diff(diffs_stim_con) > self.sample_rate * 10],
-                )
-            )
-
-        else:
-            idx_true_stim = np.array([])
-        diffs_juxta = np.where(self.analog_trace.stimulus > 2.2)[0]
-        if len(diffs_juxta) > 0:
-            diffs_juxta_con = np.concatenate(
-                (np.atleast_1d(diffs_juxta[0]), diffs_juxta)
-            )
-            idx_juxta_full = np.concatenate(
-                (
-                    np.atleast_1d(diffs_juxta[0]),
-                    diffs_juxta[np.diff(diffs_juxta_con) > self.sample_rate * 10],
-                )
-            )
-
-            # Separate between stimulus and juxta pulses
-            idx_juxta = []
-            for val in idx_juxta_full:
-                diff = np.abs(idx_true_stim - val)
-                idx = np.where(diff < self.sample_rate)[0]
-                if idx.size > 0:
-                    continue
-                else:
-                    idx_juxta.append(val)
-        else:
-            idx_juxta = []
-        return idx_true_stim, np.array(idx_juxta)
-
-    def __populate_stims(
-        self, true_stim: np.ndarray, juxta: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        For each peak, "mark" the following frames as the response frames for that
-        stimulus
-        :param true_stim: Indices for a stimulus
-        :param juxta: Indices for a juxta stimulus
-        :return: None
-        """
-        stim_vec = np.full(self.analog_trace.shape[0], np.nan)
-        juxta_vec = np.full(self.analog_trace.shape[0], np.nan)
-        for idx in true_stim:
-            last_idx = int(
-                idx + (self.response_window + self.buffer_after_stim) * self.sample_rate
-            )
-            stim_vec[idx:last_idx] = 1
-
-        for idx in juxta:
-            last_idx = int(
-                idx + (self.response_window + self.buffer_after_stim) * self.sample_rate
-            )
-            juxta_vec[idx:last_idx] = 1
-
-        return stim_vec, juxta_vec
 
     def __populate_occluder(self):
         self.before_occ_vec = np.full(self.timestamps.shape, np.nan)
@@ -290,7 +221,7 @@ class AnalogTraceAnalyzer:
         move_data = [self.run_vec, self.stand_vec, ones]
         puff_data = [self.stim_vec, self.juxta_vec, self.spont_vec, ones]
         coords = [movement, puff]
-        data = [move_data, puff_data]
+        analog_data = [move_data, puff_data]
         if self.occluder:
             occluder = ["before_occ", "during_occ", "after_occ", None]
             coords.append(occluder)
@@ -300,10 +231,10 @@ class AnalogTraceAnalyzer:
                 self.after_occ_vec,
                 ones,
             ]
-            data.append(occ_data)
+            analog_data.append(occ_data)
         all_coords = []
         all_data = []
-        for coord, datum in zip(product(*coords), product(*data)):
+        for coord, datum in zip(product(*coords), product(*analog_data)):
             try:
                 all_coords.append("_".join((filter(None.__ne__, coord))))
             except IndexError:
@@ -328,7 +259,7 @@ class AnalogTraceAnalyzer:
             da.loc[coor] = other * np.atleast_2d(vec)
 
         da.attrs["fps"] = self.framerate
-        da.attrs["stim_window"] = self.response_window + self.buffer_after_stim
+        da.attrs["stim_window"] = self.puff_length + self.buffer_after_stim
         return da
 
 
