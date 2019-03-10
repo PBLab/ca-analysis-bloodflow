@@ -22,9 +22,9 @@ sys.path.append(
 )
 from matplotlib import gridspec
 
-from analog_trace import AnalogTraceAnalyzer
-from fluo_metadata import FluoMetadata
-import dff_tools
+from calcium_bflow_analysis.analog_trace import AnalogTraceAnalyzer
+from calcium_bflow_analysis.fluo_metadata import FluoMetadata
+from calcium_bflow_analysis import dff_tools
 
 
 @attr.s(slots=True)
@@ -47,17 +47,18 @@ class SingleFovParser:
         """ Main method to parse a single duo of analog and fluorescent data """
         with np.load(str(self.results_fname), "r+") as self.all_fluo_results:
             self.fluo_trace = self.all_fluo_results["F_dff"]
+            print(self.fluo_trace.shape)
         try:
             if not self.fluo_trace:  # no cells detected
                 self.fluo_trace = np.array([])
         except ValueError:
             pass
-        if len(self.fluo_trace.shape) == 0:
+        if (self.fluo_trace.shape == ()) or (self.fluo_trace.shape[0] == 0):
             self.fluo_analyzed = None
             return
 
         if self.with_analog:
-            analog_data = pd.read_csv(
+            analog_data = pd.read_table(
                 self.analog_fname,
                 header=None,
                 names=["stimulus", "run"],

@@ -155,7 +155,7 @@ class CalciumAnalysisOverTime:
             fov.add_metadata_and_serialize()
         return fov
 
-    def generate_da_per_day(self, globstr='*FOV*.nc', day_regex=r'_DAY_*(\d+)_'):
+    def generate_da_per_day(self, globstr='*FOV*.nc'):
         """
         Parse .nc files that were generated from the previous analysis
         and chain all "DAY_X" DataArrays together into a single list.
@@ -168,7 +168,7 @@ class CalciumAnalysisOverTime:
         Saves all day-data into self.results_folder.
         """
         fovs_by_day = defaultdict(list)
-        day_reg = re.compile(day_regex)
+        day_reg = re.compile(r'_DAY_*(\d+)_')
         try:  # coming from run_batch_of_timepoints()
             all_files = self.list_of_fovs
         except AttributeError:
@@ -233,14 +233,12 @@ if __name__ == '__main__':
     folder = Path(r'data/David/gcamp7f_php.eb_4w')
     results_folder = home / folder
     assert results_folder.exists()
-    globstr = 'F*.tif'
-    folder_and_files = {home / folder: globstr}
+    folder_and_files = {home / folder: 'F*.tif'}
                         # Path('/data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
     # folder_and_files = {Path('/data/David/thy1_test_R_L/NEW_mouse_x10'): '*mill_STIM_*.tif'}
     res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True,
                                   folder_globs=folder_and_files, with_analog=True)
     regex = {'cond_reg': r'ch_2_(\w+?)_0'}
     # regex = {'cond_reg': r'420_(\w+?)_30HZ'}
-    # res.run_batch_of_timepoints()
-    day_reg = r'(0)'
-    res.generate_da_per_day('F*.nc', day_reg)
+    res.run_batch_of_timepoints()
+    # res.generate_da_per_day()
