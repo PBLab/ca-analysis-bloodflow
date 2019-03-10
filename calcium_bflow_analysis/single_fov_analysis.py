@@ -57,7 +57,7 @@ class SingleFovParser:
             return
 
         if self.with_analog:
-            analog_data = pd.read_csv(
+            analog_data = pd.read_table(
                 self.analog_fname,
                 header=None,
                 names=["stimulus", "run"],
