@@ -20,3 +20,4 @@ __pycache__/*
 doc/_build/
 doc/_static/
 *.egg-info/
+build/
