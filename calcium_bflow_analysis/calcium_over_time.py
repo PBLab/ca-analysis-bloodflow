@@ -1,20 +1,21 @@
 """
 __author__ = Hagai Hargil
 """
-import attr
-from enum import Enum
-import tifffile
-from scipy.ndimage.morphology import binary_fill_holes
-from attr.validators import instance_of
+import itertools
 from pathlib import Path
-import pandas as pd
+from enum import Enum
 import os
 import re
 from collections import defaultdict
-import itertools
-import numpy as np
 from datetime import datetime
 import multiprocessing as mp
+
+import attr
+import tifffile
+from scipy.ndimage.morphology import binary_fill_holes
+from attr.validators import instance_of
+import pandas as pd
+import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
 
@@ -206,13 +207,25 @@ class CalciumAnalysisOverTime:
                         data_per_day.append(xr.open_dataarray(file).load())
                     except FileNotFoundError:
                         pass
-                concat = xr.concat(data_per_day, dim='neuron')
-                concat.attrs['fps'] = self._get_metadata(data_per_day, 'fps', 30)
-                concat.attrs['stim_window'] = self._get_metadata(data_per_day, 'stim_window', 1.5)
-                concat.attrs['day'] = day
-                concat.name = str(day)
-                self.concat = concat
-                concat.to_netcdf(str(self.results_folder / f"{fname_to_save + str(day)}.nc"), mode='w')
+                try:
+                    concat = xr.concat(data_per_day, dim='neuron')
+                except MemoryError:
+                    print("Memory error, splitting result")
+                    for idx, partial in enumerate(itertools.tee(data_per_day, 3)):
+                        cur_concat = xr.concat(partial, dim='neuron')
+                        cur_concat.attrs['fps'] = self._get_metadata(data_per_day, 'fps', 30)
+                        cur_concat.attrs['stim_window'] = self._get_metadata(data_per_day, 'stim_window', 1.5)
+                        cur_concat.attrs['day'] = day
+                        cur_concat.name = str(day)
+                        cur_concat.to_netcdf(str(self.results_folder / f"{fname_to_save + str(day)}_{idx}.nc"), mode='w')
+                    self.concat = cur_concat
+                else:
+                    concat.attrs['fps'] = self._get_metadata(data_per_day, 'fps', 30)
+                    concat.attrs['stim_window'] = self._get_metadata(data_per_day, 'stim_window', 1.5)
+                    concat.attrs['day'] = day
+                    concat.name = str(day)
+                    self.concat = concat
+                    concat.to_netcdf(str(self.results_folder / f"{fname_to_save + str(day)}.nc"), mode='w')
 
     def _get_metadata(self, list_of_da: list, key: str, default):
         """ Finds ands returns metadata from existing DataArrays """
@@ -230,17 +243,18 @@ class CalciumAnalysisOverTime:
 if __name__ == '__main__':
     home = Path('/')
     # home = Path('/export/home/pblab')
-    folder = Path(r'data/David/gcamp7f_php.eb_4w')
+    folder = Path(r'data/Amit_QNAP/Calcium_FXS')
     results_folder = home / folder
     assert results_folder.exists()
-    globstr = 'F*.tif'
+    globstr = '[WF]*.tif'
     folder_and_files = {home / folder: globstr}
-                        # Path('/data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
-    # folder_and_files = {Path('/data/David/thy1_test_R_L/NEW_mouse_x10'): '*mill_STIM_*.tif'}
     res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True,
                                   folder_globs=folder_and_files, with_analog=True)
-    regex = {'cond_reg': r'ch_2_(\w+?)_0'}
-    # regex = {'cond_reg': r'420_(\w+?)_30HZ'}
-    # res.run_batch_of_timepoints()
-    day_reg = r'(0)'
-    res.generate_da_per_day('F*.nc', day_reg)
+    regexes = {
+        'cond_reg': r'^(\w+)_\d',
+        'id_reg': r'_(\d{3})_[XF]',
+        'day_reg': r'_X(\d{2})_',
+        'fov_reg': r'FOV(\d)_'
+    }
+    # res.run_batch_of_timepoints(**regexes)
+    res.generate_da_per_day('[WF]*.nc', r'_X(\d{2})_')

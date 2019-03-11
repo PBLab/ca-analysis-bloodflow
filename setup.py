@@ -27,14 +27,11 @@ setup(
     ],
     keywords='calcium blooflow neuroscience',  # Optional
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),  # Required
-    install_requires=['matplotlib > 2',
-                      'numpy > 1.15',
-                      'scipy > 1.1',
+    install_requires=['matplotlib > 3',
+                      'numpy > 1.16',
+                      'scipy > 1.2',
                       'tifffile',
-                      'ipython > 6',
-                      'pandas > 0.22'],  # Optional
-
-    package_data={  # Optional
-        'peakutils': ['lucashnegri-peakutils-48c329c177b1'],
-    },
+                      'ipython > 7',
+                      'pandas > 0.24',
+                      'xarray > 0.11'],  # Optional
 )

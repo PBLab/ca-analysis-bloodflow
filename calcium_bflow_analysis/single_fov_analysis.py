@@ -52,7 +52,7 @@ class SingleFovParser:
                 self.fluo_trace = np.array([])
         except ValueError:
             pass
-        if len(self.fluo_trace.shape) == 0:
+        if (len(self.fluo_trace.shape) == 0) or (self.fluo_trace.size == 0):
             self.fluo_analyzed = None
             return
 
