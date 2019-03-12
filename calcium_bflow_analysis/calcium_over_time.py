@@ -3,6 +3,7 @@ __author__ = Hagai Hargil
 """
 import itertools
 from pathlib import Path
+from typing import List
 from enum import Enum
 import os
 import re
@@ -25,6 +26,7 @@ from trace_converter import RawTraceConverter, ConversionMethod
 import caiman_funcs_for_comparison
 from single_fov_analysis import SingleFovParser
 from calcium_trace_analysis import Condition
+import vasc_occ_parsing
 
 
 class Epoch(Enum):
@@ -188,8 +190,11 @@ class CalciumAnalysisOverTime:
 
     def _concat_fovs(self, fovs_by_day: dict):
         """
-        Take the list of FOVs and turn them into a single DataArray. Lastly it will
+        Find all FOVs per day and append them to a list. Then turn
+        them into a single DataArray using the method _concat_list_of_da. Lastly it will
         write this DataArray to disk.
+        Parameters:
+        -----------
         fovs_by_day: Dictionary with its keys being the days of experiment (0, 1, ...) and
         values as a list of filenames.
         """
@@ -199,33 +204,23 @@ class CalciumAnalysisOverTime:
             try:
                 file = next(self.results_folder.glob(fname_to_save + str(day) + '.nc'))
                 print(f"Found {str(file)}, not concatenating")
+                continue
             except StopIteration:   # .nc file doesn't exist
                 print(f"Concatenating day {day}")
                 data_per_day = []
                 for file in file_list:
                     try:
-                        data_per_day.append(xr.open_dataarray(file).load())
+                        data_per_day.append(xr.open_dataarray(file, chunks=10))
                     except FileNotFoundError:
                         pass
-                try:
-                    concat = xr.concat(data_per_day, dim='neuron')
-                except MemoryError:
-                    print("Memory error, splitting result")
-                    for idx, partial in enumerate(itertools.tee(data_per_day, 3)):
-                        cur_concat = xr.concat(partial, dim='neuron')
-                        cur_concat.attrs['fps'] = self._get_metadata(data_per_day, 'fps', 30)
-                        cur_concat.attrs['stim_window'] = self._get_metadata(data_per_day, 'stim_window', 1.5)
-                        cur_concat.attrs['day'] = day
-                        cur_concat.name = str(day)
-                        cur_concat.to_netcdf(str(self.results_folder / f"{fname_to_save + str(day)}_{idx}.nc"), mode='w')
-                    self.concat = cur_concat
-                else:
-                    concat.attrs['fps'] = self._get_metadata(data_per_day, 'fps', 30)
-                    concat.attrs['stim_window'] = self._get_metadata(data_per_day, 'stim_window', 1.5)
-                    concat.attrs['day'] = day
-                    concat.name = str(day)
-                    self.concat = concat
-                    concat.to_netcdf(str(self.results_folder / f"{fname_to_save + str(day)}.nc"), mode='w')
+            self.concat = vasc_occ_parsing.concat_dataarrays(data_per_day)
+            self.concat.attrs['fps'] = self._get_metadata(data_per_day, 'fps', 30)
+            self.concat.attrs['stim_window'] = self._get_metadata(data_per_day, 'stim_window', 1.5)
+            self.concat.attrs['day'] = day
+            self.concat.name = str(day)
+            self.concat.to_netcdf(str(self.results_folder / f"{fname_to_save + str(day)}.nc"), mode='w')
+            return self.concat
+
 
     def _get_metadata(self, list_of_da: list, key: str, default):
         """ Finds ands returns metadata from existing DataArrays """
@@ -240,10 +235,17 @@ class CalciumAnalysisOverTime:
         return val
 
 
+def grouper(iterable, n, fillvalue=None):
+    "Collect data into fixed-length chunks or blocks"
+    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
+    args = [iter(iterable)] * n
+    return itertools.zip_longest(*args, fillvalue=fillvalue)
+
+
 if __name__ == '__main__':
     home = Path('/')
     # home = Path('/export/home/pblab')
-    folder = Path(r'data/Amit_QNAP/Calcium_FXS')
+    folder = Path(r'data/Amit_QNAP/Calcium_FXS/x10')
     results_folder = home / folder
     assert results_folder.exists()
     globstr = '[WF]*.tif'
@@ -251,10 +253,10 @@ if __name__ == '__main__':
     res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True,
                                   folder_globs=folder_and_files, with_analog=True)
     regexes = {
-        'cond_reg': r'^(\w+)_\d',
+        'cond_reg': r'^(\w+?)_\d',
         'id_reg': r'_(\d{3})_[XF]',
         'day_reg': r'_X(\d{2})_',
         'fov_reg': r'FOV(\d)_'
     }
     # res.run_batch_of_timepoints(**regexes)
-    res.generate_da_per_day('[WF]*.nc', r'_X(\d{2})_')
+    res.generate_da_per_day('[WF]*.nc', r'_X(10)_')

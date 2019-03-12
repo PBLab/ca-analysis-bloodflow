@@ -1,3 +1,11 @@
+import os
+import itertools
+from collections import namedtuple
+from datetime import datetime
+import copy
+import warnings
+from typing import List
+
 import attr
 from attr.validators import instance_of
 import numpy as np
@@ -5,17 +13,9 @@ import pandas as pd
 import pathlib
 import matplotlib.pyplot as plt
 import tifffile
-import os
-import itertools
 import xarray as xr
-from collections import namedtuple
-from datetime import datetime
 import colorama
-
 colorama.init()
-import copy
-import warnings
-
 from calcium_bflow_analysis.analog_trace import AnalogTraceAnalyzer
 from calcium_bflow_analysis.dff_tools import (
     calc_dff,
@@ -105,7 +105,7 @@ class VascOccParser:
         if self.with_colabeling:
             self.colabel_idx = self._load_colabeled_idx()
         print("Concatenating FOVs into a single data structure...")
-        self.sliced_fluo: xr.DataArray = concat_vasc_occ_dataarrays(list_of_sliced_fluo)
+        self.sliced_fluo: xr.DataArray = concat_dataarrays(list_of_sliced_fluo)
         if self.serialize:
             print("Writing to disk...")
             self._serialize_results(row["tif"].parent)
@@ -252,27 +252,26 @@ class VascOccParser:
         ax.set_xlabel("")
 
 
-def concat_vasc_occ_dataarrays(da_list: list):
+def concat_dataarrays(da_list: List[xr.DataArray], concat_dim='neuron'):
     """ Take a list of DataArrays and concatenate them together
     while keeping the index integrity """
     new_da_list = []
-    num_of_neurons = 0
-    crd_time = da_list[0].time.values
-    crd_epoch = da_list[0].epoch.values
-    for idx, da in enumerate(da_list):
-        crd_neuron = np.arange(num_of_neurons, num_of_neurons + len(da.neuron))
-        if len(da.time) > len(crd_time):
-            crd_time = da.time.values
+    concat_dim_idx =0
+    dims = da_list[0].dims
+    while len(da_list) > 0:
+        da = da_list.pop(0)
+        coords = {key: val.values for key, val in da.coords.items()}
+        new_crd_for_concat = np.arange(concat_dim_idx, concat_dim_idx + len(da[concat_dim]))
+        coords[concat_dim] = new_crd_for_concat
         reindexed_da = xr.DataArray(
             data=da.data,
-            dims=["epoch", "neuron", "time"],
-            coords={"epoch": crd_epoch, "neuron": crd_neuron, "time": crd_time},
+            dims=dims,
+            coords=coords,
             attrs=da.attrs,
-        )
+        ).chunk(100)
         new_da_list.append(reindexed_da)
-        num_of_neurons += len(da.neuron)
-
-    return xr.concat(new_da_list, dim="neuron")
+        concat_dim_idx += len(da[concat_dim])
+    return xr.concat(new_da_list, dim=concat_dim)
 
 
 if __name__ == "__main__":
