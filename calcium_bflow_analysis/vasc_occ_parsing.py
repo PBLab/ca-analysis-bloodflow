@@ -268,7 +268,7 @@ def concat_dataarrays(da_list: List[xr.DataArray], concat_dim='neuron'):
             dims=dims,
             coords=coords,
             attrs=da.attrs,
-        ).chunk(100)
+        ).chunk(20)
         new_da_list.append(reindexed_da)
         concat_dim_idx += len(da[concat_dim])
     return xr.concat(new_da_list, dim=concat_dim)

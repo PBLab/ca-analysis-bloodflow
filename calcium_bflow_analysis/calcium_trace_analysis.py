@@ -75,7 +75,7 @@ class CalciumReview:
             self.files.append(file)
             day = int(day_reg.findall(file.name)[0])
             parsed_days.append(day)
-            self.raw_data[day] = xr.open_dataarray(file)
+            self.raw_data[day] = xr.open_dataarray(file, chunks=10)
         self.days = np.array(parsed_days)
         stats = ["_mean", "_std"]
         self.conditions = self.raw_data[day].condition.values.tolist()
@@ -178,7 +178,7 @@ class CalciumReview:
 
 
 if __name__ == "__main__":
-    folder = pathlib.Path(r"/data/David/gcamp7f_php.eb_4w")
+    folder = pathlib.Path(r"/data/Amit_QNAP/Calcium_FXS")
     #     crystal_skull_TAC_180719   NEW_crystal_skull_TAC_161018   TAC_together_nov18
     assert folder.exists()
     ca = CalciumReview(folder, "data*.nc")

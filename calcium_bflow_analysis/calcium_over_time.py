@@ -210,7 +210,7 @@ class CalciumAnalysisOverTime:
                 data_per_day = []
                 for file in file_list:
                     try:
-                        data_per_day.append(xr.open_dataarray(file, chunks=10))
+                        data_per_day.append(xr.open_dataarray(file).load())
                     except FileNotFoundError:
                         pass
             self.concat = vasc_occ_parsing.concat_dataarrays(data_per_day)
@@ -245,7 +245,7 @@ def grouper(iterable, n, fillvalue=None):
 if __name__ == '__main__':
     home = Path('/')
     # home = Path('/export/home/pblab')
-    folder = Path(r'data/Amit_QNAP/Calcium_FXS/x10')
+    folder = Path(r'data/Amit_QNAP/Calcium_FXS/x25')
     results_folder = home / folder
     assert results_folder.exists()
     globstr = '[WF]*.tif'
@@ -254,9 +254,9 @@ if __name__ == '__main__':
                                   folder_globs=folder_and_files, with_analog=True)
     regexes = {
         'cond_reg': r'^(\w+?)_\d',
-        'id_reg': r'_(\d{3})_[XF]',
+        'id_reg': r'^FXS_(\d{3})',
         'day_reg': r'_X(\d{2})_',
-        'fov_reg': r'FOV(\d)_'
+        'fov_reg': r'_FOV(\d)_'
     }
     # res.run_batch_of_timepoints(**regexes)
-    res.generate_da_per_day('[WF]*.nc', r'_X(10)_')
+    res.generate_da_per_day('[WF]*.nc', r'_X(\d{2})_')
