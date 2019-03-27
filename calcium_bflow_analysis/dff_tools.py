@@ -27,7 +27,7 @@ import tifffile
 import scipy.ndimage
 
 from calcium_bflow_analysis import caiman_funcs_for_comparison
-from calcium_bflow_analysis.find_colabeled_cells import TiffChannels
+from calcium_bflow_analysis.colabeled_cells.find_colabeled_cells import TiffChannels
 
 # from calcium_bflow_analysis.single_fov_analysis import SingleFovParser
 from calcium_bflow_analysis.analog_trace import AnalogTraceAnalyzer
