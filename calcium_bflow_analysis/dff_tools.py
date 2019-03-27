@@ -392,7 +392,7 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None):
             linewidth=0.5,
         )
         ax_img.add_patch(rect)
-        ax_img.text(*origin, str(idx + 1), color="w")
+        ax_img.text(*origin, str(idx), color="w")
 
 
 def show_side_by_side(
