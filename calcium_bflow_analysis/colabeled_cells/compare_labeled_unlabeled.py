@@ -47,7 +47,9 @@ class ShowLabeledAndUnlabeled:
                 file_pairs = file_pairs.append(pair, ignore_index=True)
         return file_pairs
 
-    def _stack_dff_arrays(self, file_pairs, max_shape: tuple) -> Tuple[List[np.ndarray], List[np.ndarray]]:
+    def _stack_dff_arrays(
+        self, file_pairs, max_shape: tuple
+    ) -> Tuple[List[np.ndarray], List[np.ndarray]]:
         """
         Loads each pair of dF/F data and colabeled cells and
         separates the labeled and the unlabeled cells.
@@ -63,8 +65,12 @@ class ShowLabeledAndUnlabeled:
             unlabeled = np.delete(all_data, labeled_idx, axis=0)
             num_of_label_rows = labeled.shape[0]
             num_of_unlabel_rows = unlabeled.shape[0]
-            labeled_data[row_label:row_label+num_of_label_rows, :labeled.shape[1]] = labeled
-            unlabeled_data[row_unlabel:row_unlabel+num_of_unlabel_rows, :unlabeled.shape[1]] = unlabeled
+            labeled_data[
+                row_label : row_label + num_of_label_rows, : labeled.shape[1]
+            ] = labeled
+            unlabeled_data[
+                row_unlabel : row_unlabel + num_of_unlabel_rows, : unlabeled.shape[1]
+            ] = unlabeled
             row_label += num_of_label_rows
             row_unlabel += num_of_unlabel_rows
 
@@ -79,8 +85,8 @@ class ShowLabeledAndUnlabeled:
         shapes = []
         num_of_labeled = 0
         for _, file in file_pairs.iterrows():
-            all_data = np.load(file['results'])['F_dff']
-            num_of_labeled += np.load(file['colabeled']).shape[0]
+            all_data = np.load(file["results"])["F_dff"]
+            num_of_labeled += np.load(file["colabeled"]).shape[0]
             shapes.append(all_data.shape)
 
         shapes = np.array(shapes)
@@ -103,9 +109,12 @@ class ShowLabeledAndUnlabeled:
         scatter_spikes(
             unlabeled, spikes_unlabeled, downsample_display=1, time_vec=x_ax, ax=ax[0]
         )
-        fig.suptitle(f"Comparison of PNN-negative neurons (left) and positive from 3 FOVs")
-        ax[0].set_title('Non-PNN neurons')
-        ax[1].set_title('PNN-labeled neurons')
+        fig.suptitle(
+            f"Comparison of PNN-negative neurons (left) and positive from 3 FOVs"
+        )
+        ax[0].set_title("Non-PNN neurons")
+        ax[1].set_title("PNN-labeled neurons")
+
 
 if __name__ == "__main__":
     foldername = pathlib.Path("/data/Amit_QNAP/ForHagai")
