@@ -186,9 +186,6 @@ def calc_mean_dff(data):
     return np.nanmean(data_no_offset, axis=1)
 
 
-
-
-
 def deinterleave(fname: str, data_channel: int, num_of_channels: int = 2):
     """ Takes a multichannel TIF and writes back to disk the channel with
     the relevant data. """

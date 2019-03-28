@@ -21,7 +21,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tifffile
 
-from calcium_bflow_analysis.dff_tools import draw_rois_over_cells
+from calcium_bflow_analysis.dff_analysis_and_plotting.plot_cells_and_traces import draw_rois_over_cells
 
 @attr.s
 class ManualLabeling:
@@ -38,6 +38,8 @@ class ManualLabeling:
     def run(self):
         """ Main pipeline """
         cell_idx = self._draw_rois_and_get_idx(self.tif, self.cell_radius)
+        if cell_idx == [-1]:
+            return
         self._serialize_idx(cell_idx)
 
     def _draw_rois_and_get_idx(self, tif, cell_radius):
@@ -48,11 +50,12 @@ class ManualLabeling:
         draw_rois_over_cells(tif, cell_radius=cell_radius)
         plt.show(block=False)
         while True:
-            idx_as_str = input(f'Tif: {tif}\nEnter colabeled cell indices as a list of numbers, d by a comma:\n')
+            idx_as_str = input(f'Tif: {tif}\nEnter colabeled cell indices as a list of numbers, separated by a comma. If none are colabeld, enter -1:\n')
             try:
                 idx_as_str = idx_as_str.split(',')
                 idx = [int(x) for x in idx_as_str]
                 idx.sort()
+                break
             except Exception as e:
                 print(e)
                 continue
@@ -68,8 +71,8 @@ class ManualLabeling:
 
 
 if __name__ == "__main__":
-    tif = pathlib.Path('/data/Amit_QNAP/ForHagai/FOV3/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act3b-940nm_256px_20180313_00001_CHANNEL_2.tif')
-    result_file = pathlib.Path('/data/Amit_QNAP/ForHagai/FOV3/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act3b-940nm_256px_20180313_00001_CHANNEL_2_results.npz')
-    cell_radius = 9
+    tif = pathlib.Path('/data/Amit_QNAP/ForHagai/FOV2/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act2-940nm_20180313_00003_CHANNEL_2.tif')
+    result_file = pathlib.Path('/data/Amit_QNAP/ForHagai/FOV2/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act2-940nm_20180313_00002_CHANNEL_3_results.npz')
+    cell_radius = 14
     manu = ManualLabeling(tif=tif, result_file=result_file, cell_radius=cell_radius)
     manu.run()

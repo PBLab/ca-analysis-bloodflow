@@ -351,4 +351,3 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None):
         )
         ax_img.add_patch(rect)
         ax_img.text(*origin, str(idx), color="w")
-
