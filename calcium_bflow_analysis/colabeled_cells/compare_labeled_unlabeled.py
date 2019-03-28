@@ -13,6 +13,12 @@ from calcium_bflow_analysis.dff_analysis_and_plotting.dff_analysis import (
     scatter_spikes,
 )
 
+from calcium_bflow_analysis.dff_analysis_and_plotting.plot_cells_and_traces import (
+    extract_cells_from_tif,
+)
+
+from calcium_bflow_analysis.colabeled_cells.find_colabeled_cells import TiffChannels
+
 
 @attr.s
 class FovSubsetData:
@@ -30,6 +36,7 @@ class FovSubsetData:
     this subset points to the unlabeled data, and None means that there was
     no colabeling involved with this data.
     """
+
     results_file = attr.ib(validator=instance_of(pathlib.Path))
     with_labeling = attr.ib(validator=optional(instance_of(bool)))
     tif_file = attr.ib(init=False)
@@ -50,11 +57,12 @@ class FovSubsetData:
         Finds and returns the associated tif file. Returns None if
         doesn't exist.
         """
-        name = self.results_file.name[:-11] + ".tif"
+        name = self.results_file.name[:-12] + ".tif"
         try:
             tif_file = next(self.results_file.parent.glob(name))
             return tif_file
         except StopIteration:
+            print(f"Tif not found for {name}")
             return None
 
     def _find_colabeled_file(self) -> Union[pathlib.Path, None]:
@@ -76,9 +84,9 @@ class FovSubsetData:
         working with labeled data) the indices of the relevant
         rows are also returned.
         """
-        all_data = np.load(self.results_file)['F_dff']
+        all_data = np.load(self.results_file)["F_dff"]
         if self.with_labeling is None:
-            return all_data, slice(None)
+            return all_data, np.arange(all_data.shape[0])
 
         indices = np.load(self.colabel_file)
         if self.with_labeling:
@@ -97,15 +105,18 @@ class FovDataContainer:
     in its two subsets, or variations, i.e. labeled and unlabeled
     cells.
     """
+
     results_file = attr.ib(validator=instance_of(pathlib.Path))
     labeled = attr.ib(validator=optional(instance_of(FovSubsetData)), repr=False)
     unlabeled = attr.ib(validator=instance_of(FovSubsetData), repr=False)
     fps = attr.ib(default=58.8, validator=instance_of(float))
     cell_radius = attr.ib(default=9, validator=instance_of(int))
     tif = attr.ib(init=False)
+    all_data = attr.ib(init=False)
 
     def __attrs_post_init__(self):
         self.tif = self.unlabeled.tif_file
+        self.all_data = np.load(self.results_file)["F_dff"]
 
 
 @attr.s
@@ -116,38 +127,119 @@ class ShowLabeledAndUnlabeled:
     cells.
     """
 
-    fovlist = attr.ib(validator=instance_of(List[FovDataContainer]))
+    fovlist = attr.ib(validator=instance_of(List))
 
     def run(self):
         """ Main pipeline """
-        self.file_pairs = self._find_results_and_colabeled_files(self.foldername)
-        self.indices_per_fov = self._find_indices_for_labeled_unlabeled_data(
-            self.file_pairs
-        )
-        max_shape = self._find_max_shape(self.file_pairs)
-        labeled, unlabeled = self._stack_dff_arrays(self.file_pairs, max_shape)
+
+        max_shape = self._find_max_shape(self.fovlist)
+        # labeled, unlabeled = self._stack_dff_arrays(self.file_pairs, max_shape)
         fig = plt.figure(figsize=(20, 16))
         gs = gridspec.GridSpec(max_shape[0], 16, figure=fig)
-        self._populate_fig_rows(gs, labeled, unlabeled, self.fps, self.indices_per_fov, max_shape)
+        self._plot_traces_with_cell_img(self.fovlist, gs, max_shape)
+        # self._populate_fig_rows(
+        #     gs, labeled, unlabeled, self.fps, self.indices_per_fov, max_shape
+        # )
 
-        self._plot_against(labeled, unlabeled, self.fps, self.indices_per_fov)
+        # self._plot_against(labeled, unlabeled, self.fps, self.indices_per_fov)
 
-    def _find_indices_for_labeled_unlabeled_data(self, file_pairs):
+    def _find_max_shape(self, fovlist):
         """
-        Populate the DataFrame containing the file names with the
-        indices of the cells which belong to each group - labeled
-        and unlabeled.
+        Iterate over the found files and decide upon the shape of
+        the array that will hold the stacked data. This is useful
+        when the number of measurements in each FOV was unequal.
         """
-        indices_df = pd.DataFrame({"labeled_idx": [], "unlabeled_idx": []})
-        for idx, file in file_pairs.iterrows():
-            all_idx = np.arange(np.load(file["results"])["F_dff"].shape[0])
-            labeled_idx = np.load(file["colabeled"])
-            unlabeled_idx = np.delete(all_idx, labeled_idx, axis=0)
-            cur_indices = pd.Series(
-                {"labeled_idx": [labeled_idx], "unlabeled_idx": [unlabeled_idx]}
+        shapes = []
+        num_of_labeled = 0
+        for fov in fovlist:
+            shapes.append(fov.all_data.shape)
+            try:
+                num_of_labeled += fov.labeled.indices.shape[0]
+            except AttributeError:  # no labeled data present
+                pass
+
+        shapes = np.array(shapes)
+        num_of_rows = shapes[:, 0].sum() - num_of_labeled
+        max_cols = shapes[:, 1].max()
+        return num_of_rows, max_cols
+
+    def _plot_traces_with_cell_img(self, fovlist, gs, maxshape):
+        """
+        Create a plot built from rows, each containing an small
+        image of an identified component and it corresponding trace.
+        The final plot contains two columns, one for each
+        type of neuron shown in the image., as well as the framerate of the acquisition
+        """
+        starting_row_idx = 0
+        ending_row_idx = 0
+        for fov in fovlist:
+            starting_row_idx = ending_row_idx
+            if fov.labeled:
+                ending_row_idx += max(
+                    fov.unlabeled.dff.shape[0], fov.labeled.dff.shape[0]
+                )
+            else:
+                ending_row_idx += fov.all_data.shape[0]
+            midpoint = gs.get_geometry()[1] // 2
+            self._show_cell_excerpts(
+                fovsubset=fov.unlabeled,
+                radius=fov.cell_radius,
+                gs=gs,
+                gs_rows=slice(starting_row_idx, ending_row_idx),
+                gs_col=0,
             )
-            indices_df = indices_df.append(cur_indices, ignore_index=True)
-        return indices_df
+            self._show_cell_excerpts(
+                fovsubset=fov.labeled,
+                radius=fov.cell_radius,
+                gs=gs,
+                gs_rows=slice(starting_row_idx, ending_row_idx),
+                gs_col=midpoint,
+            )
+            self._show_traces(
+                fovsubset=fov.unlabeled,
+                fps=fov.fps,
+                gs=gs,
+                gs_rows=slice(starting_row_idx, ending_row_idx),
+                gs_cols=slice(1, midpoint),
+            )
+            self._show_traces(
+                fovsubset=fov.labeled,
+                fps=fov.fps,
+                gs=gs,
+                gs_rows=slice(starting_row_idx, ending_row_idx),
+                gs_cols=slice(midpoint+1, None),
+            )
+
+    def _show_cell_excerpts(self, fovsubset, radius, gs, gs_rows, gs_col):
+        """
+        Plots a column of cell excerpts in the given ax
+        """
+        excerpts = extract_cells_from_tif(
+            fovsubset.results_file,
+            str(fovsubset.tif_file),
+            fovsubset.indices,
+            num=100,
+            cell_radius=radius,
+            data_channel=TiffChannels.ONE,
+            number_of_channels=1,
+        )
+        cell_means = np.nanmean(excerpts, axis=1)
+        axis_rows = range(gs_rows.start, gs_rows.stop)
+        for cell, ax_row in zip(cell_means, axis_rows):
+            ax_img = plt.subplot(gs[ax_row, gs_col])
+            ax_img.imshow(cell, cmap='gray')
+            ax_img.axis('off')
+
+    def _show_traces(self, fovsubset, fps, gs, gs_rows, gs_cols):
+        """
+        For the given axes shows the trace of the dF/F of the
+        cell over time.
+        """
+        spikes = locate_spikes_peakutils(fovsubset.dff, fps=fps)
+        time_ax = np.arange(fovsubset.dff.shape[1]) / fps
+        ax = plt.subplot(gs[gs_rows, gs_cols])
+        scatter_spikes(fovsubset.dff, spikes, downsample_display=1, time_vec=time_ax, ax=ax)
+
 
     def _stack_dff_arrays(
         self, file_pairs, max_shape: tuple
@@ -178,24 +270,6 @@ class ShowLabeledAndUnlabeled:
 
         return labeled_data, unlabeled_data
 
-    def _find_max_shape(self, file_pairs):
-        """
-        Iterate over the found files and decide upon the shape of
-        the array that will hold the stacked data. This is useful
-        when the number of measurements in each FOV was unequal.
-        """
-        shapes = []
-        num_of_labeled = 0
-        for _, file in file_pairs.iterrows():
-            all_data = np.load(file["results"])["F_dff"]
-            num_of_labeled += np.load(file["colabeled"]).shape[0]
-            shapes.append(all_data.shape)
-
-        shapes = np.array(shapes)
-        num_of_rows = shapes[:, 0].sum() - num_of_labeled
-        max_cols = shapes[:, 1].max()
-        return num_of_rows, max_cols
-
     def _plot_against(self, labeled, unlabeled, fps, indices_per_fov):
         """
         Plot one against the other the labeled and unlabeled
@@ -218,31 +292,18 @@ class ShowLabeledAndUnlabeled:
         ax[0].set_title("Non-PNN neurons")
         ax[1].set_title("PNN-labeled neurons")
 
-    def _populate_fig_rows(self, gs: gridspec.GridSpec, labeled, unlabeled, fps, indices_per_fov, max_shape):
-        """
-
-        """
-        for row in range(max_shape[0]):
-            ax_img_unlabeled = plt.subplot(gs[row, 0])
-            ax_trace_unlabeled = plt.subplot(gs[row, 1:gs.get_geometry()[1]//2])
-            self._populate_fig_row(row, ax_img_unlabeled, ax_trace_unlabeled, unlabeled, fps, )
-
-
-
 
 if __name__ == "__main__":
     foldername = pathlib.Path("/data/Amit_QNAP/ForHagai")
     fovs = []
-    for res_file in foldername.rglob('*results.npz'):
+    for res_file in foldername.rglob("*results.npz"):
         subset_with = FovSubsetData(res_file, with_labeling=True)
         subset_with.load_data()
         subset_without = FovSubsetData(res_file, with_labeling=False)
         subset_without.load_data()
         fovs.append(FovDataContainer(res_file, subset_with, subset_without))
 
-
-
-    # showl = ShowLabeledAndUnlabeled(foldername, fps=58.2)
-    # showl.run()
-    # plt.show()
+    showl = ShowLabeledAndUnlabeled(fovs)
+    showl.run()
+    plt.show()
 

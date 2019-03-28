@@ -178,10 +178,10 @@ def extract_cells_from_tif(
     cell_radius=5,
     data_channel=TiffChannels.ONE,
     number_of_channels=2,
-) -> Tuple[np.ndarray, float]:
+) -> np.ndarray:
     """ Load a raw TIF stack and extract an array of cells. The first dimension is
     the cell index, the second is time and the other two are the x-y images.
-    Returns this 4D array, as well as the framerate of the acquisition.
+    Returns this 4D array.
     """
     res_data = np.load(results_file)
     if len(res_data["idx_components"]) == len(res_data["crd"]):  # new file
@@ -192,11 +192,10 @@ def extract_cells_from_tif(
 
     with tifffile.TiffFile(tif, movie=True) as f:
         data = f.asarray(slice(data_channel.value, None, number_of_channels))
-        fps = f.scanimage_metadata["FrameData"]["SI.hRoiManager.scanFrameRate"]
 
     masks = extract_mask_from_coords(coords, data.shape[1:], cell_radius)
     cell_data = [data[:, mask[0], mask[1]] for mask in masks]
-    return np.array(cell_data), fps
+    return np.array(cell_data)
 
 
 def extract_mask_from_coords(coords, img_shape, cell_radius) -> List[List[np.ndarray]]:
@@ -240,7 +239,7 @@ def display_cell_excerpts_over_time(
         data_channel (Tiffchannels):  The channel containing the functional data.
         number_of_channels (int): Number of data channels.
     """
-    cell_data, fps = extract_cells_from_tif(
+    cell_data = extract_cells_from_tif(
         results_file,
         tif,
         indices,
@@ -249,6 +248,9 @@ def display_cell_excerpts_over_time(
         data_channel,
         number_of_channels,
     )
+
+    with tifffile.TiffFile(tif, movie=True) as f:
+        fps = f.scanimage_metadata["FrameData"]["SI.hRoiManager.scanFrameRate"]
 
     # Start plotting the cell excerpts, the first column is left currently blank
     idx_sample_start = np.linspace(
