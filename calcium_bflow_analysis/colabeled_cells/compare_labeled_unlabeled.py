@@ -173,6 +173,7 @@ class ShowLabeledAndUnlabeled:
         starting_row_idx = 0
         ending_row_idx = 0
         for fov in fovlist:
+            time_vec = np.arange(maxshape[1]) / fov.fps
             starting_row_idx = ending_row_idx
             if fov.labeled:
                 ending_row_idx += max(
@@ -197,6 +198,7 @@ class ShowLabeledAndUnlabeled:
             )
             self._show_traces(
                 fovsubset=fov.unlabeled,
+                time_vec=time_vec,
                 fps=fov.fps,
                 gs=gs,
                 gs_rows=slice(starting_row_idx, ending_row_idx),
@@ -204,6 +206,7 @@ class ShowLabeledAndUnlabeled:
             )
             self._show_traces(
                 fovsubset=fov.labeled,
+                time_vec=time_vec,
                 fps=fov.fps,
                 gs=gs,
                 gs_rows=slice(starting_row_idx, ending_row_idx),
@@ -224,73 +227,28 @@ class ShowLabeledAndUnlabeled:
             number_of_channels=1,
         )
         cell_means = np.nanmean(excerpts, axis=1)
-        axis_rows = range(gs_rows.start, gs_rows.stop)
+        axis_rows = range(gs_rows.start, gs_rows.stop)[::-1]
         for cell, ax_row in zip(cell_means, axis_rows):
             ax_img = plt.subplot(gs[ax_row, gs_col])
             ax_img.imshow(cell, cmap='gray')
             ax_img.axis('off')
 
-    def _show_traces(self, fovsubset, fps, gs, gs_rows, gs_cols):
+    def _show_traces(self, fovsubset, time_vec, fps, gs, gs_rows, gs_cols):
         """
         For the given axes shows the trace of the dF/F of the
         cell over time.
         """
-        spikes = locate_spikes_peakutils(fovsubset.dff, fps=fps)
-        time_ax = np.arange(fovsubset.dff.shape[1]) / fps
+        detected_spikes = locate_spikes_peakutils(fovsubset.dff, fps=fps)
         ax = plt.subplot(gs[gs_rows, gs_cols])
-        scatter_spikes(fovsubset.dff, spikes, downsample_display=1, time_vec=time_ax, ax=ax)
-
-
-    def _stack_dff_arrays(
-        self, file_pairs, max_shape: tuple
-    ) -> Tuple[List[np.ndarray], List[np.ndarray]]:
-        """
-        Loads each pair of dF/F data and colabeled cells and
-        separates the labeled and the unlabeled cells.
-        """
-        labeled_data = np.zeros(max_shape)
-        unlabeled_data = np.zeros(max_shape)
-        row_label = 0
-        row_unlabel = 0
-        for _, file in file_pairs.iterrows():
-            all_data = np.load(file["results"])["F_dff"]
-            labeled_idx = np.load(file["colabeled"])
-            labeled = all_data[labeled_idx, :]
-            unlabeled = np.delete(all_data, labeled_idx, axis=0)
-            num_of_label_rows = labeled.shape[0]
-            num_of_unlabel_rows = unlabeled.shape[0]
-            labeled_data[
-                row_label : row_label + num_of_label_rows, : labeled.shape[1]
-            ] = labeled
-            unlabeled_data[
-                row_unlabel : row_unlabel + num_of_unlabel_rows, : unlabeled.shape[1]
-            ] = unlabeled
-            row_label += num_of_label_rows
-            row_unlabel += num_of_unlabel_rows
-
-        return labeled_data, unlabeled_data
-
-    def _plot_against(self, labeled, unlabeled, fps, indices_per_fov):
-        """
-        Plot one against the other the labeled and unlabeled
-        traces.
-        TODO: ADD THE CELL EXCERPTS
-        """
-        fig, ax = plt.subplots(1, 2, sharey=True)
-        spikes_labeled = locate_spikes_peakutils(labeled, fps=fps)
-        spikes_unlabeled = locate_spikes_peakutils(unlabeled, fps=fps)
-        x_ax = np.arange(labeled.shape[1]) / fps
-        scatter_spikes(
-            labeled, spikes_labeled, downsample_display=1, time_vec=x_ax, ax=ax[1]
-        )
-        scatter_spikes(
-            unlabeled, spikes_unlabeled, downsample_display=1, time_vec=x_ax, ax=ax[0]
-        )
-        fig.suptitle(
-            f"Comparison of PNN-negative neurons (left) and positive from 3 FOVs"
-        )
-        ax[0].set_title("Non-PNN neurons")
-        ax[1].set_title("PNN-labeled neurons")
+        if time_vec.shape[0] != fovsubset.dff.shape[1]:
+            dff = np.zeros((fovsubset.dff.shape[0], time_vec.shape[0]))
+            spikes = np.zeros((detected_spikes.shape[0], time_vec.shape[0]))
+            spikes[:, :detected_spikes.shape[1]] = detected_spikes
+            dff[:, :fovsubset.dff.shape[1]] = fovsubset.dff
+        else:
+            dff = fovsubset.dff
+            spikes = detected_spikes
+        scatter_spikes(dff, spikes, downsample_display=1, time_vec=time_vec, ax=ax)
 
 
 if __name__ == "__main__":
@@ -306,4 +264,3 @@ if __name__ == "__main__":
     showl = ShowLabeledAndUnlabeled(fovs)
     showl.run()
     plt.show()
-

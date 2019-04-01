@@ -21,6 +21,7 @@ import scipy.ndimage
 
 from calcium_bflow_analysis.colabeled_cells.find_colabeled_cells import TiffChannels
 
+
 def rank_dff_by_stim(dff: np.ndarray, spikes: np.ndarray, stim: np.ndarray, fps: float):
     """ Draws a plot of neurons ranked by the correlation they exhibit between
     a spike an air puff.
@@ -79,11 +80,15 @@ def rank_dff_by_stim(dff: np.ndarray, spikes: np.ndarray, stim: np.ndarray, fps:
         value_name="dF/F at delay",
     )
 
-    data = pd.concat((frame_diffs, dff_diffs['dF/F at delay'].to_frame()), axis=1, sort=False)
+    data = pd.concat(
+        (frame_diffs, dff_diffs["dF/F at delay"].to_frame()), axis=1, sort=False
+    )
     # Change a couple of things around for seaborn plottings
     data["Cell number"] = data["Cell number"].astype(np.int32).astype("category")
     data["Stimulus number"] = data["Stimulus number"].astype("category")
-    order = np.array(data.groupby('Cell number', sort=True).mean().sort_values('Delay [sec]').index)
+    order = np.array(
+        data.groupby("Cell number", sort=True).mean().sort_values("Delay [sec]").index
+    )
 
     fig, ax_frame = plt.subplots()
     fig2, ax_dff = plt.subplots()
@@ -104,17 +109,11 @@ def rank_dff_by_stim(dff: np.ndarray, spikes: np.ndarray, stim: np.ndarray, fps:
         ax=ax_dff,
         order=order,
     )
-    sns.scatterplot(
-        data=data,
-        x='Delay [sec]',
-        y='dF/F at delay',
-        ax=ax_corr,
-    )
+    sns.scatterplot(data=data, x="Delay [sec]", y="dF/F at delay", ax=ax_corr)
     ax_frame.set_title(
         "Average minimal delay between spikes and stimulus for all neurons"
     )
     ax_dff.set_title("Average dF/F value during the spike")
-
 
 
 def show_side_by_side(
@@ -185,7 +184,7 @@ def extract_cells_from_tif(
     """
     res_data = np.load(results_file)
     if len(res_data["idx_components"]) == len(res_data["crd"]):  # new file
-        coords = res_data["crd"][:num]
+        coords = res_data["crd"][indices][:num]
     else:
         relevant_indices = res_data["idx_components"][indices][:num]
         coords = res_data["crd"][relevant_indices]
@@ -224,6 +223,7 @@ def display_cell_excerpts_over_time(
     cell_radius=5,
     data_channel=TiffChannels.ONE,
     number_of_channels=2,
+    fps=None,
     title="Cell Excerpts Over Time",
 ):
     """
@@ -238,6 +238,7 @@ def display_cell_excerpts_over_time(
         cell_radius (int): Number of pixels in the cell's radius.
         data_channel (Tiffchannels):  The channel containing the functional data.
         number_of_channels (int): Number of data channels.
+        fps (float): Frames per second. Can be computed from the file.
     """
     cell_data = extract_cells_from_tif(
         results_file,
@@ -249,8 +250,9 @@ def display_cell_excerpts_over_time(
         number_of_channels,
     )
 
-    with tifffile.TiffFile(tif, movie=True) as f:
-        fps = f.scanimage_metadata["FrameData"]["SI.hRoiManager.scanFrameRate"]
+    if not fps:
+        with tifffile.TiffFile(str(tif), movie=True) as f:
+            fps = f.scanimage_metadata["FrameData"]["SI.hRoiManager.scanFrameRate"]
 
     # Start plotting the cell excerpts, the first column is left currently blank
     idx_sample_start = np.linspace(
@@ -353,3 +355,20 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None):
         )
         ax_img.add_patch(rect)
         ax_img.text(*origin, str(idx), color="w")
+
+
+if __name__ == "__main__":
+    results_file = pathlib.Path("/data/Amit_QNAP/ForHagai/FOV2/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act2-940nm_20180313_00001_CHANNEL_2_results.npz")
+    tif = pathlib.Path("/data/Amit_QNAP/ForHagai/FOV2/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act2-940nm_20180313_00001_CHANNEL_2.tif")
+    cell_radius = 14
+    num_of_channels = 1
+    fps = 58.8
+    display_cell_excerpts_over_time(
+        results_file,
+        tif,
+        cell_radius=cell_radius,
+        number_of_channels=num_of_channels,
+        fps=fps,
+    )
+    plt.show()
+
