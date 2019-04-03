@@ -252,9 +252,9 @@ class ShowLabeledAndUnlabeled:
 
 
 if __name__ == "__main__":
-    foldername = pathlib.Path("/data/Amit_QNAP/ForHagai")
+    foldername = pathlib.Path("/data/Amit_QNAP/ForHagai/FOV3")
     fovs = []
-    for res_file in foldername.rglob("*results.npz"):
+    for res_file in foldername.rglob("*act3a*results.npz"):
         subset_with = FovSubsetData(res_file, with_labeling=True)
         subset_with.load_data()
         subset_without = FovSubsetData(res_file, with_labeling=False)

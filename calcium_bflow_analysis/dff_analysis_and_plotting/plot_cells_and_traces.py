@@ -119,12 +119,14 @@ def rank_dff_by_stim(dff: np.ndarray, spikes: np.ndarray, stim: np.ndarray, fps:
 def show_side_by_side(
     tifs: List[pathlib.Path],
     results: List[pathlib.Path],
+    crds: List[np.ndarray]=None,
     cell_radius=5,
     figsize=(36, 32),
 ):
     """ Shows a figure where each row is an image of a FOV,
     and all corresponding calcium traces. The image also draws
-    a rectangle around each cell
+    a rectangle around each cell. The crds parameter allows you to
+    choose which cells to display for each FOV.
     """
     assert len(tifs) == len(results)
     num_of_rows = len(tifs)
@@ -133,12 +135,15 @@ def show_side_by_side(
     if num_of_rows == 1:
         axes = [axes]
 
-    for tif, result, ax in zip(tifs, results, axes):
+    if not crds:
+        crds = [slice(None) for item in tifs]
+
+    for tif, result, crd, ax in zip(tifs, results, crds, axes):
         data = np.load(result)
-        dff = data["F_dff"]
+        dff = data["F_dff"][crds]
         fps = data["params"].tolist()["fr"]
         time_vec = np.arange(dff.shape[1]) / fps
-        draw_rois_over_cells(tif, cell_radius, ax[0])
+        draw_rois_over_cells(tif, cell_radius, ax[0], crd)
         ax[1].plot(time_vec, (dff + np.arange(dff.shape[0])[:, np.newaxis]).T)
         ax[1].spines["top"].set_visible(False)
         ax[1].spines["right"].set_visible(False)
@@ -317,13 +322,14 @@ def display_cell_excerpts_over_time(
     fig.savefig(f"cell_mosaic_{title}.pdf", frameon=False, transparent=True)
 
 
-def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None):
+def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=None):
     """
     Draw ROIs around cells in the FOV, and mark their number (ID).
     Parameters:
         fname (pathlib.Path): Deinterleaved TIF filename.
         cell_radius (int): Number of pixels in a cell's radius
         ax_img (Axes): matplotlib Axes object to draw on. If None - will be created
+        crds (List of ints): Specific indices of the cells to be shown. If None shows all.
     """
     assert fname.exists()
     try:
@@ -338,6 +344,8 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None):
     else:
         rel_crds = full_dict["crd"][full_dict["idx_components"]]
 
+    if crds:
+        rel_crds = rel_crds[crds]
     if ax_img is None:
         fig, ax_img = plt.subplots()
     data = tifffile.imread(str(fname)).mean(0)
@@ -349,26 +357,23 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None):
         rect = matplotlib.patches.Rectangle(
             origin,
             *mask[0].shape,
-            edgecolor=colors[idx % 10],
+            edgecolor='w', #  colors[idx % 10],
             facecolor="none",
             linewidth=0.5,
         )
         ax_img.add_patch(rect)
         ax_img.text(*origin, str(idx), color="w")
+    ax_img.axis('off')
 
 
 if __name__ == "__main__":
-    results_file = pathlib.Path("/data/Amit_QNAP/ForHagai/FOV2/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act2-940nm_20180313_00001_CHANNEL_2_results.npz")
-    tif = pathlib.Path("/data/Amit_QNAP/ForHagai/FOV2/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act2-940nm_20180313_00001_CHANNEL_2.tif")
+    results_file = pathlib.Path("/data/Amit_QNAP/ForHagai/FOV3/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act3a-940nm_256px_20180313_00001_CHANNEL_2_results.npz")
+    tif = pathlib.Path("/data/Amit_QNAP/ForHagai/FOV3/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act3a-940nm_256px_20180313_00001_CHANNEL_2.tif")
     cell_radius = 14
     num_of_channels = 1
-    fps = 58.8
-    display_cell_excerpts_over_time(
-        results_file,
-        tif,
-        cell_radius=cell_radius,
-        number_of_channels=num_of_channels,
-        fps=fps,
-    )
+    fps = 30
+    crds = np.array((0, 3, 4, 5))
+    draw_rois_over_cells(tif, cell_radius=cell_radius)
+    show_side_by_side([tif], [results_file], [crds], cell_radius=cell_radius)
     plt.show()
 
