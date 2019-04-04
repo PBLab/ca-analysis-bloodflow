@@ -344,7 +344,7 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=N
     else:
         rel_crds = full_dict["crd"][full_dict["idx_components"]]
 
-    if crds:
+    if crds is not None:
         rel_crds = rel_crds[crds]
     if ax_img is None:
         fig, ax_img = plt.subplots()
