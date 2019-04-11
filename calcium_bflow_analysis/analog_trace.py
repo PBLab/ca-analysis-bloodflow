@@ -12,11 +12,13 @@ import os
 from datetime import datetime
 from collections import namedtuple
 
+from calcium_over_time import AnalogAcquisitionType
+
 # Constant values for the analog acquisiton
 TYPICAL_JUXTA_VALUE = -480
 TYPICAL_PUFF_VALUE = -27180
 
-@attr.s(slots=True)
+@attr.s
 class AnalogTraceAnalyzer:
     """
     Fit and match the analog trace corresponding to the puffs and running of the mouse with the neuronal trace.
@@ -34,6 +36,7 @@ class AnalogTraceAnalyzer:
     analog_trace = attr.ib(
         validator=instance_of(pd.DataFrame)
     )  # .txt file from ScanImage
+    analog_type = attr.ib(validator=instance_of(AnalogAcquisitionType))
     timestamps = attr.ib(validator=instance_of(np.ndarray))
     framerate = attr.ib(validator=instance_of(float))
     start_time = attr.ib(validator=instance_of(str))

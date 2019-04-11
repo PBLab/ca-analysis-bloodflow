@@ -44,6 +44,13 @@ class Epoch(Enum):
     STAND_SPONT = 'stand_spont'
 
 
+class AnalogAcquisitionType(Enum):
+    NONE = 'NONE'
+    OLD = 'OLD'
+    MRDUINO = 'MRDUINO'
+    TREADMILL = 'TREADMILL'
+
+
 @attr.s(slots=True)
 class CalciumAnalysisOverTime:
     """ Analysis class that parses the output of CaImAn "results.npz" files.
@@ -61,7 +68,7 @@ class CalciumAnalysisOverTime:
     results_folder = attr.ib(validator=instance_of(Path))
     folder_globs = attr.ib(default={Path('.'): '*.tif'}, validator=instance_of(dict))
     serialize = attr.ib(default=False, validator=instance_of(bool))
-    with_analog = attr.ib(default=True, validator=instance_of(bool))
+    analog = attr.ib(default=AnalogAcquisitionType.NONE, validator=instance_of(AnalogAcquisitionType))
     fluo_files = attr.ib(init=False)
     result_files = attr.ib(init=False)
     analog_files = attr.ib(init=False)
@@ -98,7 +105,7 @@ class CalciumAnalysisOverTime:
                                              analog=analog_file, caiman=result_file))
                     self.fluo_files.append(file)
                     self.result_files.append(result_file)
-                    if self.with_analog:
+                    if self.analog != AnalogAcquisitionType.NONE:
                         self.analog_files.append(analog_file)
 
         print("\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C")
@@ -124,18 +131,18 @@ class CalciumAnalysisOverTime:
         self.list_of_fovs = []
         self._find_all_relevant_files()
         assert len(self.fluo_files) == len(self.result_files)
-        if self.with_analog:
+        if self.analog != AnalogAcquisitionType.NONE:
             assert len(self.fluo_files) == len(self.analog_files)
             for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
                 print(f"Parsing {file_fluo}")
                 fov = self._analyze_single_fov(file_fluo, file_result, fname_analog=file_analog,
-                                               with_analog=True, **regex)
+                                               analog=self.analog, **regex)
                 self.list_of_fovs.append(str(fov.metadata.fname)[:-4] + ".nc")
         else:
             for file_fluo, file_result in zip(self.fluo_files, self.result_files):
                 print(f"Parsing {file_fluo}")
                 fov = self._analyze_single_fov(file_fluo, file_result,
-                                               with_analog=False, **regex)
+                                               analog=self.analog, **regex)
                 self.list_of_fovs.append(str(fov.metadata.fname)[:-4] + ".nc")
 
         self.generate_da_per_day()

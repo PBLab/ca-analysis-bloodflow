@@ -136,7 +136,7 @@ def show_side_by_side(
         axes = [axes]
 
     if not crds:
-        crds = [slice(None) for item in tifs]
+        crds = tuple([slice(None) for item in tifs])
 
     for tif, result, crd, ax in zip(tifs, results, crds, axes):
         data = np.load(result)
@@ -367,13 +367,15 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=N
 
 
 if __name__ == "__main__":
-    results_file = pathlib.Path("/data/Amit_QNAP/ForHagai/FOV3/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act3a-940nm_256px_20180313_00001_CHANNEL_2_results.npz")
-    tif = pathlib.Path("/data/Amit_QNAP/ForHagai/FOV3/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act3a-940nm_256px_20180313_00001_CHANNEL_2.tif")
-    cell_radius = 14
+    # results_file = pathlib.Path("/data/Amit_QNAP/ForHagai/FOV3/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act3a-940nm_256px_20180313_00001_CHANNEL_2_results.npz")
+    # tif = pathlib.Path("/data/Amit_QNAP/ForHagai/FOV3/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act3a-940nm_256px_20180313_00001_CHANNEL_2.tif")
+    results_file = pathlib.Path("/data/Amit_QNAP/ForHagai/cropped_355_GCaMP6_WFA-590_X25_mag3_act1_20180313_00001.tif #2 kept stack_results.npz")
+    tif = pathlib.Path("/data/Amit_QNAP/ForHagai/cropped_355_GCaMP6_WFA-590_X25_mag3_act1_20180313_00001.tif #2 kept stack.tif")
+    cell_radius = 12
     num_of_channels = 1
     fps = 30
-    crds = np.array((0, 3, 4, 5))
-    draw_rois_over_cells(tif, cell_radius=cell_radius)
-    show_side_by_side([tif], [results_file], [crds], cell_radius=cell_radius)
+    # crds = np.array((0, 3, 4, 5))
+    # draw_rois_over_cells(tif, cell_radius=cell_radius)
+    show_side_by_side([tif], [results_file], cell_radius=cell_radius)
     plt.show()
 
