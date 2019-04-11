@@ -22,7 +22,7 @@ sys.path.append(
 )
 from matplotlib import gridspec
 
-from analog_trace import AnalogTraceAnalyzer
+from analog_trace import analog_trace_runner
 from fluo_metadata import FluoMetadata
 from calcium_over_time import AnalogAcquisitionType
 import dff_tools
@@ -64,15 +64,7 @@ class SingleFovParser:
                 names=["stimulus", "run"],
                 index_col=False,
             )
-            self.analog_analyzed = AnalogTraceAnalyzer(
-                tif_filename=str(self.analog_fname),
-                analog_trace=analog_data,
-                analog_type=self.analog,
-                framerate=self.metadata.fps,
-                start_time=self.metadata.start_time,
-                timestamps=self.metadata.timestamps,
-            )
-            self.analog_analyzed.run()
+            self.analog_analyzed = analog_trace_runner(str(self.analog_fname), analog_data, self.analog, self.metadata.fps, self.metadata.start_time, self.metadata.timestamps,)
             self.fluo_analyzed = self.analog_analyzed * self.fluo_trace
         else:
             coords = {
