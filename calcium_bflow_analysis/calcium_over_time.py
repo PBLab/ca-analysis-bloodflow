@@ -19,7 +19,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 
 from fluo_metadata import FluoMetadata
-from analog_trace import AnalogTraceAnalyzer
+from analog_trace import AnalogAcquisitionType
 from trace_converter import RawTraceConverter, ConversionMethod
 import caiman_funcs_for_comparison
 from single_fov_analysis import SingleFovParser
@@ -42,13 +42,6 @@ class Epoch(Enum):
     STAND_STIM = 'stand_stim'
     STAND_JUXTA = 'stand_juxta'
     STAND_SPONT = 'stand_spont'
-
-
-class AnalogAcquisitionType(Enum):
-    NONE = 'NONE'
-    OLD = 'OLD'
-    MRDUINO = 'MRDUINO'
-    TREADMILL = 'TREADMILL'
 
 
 @attr.s(slots=True)
@@ -87,7 +80,7 @@ class CalciumAnalysisOverTime:
                     analog_file = next(folder.rglob(f'{str(file.name)[:-4]}*analog.txt'))
                     num_of_files_found += 1
                 except StopIteration:
-                    if self.with_analog:
+                    if self.analog is not AnalogAcquisitionType.NONE:
                         print(f"File {file} has no analog counterpart.")
                         continue
                     else:
@@ -99,7 +92,7 @@ class CalciumAnalysisOverTime:
                     print(f"File {file} has no result.npz couterpart.")
                     continue
                 try:
-                    fov_analysis_file = next(folder.rglob(f'{str(file.name)[:-4]}*.nc'))
+                    _ = next(folder.rglob(f'{str(file.name)[:-4]}*.nc'))
                 except StopIteration:  # FOV wasn't already analyzed
                     print(summary_str.format(num=num_of_files_found, fluo=file,
                                              analog=analog_file, caiman=result_file))
@@ -237,17 +230,14 @@ class CalciumAnalysisOverTime:
 if __name__ == '__main__':
     home = Path('/')
     # home = Path('/export/home/pblab')
-    folder = Path(r'data/David/gcamp7f_php.eb_4w')
+    folder = Path(r'data/David/vascular_occ_CAMKII_GCaMP/')
     results_folder = home / folder
     assert results_folder.exists()
     globstr = 'F*.tif'
     folder_and_files = {home / folder: globstr}
-                        # Path('/data/David/crystal_skull_TAC_180719'): '626*/*.tif'}
-    # folder_and_files = {Path('/data/David/thy1_test_R_L/NEW_mouse_x10'): '*mill_STIM_*.tif'}
     res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True,
-                                  folder_globs=folder_and_files, with_analog=True)
-    regex = {'cond_reg': r'ch_2_(\w+?)_0'}
-    # regex = {'cond_reg': r'420_(\w+?)_30HZ'}
-    # res.run_batch_of_timepoints()
-    day_reg = r'(0)'
-    res.generate_da_per_day('F*.nc', day_reg)
+                                  folder_globs=folder_and_files, analog=AnalogAcquisitionType.TREADMILL)
+    regex = {'cond_reg': r'FOV_\d_(\w+?)_'}
+    res.run_batch_of_timepoints(**regex)
+    # day_reg = r'(0)'
+    # res.generate_da_per_day('F*.nc', day_reg)

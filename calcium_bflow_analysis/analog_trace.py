@@ -1,41 +1,50 @@
 import pathlib
-import pandas as pd
-import numpy as np
-import attr
-from attr.validators import instance_of
 import re
 from typing import Tuple, Any, Union
-from tifffile import TiffFile
-import xarray as xr
 from itertools import product
 import os
 from datetime import datetime
 from collections import namedtuple
+from enum import Enum
 
-from calcium_over_time import AnalogAcquisitionType
+import tifffile
+import pandas as pd
+import numpy as np
+import attr
+from attr.validators import instance_of
+import xarray as xr
 
 # Constant values for the analog acquisiton
 TYPICAL_JUXTA_VALUE = -480
 TYPICAL_PUFF_VALUE = -27180
 
+
+class AnalogAcquisitionType(Enum):
+    NONE = 'NONE'
+    OLD = 'OLD'
+    MRDUINO = 'MRDUINO'
+    TREADMILL = 'TREADMILL'
+
+
 def analog_trace_runner(
-    tif_filename,
-    analog_trace,
-    analog_type,
-    framerate,
-    start_time,
-    timestamps,) -> AnalyzedAnalogTrace:
+    tif_filename, analog_trace, analog_type, framerate, start_time, timestamps
+):
     if analog_type is AnalogAcquisitionType.OLD:
-        analysis = AnalogAnalysisOld(tif_filename, analog_trace, framerate, start_time, timestamps)
+        analysis = AnalogAnalysisOld(
+            tif_filename, analog_trace, framerate, start_time, timestamps
+        )
     elif analog_type is AnalogAcquisitionType.MRDUINO:
-        analysis = AnalogAnalysisMrduino(tif_filename, analog_trace, framerate, start_time, timestamps)
+        analysis = AnalogAnalysisMrduino(
+            tif_filename, analog_trace, framerate, start_time, timestamps
+        )
     elif analog_type is AnalogAcquisitionType.TREADMILL:
-        analysis = AnalogAnalysisTreadmill(tif_filename, analog_trace, framerate, start_time, timestamps)
+        analysis = AnalogAnalysisTreadmillRows(
+            tif_filename, analog_trace, framerate, start_time, timestamps
+        )
     else:
         raise TypeError("Invalid analog acquisition type")
     analysis.run()
-    analyzed_analog = AnalyzedAnalogTrace(analysis)
-    return analyzed_analog
+    return analysis
 
 
 @attr.s
@@ -61,7 +70,7 @@ class AnalyzedAnalogTrace:
     framerate = attr.ib(validator=instance_of(float))
     start_time = attr.ib(validator=instance_of(str))
     puff_length = attr.ib(default=1.0, validator=instance_of(float))  # sec
-    response_window = attr.ib(default=0.5, validator=instance_of(float))   #sec
+    response_window = attr.ib(default=0.5, validator=instance_of(float))  # sec
     buffer_after_stim = attr.ib(default=1.0, validator=instance_of(float))  # sec
     move_thresh = attr.ib(default=0.25, validator=instance_of(float))  # V
     sample_rate = attr.ib(default=1000, validator=instance_of(int))  # Hz
@@ -80,20 +89,6 @@ class AnalyzedAnalogTrace:
         if self.occ_metadata is None:
             occ = namedtuple("Occluder", ("before", "during"))
             self.occ_metadata = occ(100, 200)
-
-    def run(self):
-        # Analog peak detection
-        stim_vec, juxta_vec = self._find_peaks()
-        run_vec = self.__populate_run()
-        spont_vec = self.__populate_spont(stim_vec, juxta_vec)
-        if self.occluder:
-            self.__populate_occluder()
-
-        # Fit the analog vector to frame vector
-        # self.__extract_time_series()
-        self.__init_vecs()
-        self.__fit_frames_to_analog(stim_vec, juxta_vec, run_vec, spont_vec)
-        self.__convert_to_series()
 
     def _find_peaks(self) -> Tuple[np.ndarray, np.ndarray]:
         """ Find the starts of the puff events and mark their duration.
@@ -123,9 +118,13 @@ class AnalyzedAnalogTrace:
         puff_limits = np.where(np.diff(puff_idx) > max_puff_length)[0]
         start_puff_indices = puff_limits + 1
         start_puff_indices = np.concatenate(([0], start_puff_indices))
-        end_puff_indices = np.concatenate((puff_limits, [len(puff_idx)-1]))
+        end_puff_indices = np.concatenate((puff_limits, [len(puff_idx) - 1]))
         for start_of_puff, end_of_puff in zip(start_puff_indices, end_puff_indices):
-            puff_times[puff_idx[start_of_puff]:(puff_idx[end_of_puff] + buffer_after_stim_frames)] = 1
+            puff_times[
+                puff_idx[start_of_puff] : (
+                    puff_idx[end_of_puff] + buffer_after_stim_frames
+                )
+            ] = 1
 
         return puff_times
 
@@ -170,24 +169,6 @@ class AnalyzedAnalogTrace:
             self.before_occ_vec = pd.Series(self.before_occ_vec)
             self.occluder_vec = pd.Series(self.occluder_vec)
             self.after_occ_vec = pd.Series(self.after_occ_vec)
-
-    def __extract_time_series(self):
-        with TiffFile(self.tif_filename) as f:
-            d = f.scanimage_metadata
-            # ser = f.series[0]
-            num_frames = len(f.pages) // 2
-
-        try:
-            self.framerate = d["FrameData"]["SI.hRoiManager.scanFrameRate"]
-        except (NameError, TypeError):
-            self.framerate = 30.03
-        finally:
-            self.start_time = str(
-                datetime.fromtimestamp(os.path.getmtime(self.tif_filename))
-            )
-
-        timestamps = np.arange(num_frames)
-        self.timestamps = np.array(timestamps)
 
     def __init_vecs(self):
         self.stim_vec = np.full(self.timestamps.shape, np.nan)
@@ -288,13 +269,63 @@ class AnalyzedAnalogTrace:
 
 
 @attr.s
+class AnalogAnalysisTreadmillRows(AnalyzedAnalogTrace):
+    """
+    Analysis for the first version of the treadmill output,
+    where each row was given a value, meaning the number of
+    outputs is the number of frames times the number of rows.
+    """
+    def run(self):
+        stim_vec, juxta_vec = self._find_peaks()
+        run_vec = self.__turn_run_vec_into_per_frame()
+        run_vec = self._populate_run(run_vec)
+        spont_vec = self.__populate_spont(stim_vec, juxta_vec)
+        if self.occluder:
+            self.__populate_occluder()
+
+        self.__init_vecs()
+        self.__fit_frames_to_analog(stim_vec, juxta_vec, run_vec, spont_vec)
+        self.__convert_to_series()
+
+    def __turn_run_vec_into_per_frame(self) -> np.ndarray:
+        """
+        Squeezes the input running data from a per-row basis to a per
+        frame.
+        """
+        with tifffile.TiffFile(self.tif_filename) as f:
+            meta = f.scanimage_metadata
+        num_of_lines = int(meta['SI.hRoiManager.linesPerFrame'])
+        num_of_frames = int(meta['SI.hStackManager.framesPerSlice'])
+        run_data = self.analog_trace.run.abs().rolling(num_of_lines).sum()
+        run_data_per_frame = run_data[num_of_lines-1::num_of_lines]
+
+        sum_of_last_frame = run_data[-num_of_lines+1:].sum()
+        run_data_per_frame = np.concatenate((run_data_per_frame, sum_of_last_frame))
+        assert len(run_data_per_frame) == num_of_frames
+        return run_data_per_frame
+
+    def __populate_run(self, run_vec):
+        processed_run_vec = np.full(run_vec.shape, np.nan)
+        processed_run_vec[run_vec > 1] = 1
+        return processed_run_vec
+
+
+@attr.s
 class AnalogAnalysisMrduino(AnalyzedAnalogTrace):
-    pass
+    def run(self):
+        stim_vec, juxta_vec = self._find_peaks()
+        run_vec = self.__populate_run()
+        spont_vec = self.__populate_spont(stim_vec, juxta_vec)
+        if self.occluder:
+            self.__populate_occluder()
+
+        self.__init_vecs()
+        self.__fit_frames_to_analog(stim_vec, juxta_vec, run_vec, spont_vec)
+        self.__convert_to_series()
 
 
 @attr.s
 class AnalogAnalysisOld(AnalyzedAnalogTrace):
-
     def run(self):
         # Analog peak detection
         true_stim, juxta = self.__find_peaks()
@@ -310,7 +341,7 @@ class AnalogAnalysisOld(AnalyzedAnalogTrace):
         self.__fit_frames_to_analog(stim_vec, juxta_vec, run_vec, spont_vec)
         self.__convert_to_series()
 
-   def __find_peaks(self) -> Tuple[np.ndarray, np.ndarray]:
+    def __find_peaks(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         Find the indices in which a peak occurred, and discern between peaks
         that were real stimuli and juxta peaks
@@ -379,116 +410,21 @@ class AnalogAnalysisOld(AnalyzedAnalogTrace):
 
         return stim_vec, juxta_vec
 
-    def __populate_occluder(self):
-        self.before_occ_vec = np.full(self.timestamps.shape, np.nan)
-        self.occluder_vec = np.full(self.timestamps.shape, np.nan)
-        self.after_occ_vec = np.full(self.timestamps.shape, np.nan)
-
-        tot_len_during = self.occ_metadata.before + self.occ_metadata.during
-        self.before_occ_vec[: self.occ_metadata.before] = 1
-        self.occluder_vec[self.occ_metadata.before : tot_len_during] = 1
-        self.after_occ_vec[tot_len_during:] = 1
-
-    def __populate_run(self) -> np.ndarray:
-        """
-        Wherever the analog voltage passes the threshold, assign a 1 value
-        :return: None
-        """
-        run_vec = np.full(self.analog_trace.shape[0], np.nan)
-        run_vec[self.analog_trace.run > self.move_thresh] = 1
-        return run_vec
-
-    def __populate_spont(
-        self, stim_vec: np.ndarray, juxta_vec: np.ndarray
-    ) -> np.ndarray:
-        """
-        Wherever the juxta and stim vectors are zero - write 1, else write nan.
-        :return: None
-        """
-        all_stims = np.nan_to_num(stim_vec) + np.nan_to_num(juxta_vec)
-        spont_vec = np.logical_not(all_stims)
-        spont_vec = np.where(spont_vec, 1, np.nan)
-        return spont_vec
-
-    def __convert_to_series(self):
-        self.stim_vec = pd.Series(self.stim_vec)
-        self.juxta_vec = pd.Series(self.juxta_vec)
-        self.run_vec = pd.Series(self.run_vec)
-        self.spont_vec = pd.Series(self.spont_vec)
-        self.stand_vec = pd.Series(self.stand_vec)
-        if self.occluder:
-            self.before_occ_vec = pd.Series(self.before_occ_vec)
-            self.occluder_vec = pd.Series(self.occluder_vec)
-            self.after_occ_vec = pd.Series(self.after_occ_vec)
-
-    def __extract_time_series(self):
-        with TiffFile(self.tif_filename) as f:
-            d = f.scanimage_metadata
-            # ser = f.series[0]
-            num_frames = len(f.pages) // 2
-
-        try:
-            self.framerate = d["FrameData"]["SI.hRoiManager.scanFrameRate"]
-        except (NameError, TypeError):
-            self.framerate = 30.03
-        finally:
-            self.start_time = str(
-                datetime.fromtimestamp(os.path.getmtime(self.tif_filename))
-            )
-
-        timestamps = np.arange(num_frames)
-        self.timestamps = np.array(timestamps)
-
-    def __init_vecs(self):
-        self.stim_vec = np.full(self.timestamps.shape, np.nan)
-        self.juxta_vec = np.full(self.timestamps.shape, np.nan)
-        self.run_vec = np.full(self.timestamps.shape, np.nan)
-        self.spont_vec = np.full(self.timestamps.shape, np.nan)
-        self.stand_vec = np.full(self.timestamps.shape, np.nan)
-
-    def __fit_frames_to_analog(
-        self,
-        stim_vec: np.ndarray,
-        juxta_vec: np.ndarray,
-        run_vec: np.ndarray,
-        spont_vec: np.ndarray,
-    ):
-        samples_per_frame = int(np.ceil(self.sample_rate / self.framerate))
-        starting_idx = np.linspace(
-            0, len(stim_vec), num=len(self.timestamps), dtype=np.int64, endpoint=False
-        )
-        end_idx = starting_idx + samples_per_frame
-
-        for frame_idx, (start, end) in enumerate(zip(starting_idx, end_idx)):
-            self.stim_vec[frame_idx] = (
-                1.0 if np.nanmean(stim_vec[start:end]) > 0.5 else np.nan
-            )
-            self.juxta_vec[frame_idx] = (
-                1.0 if np.nanmean(juxta_vec[start:end]) > 0.5 else np.nan
-            )
-            self.run_vec[frame_idx] = (
-                1.0 if np.nanmean(run_vec[start:end]) > 0.5 else np.nan
-            )
-            self.spont_vec[frame_idx] = (
-                1.0 if np.nanmean(spont_vec[start:end]) > 0.5 else np.nan
-            )
-
-        stand_vec = np.logical_not(np.nan_to_num(self.run_vec))
-        self.stand_vec = np.where(stand_vec, 1.0, np.nan)
-
-
-
-
 
 if __name__ == "__main__":
     # home = pathlib.Path("/mnt/qnap")
     home = pathlib.Path("/data")
     # home = pathlib.Path("/export/home/pblab/data")
-    npz_file = str(home / r"David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001_CHANNEL_2_results.npz")
+    npz_file = str(
+        home
+        / r"David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001_CHANNEL_2_results.npz"
+    )
     # analog_file = str(home / r"David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001_analog.txt")
-    analog_file = str(home / 'Hagai/puff_and_run_1.txt')
+    analog_file = str(home / "Hagai/puff_and_run_1.txt")
     data = np.load(npz_file)
-    filename = str(home / r"David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001.tif")
+    filename = str(
+        home / r"David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001.tif"
+    )
     analog = pd.read_table(analog_file, sep=",", header=None, names=["stimulus", "run"])
     an_trace = AnalogTraceAnalyzer(
         tif_filename=filename,
