@@ -228,9 +228,10 @@ class CalciumAnalysisOverTime:
 
 
 if __name__ == '__main__':
-    home = Path('/')
-    # home = Path('/export/home/pblab')
-    folder = Path(r'data/David/vascular_occ_CAMKII_GCaMP/')
+    # home = Path('/data')
+    home = Path('/mnt/qnap')
+    # home = Path('/export/home/pblab/data')
+    folder = Path(r'David/vascular_occ_CAMKII_GCaMP/')
     results_folder = home / folder
     assert results_folder.exists()
     globstr = 'F*.tif'
