@@ -1,22 +1,24 @@
 """
 __author__ = Hagai Hargil
 """
-import attr
+
 from enum import Enum
-import tifffile
-from scipy.ndimage.morphology import binary_fill_holes
-from attr.validators import instance_of
 from pathlib import Path
-import pandas as pd
 import os
 import re
 from collections import defaultdict
 import itertools
-import numpy as np
 from datetime import datetime
 import multiprocessing as mp
+
+import pandas as pd
 import xarray as xr
 import matplotlib.pyplot as plt
+import numpy as np
+import attr
+import tifffile
+from scipy.ndimage.morphology import binary_fill_holes
+from attr.validators import instance_of
 
 from fluo_metadata import FluoMetadata
 from analog_trace import AnalogAcquisitionType
@@ -30,18 +32,19 @@ class Epoch(Enum):
     """
     All possible TAC epoch combinations
     """
-    ALL = 'all'
-    RUN = 'run'
-    STAND = 'stand'
-    STIM = 'stim'
-    JUXTA = 'juxta'
-    SPONT = 'spont'
-    RUN_STIM = 'run_stim'
-    RUN_JUXTA = 'run_juxta'
-    RUN_SPONT = 'run_spont'
-    STAND_STIM = 'stand_stim'
-    STAND_JUXTA = 'stand_juxta'
-    STAND_SPONT = 'stand_spont'
+
+    ALL = "all"
+    RUN = "run"
+    STAND = "stand"
+    STIM = "stim"
+    JUXTA = "juxta"
+    SPONT = "spont"
+    RUN_STIM = "run_stim"
+    RUN_JUXTA = "run_juxta"
+    RUN_SPONT = "run_spont"
+    STAND_STIM = "stand_stim"
+    STAND_JUXTA = "stand_juxta"
+    STAND_SPONT = "stand_spont"
 
 
 @attr.s(slots=True)
@@ -58,10 +61,13 @@ class CalciumAnalysisOverTime:
     one large database which can be analyzed with downstream scripts that may be
     found in "calcium_trace_analysis.py".
     """
+
     results_folder = attr.ib(validator=instance_of(Path))
-    folder_globs = attr.ib(default={Path('.'): '*.tif'}, validator=instance_of(dict))
+    folder_globs = attr.ib(default={Path("."): "*.tif"}, validator=instance_of(dict))
     serialize = attr.ib(default=False, validator=instance_of(bool))
-    analog = attr.ib(default=AnalogAcquisitionType.NONE, validator=instance_of(AnalogAcquisitionType))
+    analog = attr.ib(
+        default=AnalogAcquisitionType.NONE, validator=instance_of(AnalogAcquisitionType)
+    )
     fluo_files = attr.ib(init=False)
     result_files = attr.ib(init=False)
     analog_files = attr.ib(init=False)
@@ -72,12 +78,16 @@ class CalciumAnalysisOverTime:
         self.fluo_files = []
         self.analog_files = []
         self.result_files = []
-        summary_str = "Found {num} files:\nFluo: {fluo}\nAnalog: {analog}\nCaImAn: {caiman}"
+        summary_str = (
+            "Found {num} files:\nFluo: {fluo}\nAnalog: {analog}\nCaImAn: {caiman}"
+        )
         for folder, globstr in self.folder_globs.items():
             for file in folder.rglob(globstr):
                 num_of_files_found = 1
                 try:
-                    analog_file = next(folder.rglob(f'{str(file.name)[:-4]}*analog.txt'))
+                    analog_file = next(
+                        folder.rglob(f"{str(file.name)[:-4]}*analog.txt")
+                    )
                     num_of_files_found += 1
                 except StopIteration:
                     if self.analog is not AnalogAcquisitionType.NONE:
@@ -86,22 +96,32 @@ class CalciumAnalysisOverTime:
                     else:
                         analog_file = None
                 try:
-                    result_file = next(folder.rglob(f'{str(file.name)[:-4]}*results.npz'))
+                    result_file = next(
+                        folder.rglob(f"{str(file.name)[:-4]}*results.npz")
+                    )
                     num_of_files_found += 1
                 except StopIteration:
                     print(f"File {file} has no result.npz couterpart.")
                     continue
                 try:
-                    _ = next(folder.rglob(f'{str(file.name)[:-4]}*.nc'))
+                    _ = next(folder.rglob(f"{str(file.name)[:-4]}*.nc"))
                 except StopIteration:  # FOV wasn't already analyzed
-                    print(summary_str.format(num=num_of_files_found, fluo=file,
-                                             analog=analog_file, caiman=result_file))
+                    print(
+                        summary_str.format(
+                            num=num_of_files_found,
+                            fluo=file,
+                            analog=analog_file,
+                            caiman=result_file,
+                        )
+                    )
                     self.fluo_files.append(file)
                     self.result_files.append(result_file)
                     if self.analog != AnalogAcquisitionType.NONE:
                         self.analog_files.append(analog_file)
 
-        print("\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C")
+        print(
+            "\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C"
+        )
 
     def run_batch_of_timepoints(self, **regex):
         """
@@ -121,41 +141,57 @@ class CalciumAnalysisOverTime:
         that will parse the metadata from the file name. The default regexes are
         described above. Valid keys are "id_reg", "fov_reg", "cond_reg" and "day_reg".
         """
-        self.list_of_fovs = []
         self._find_all_relevant_files()
         assert len(self.fluo_files) == len(self.result_files)
         if self.analog != AnalogAcquisitionType.NONE:
             assert len(self.fluo_files) == len(self.analog_files)
-            for file_fluo, file_result, file_analog in zip(self.fluo_files, self.result_files, self.analog_files):
-                print(f"Parsing {file_fluo}")
-                fov = self._analyze_single_fov(file_fluo, file_result, fname_analog=file_analog,
-                                               analog=self.analog, **regex)
-                self.list_of_fovs.append(str(fov.metadata.fname)[:-4] + ".nc")
         else:
-            for file_fluo, file_result in zip(self.fluo_files, self.result_files):
-                print(f"Parsing {file_fluo}")
-                fov = self._analyze_single_fov(file_fluo, file_result,
-                                               analog=self.analog, **regex)
-                self.list_of_fovs.append(str(fov.metadata.fname)[:-4] + ".nc")
-
+            self.analog_files = [None for x in self.fluo_files]
+        with mp.Pool() as pool:
+            self.list_of_fovs = pool.starmap(
+                self._mp_process_timepoints,
+                zip(self.fluo_files, self.result_files, self.analog_files),
+            )
         self.generate_da_per_day()
 
-    def _analyze_single_fov(self, fname_fluo, results_fname, fname_analog=Path('.'),
-                            with_analog=True, **regex):
+    def _mp_process_timepoints(self, file_fluo, file_result, file_analog):
+        """
+        A function for a single process that takes three conjugated files - i.e.
+        three files that belong to the same recording, and processes them.
+        """
+        print(f"Parsing {file_fluo}")
+        fov = self._analyze_single_fov(
+            file_fluo, file_result, file_analog, analog=self.analog, **regex
+        )
+        return str(fov.metadata.fname)[:-4] + ".nc"
+
+    def _analyze_single_fov(
+        self,
+        fname_fluo,
+        results_fname,
+        fname_analog,
+        analog=AnalogAcquisitionType.NONE,
+        **regex,
+    ):
         """ Helper function to go file by file, each with its own fluorescence and
         possibly analog data, and run the single FOV parsing on it """
 
         meta = FluoMetadata(fname_fluo, **regex)
         meta.get_metadata()
-        fov = SingleFovParser(analog_fname=fname_analog, results_fname=results_fname,
-                              metadata=meta, with_analog=with_analog, summarize_in_plot=True)
+        fov = SingleFovParser(
+            analog_fname=fname_analog,
+            results_fname=results_fname,
+            metadata=meta,
+            analog=analog,
+            summarize_in_plot=True,
+        )
         fov.parse()
         plt.close()
         if self.serialize:
             fov.add_metadata_and_serialize()
         return fov
 
-    def generate_da_per_day(self, globstr='*FOV*.nc', day_regex=r'_DAY_*(\d+)_'):
+    def generate_da_per_day(self, globstr="*FOV*.nc", day_regex=r"_DAY_*(\d+)_"):
         """
         Parse .nc files that were generated from the previous analysis
         and chain all "DAY_X" DataArrays together into a single list.
@@ -193,12 +229,12 @@ class CalciumAnalysisOverTime:
         values as a list of filenames.
         """
         print("Concatenating all FOVs...")
-        fname_to_save = 'data_of_day_'
+        fname_to_save = "data_of_day_"
         for day, file_list in fovs_by_day.items():
             try:
-                file = next(self.results_folder.glob(fname_to_save + str(day) + '.nc'))
+                file = next(self.results_folder.glob(fname_to_save + str(day) + ".nc"))
                 print(f"Found {str(file)}, not concatenating")
-            except StopIteration:   # .nc file doesn't exist
+            except StopIteration:  # .nc file doesn't exist
                 print(f"Concatenating day {day}")
                 data_per_day = []
                 for file in file_list:
@@ -206,13 +242,18 @@ class CalciumAnalysisOverTime:
                         data_per_day.append(xr.open_dataarray(file).load())
                     except FileNotFoundError:
                         pass
-                concat = xr.concat(data_per_day, dim='neuron')
-                concat.attrs['fps'] = self._get_metadata(data_per_day, 'fps', 30)
-                concat.attrs['stim_window'] = self._get_metadata(data_per_day, 'stim_window', 1.5)
-                concat.attrs['day'] = day
+                concat = xr.concat(data_per_day, dim="neuron")
+                concat.attrs["fps"] = self._get_metadata(data_per_day, "fps", 30)
+                concat.attrs["stim_window"] = self._get_metadata(
+                    data_per_day, "stim_window", 1.5
+                )
+                concat.attrs["day"] = day
                 concat.name = str(day)
                 self.concat = concat
-                concat.to_netcdf(str(self.results_folder / f"{fname_to_save + str(day)}.nc"), mode='w')
+                concat.to_netcdf(
+                    str(self.results_folder / f"{fname_to_save + str(day)}.nc"),
+                    mode="w",
+                )
 
     def _get_metadata(self, list_of_da: list, key: str, default):
         """ Finds ands returns metadata from existing DataArrays """
@@ -227,17 +268,21 @@ class CalciumAnalysisOverTime:
         return val
 
 
-if __name__ == '__main__':
-    home = Path('/')
+if __name__ == "__main__":
+    home = Path("/")
     # home = Path('/export/home/pblab')
-    folder = Path(r'data/David/vascular_occ_CAMKII_GCaMP/')
+    folder = Path(r"data/David/vascular_occ_CAMKII_GCaMP/")
     results_folder = home / folder
     assert results_folder.exists()
-    globstr = 'F*.tif'
+    globstr = "F*.tif"
     folder_and_files = {home / folder: globstr}
-    res = CalciumAnalysisOverTime(results_folder=results_folder, serialize=True,
-                                  folder_globs=folder_and_files, analog=AnalogAcquisitionType.TREADMILL)
-    regex = {'cond_reg': r'FOV_\d_(\w+?)_'}
+    res = CalciumAnalysisOverTime(
+        results_folder=results_folder,
+        serialize=True,
+        folder_globs=folder_and_files,
+        analog=AnalogAcquisitionType.TREADMILL,
+    )
+    regex = {"cond_reg": r"FOV_\d_(\w+?)_"}
     res.run_batch_of_timepoints(**regex)
     # day_reg = r'(0)'
     # res.generate_da_per_day('F*.nc', day_reg)

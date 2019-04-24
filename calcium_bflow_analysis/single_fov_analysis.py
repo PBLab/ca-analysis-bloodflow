@@ -170,7 +170,7 @@ class SingleFovViz:
         """ Main method of the class.
         Generates a summary figure containing the data inside that
         FOV """
-        num_of_axes = 23 if self.fov.with_analog else self.axes_for_dff
+        num_of_axes = 23 if self.fov.analog is not AnalogAcquisitionType.NONE else self.axes_for_dff
         self.fig = plt.figure(figsize=(24, 12))
         if self.fov.analog_analyzed.occluder:
             num_of_axes += 1
@@ -181,7 +181,7 @@ class SingleFovViz:
         scatter_ax.xaxis.set_label_position("top")
         scatter_ax.spines["top"].set_visible(True)
         scatter_ax.spines["bottom"].set_visible(False)
-        if self.fov.with_analog:
+        if self.fov.analog is not AnalogAcquisitionType.NONE:
             gen_patches, colors = self._create_rect_patches(
                 self.fov.metadata.fps, self.fov.fluo_trace.shape[1]
             )

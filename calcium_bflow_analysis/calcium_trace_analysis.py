@@ -15,7 +15,7 @@ import re
 import itertools
 from scipy import stats
 
-from calcium_bflow_analysis import dff_tools
+from calcium_bflow_analysis.dff_analysis_and_plotting import dff_analysis
 from calcium_bflow_analysis.single_fov_analysis import filter_da
 
 
@@ -26,7 +26,7 @@ class Condition(Enum):
 
 class AvailableFuncs(Enum):
     """ Allowed analysis functions that can be used with CalciumReview.
-    The values of the enum variants are names of functions in dff_tools.py """
+    The values of the enum variants are names of functions in dff_analysis.py """
 
     AUC = "calc_auc"
     MEAN = "calc_mean_dff"
@@ -38,7 +38,7 @@ class CalciumReview:
     """
     Evaluate and analyze calcium data from TAC-like experiments.
     The attributes ending with `_data` are pd.DataFrames that
-    contain the result of different function from dff_tools.py. If you wish
+    contain the result of different function from dff_analysis.py. If you wish
     to add a new function, first make sure that its output is
     compatible with that of existing functions, then add a new
     attribute to the class and a new variant to the enum,
@@ -119,12 +119,12 @@ class CalciumReview:
                 raw_datum, condition=self.conditions[1], epoch=epoch
             )
             for func in funcs:
-                cond1 = getattr(dff_tools, func.value)(selected_first)
+                cond1 = getattr(dff_analysis, func.value)(selected_first)
                 cond1_mean, cond1_sem = (
                     cond1.mean(),
                     cond1.std(ddof=1) / np.sqrt(cond1.shape[0]),
                 )
-                cond2 = getattr(dff_tools, func.value)(selected_second)
+                cond2 = getattr(dff_analysis, func.value)(selected_second)
                 cond2_mean, cond2_sem = (
                     cond2.mean(),
                     cond2.std(ddof=1) / np.sqrt(cond2.shape[0]),

@@ -20,10 +20,10 @@ TYPICAL_PUFF_VALUE = -27180
 
 
 class AnalogAcquisitionType(Enum):
-    NONE = 'NONE'
-    OLD = 'OLD'
-    MRDUINO = 'MRDUINO'
-    TREADMILL = 'TREADMILL'
+    NONE = "NONE"
+    OLD = "OLD"
+    MRDUINO = "MRDUINO"
+    TREADMILL = "TREADMILL"
 
 
 def analog_trace_runner(
@@ -65,10 +65,9 @@ class AnalyzedAnalogTrace:
     analog_trace = attr.ib(
         validator=instance_of(pd.DataFrame)
     )  # .txt file from ScanImage
-    analog_type = attr.ib(validator=instance_of(AnalogAcquisitionType))
-    timestamps = attr.ib(validator=instance_of(np.ndarray))
     framerate = attr.ib(validator=instance_of(float))
     start_time = attr.ib(validator=instance_of(str))
+    timestamps = attr.ib(validator=instance_of(np.ndarray))
     puff_length = attr.ib(default=1.0, validator=instance_of(float))  # sec
     response_window = attr.ib(default=0.5, validator=instance_of(float))  # sec
     buffer_after_stim = attr.ib(default=1.0, validator=instance_of(float))  # sec
@@ -128,7 +127,7 @@ class AnalyzedAnalogTrace:
 
         return puff_times
 
-    def __populate_occluder(self):
+    def _populate_occluder(self):
         self.before_occ_vec = np.full(self.timestamps.shape, np.nan)
         self.occluder_vec = np.full(self.timestamps.shape, np.nan)
         self.after_occ_vec = np.full(self.timestamps.shape, np.nan)
@@ -138,7 +137,7 @@ class AnalyzedAnalogTrace:
         self.occluder_vec[self.occ_metadata.before : tot_len_during] = 1
         self.after_occ_vec[tot_len_during:] = 1
 
-    def __populate_run(self) -> np.ndarray:
+    def _populate_run(self) -> np.ndarray:
         """
         Wherever the analog voltage passes the threshold, assign a 1 value
         :return: None
@@ -147,7 +146,7 @@ class AnalyzedAnalogTrace:
         run_vec[self.analog_trace.run > self.move_thresh] = 1
         return run_vec
 
-    def __populate_spont(
+    def _populate_spont(
         self, stim_vec: np.ndarray, juxta_vec: np.ndarray
     ) -> np.ndarray:
         """
@@ -159,7 +158,7 @@ class AnalyzedAnalogTrace:
         spont_vec = np.where(spont_vec, 1, np.nan)
         return spont_vec
 
-    def __convert_to_series(self):
+    def _convert_to_series(self):
         self.stim_vec = pd.Series(self.stim_vec)
         self.juxta_vec = pd.Series(self.juxta_vec)
         self.run_vec = pd.Series(self.run_vec)
@@ -170,14 +169,14 @@ class AnalyzedAnalogTrace:
             self.occluder_vec = pd.Series(self.occluder_vec)
             self.after_occ_vec = pd.Series(self.after_occ_vec)
 
-    def __init_vecs(self):
+    def _init_vecs(self):
         self.stim_vec = np.full(self.timestamps.shape, np.nan)
         self.juxta_vec = np.full(self.timestamps.shape, np.nan)
         self.run_vec = np.full(self.timestamps.shape, np.nan)
         self.spont_vec = np.full(self.timestamps.shape, np.nan)
         self.stand_vec = np.full(self.timestamps.shape, np.nan)
 
-    def __fit_frames_to_analog(
+    def _fit_frames_to_analog(
         self,
         stim_vec: np.ndarray,
         juxta_vec: np.ndarray,
@@ -275,38 +274,38 @@ class AnalogAnalysisTreadmillRows(AnalyzedAnalogTrace):
     where each row was given a value, meaning the number of
     outputs is the number of frames times the number of rows.
     """
+
     def run(self):
         stim_vec, juxta_vec = self._find_peaks()
-        run_vec = self.__turn_run_vec_into_per_frame()
+        run_vec = self._turn_run_vec_into_per_frame()
         run_vec = self._populate_run(run_vec)
-        spont_vec = self.__populate_spont(stim_vec, juxta_vec)
+        spont_vec = self._populate_spont(stim_vec, juxta_vec)
         if self.occluder:
-            self.__populate_occluder()
+            self._populate_occluder()
 
-        self.__init_vecs()
-        self.__fit_frames_to_analog(stim_vec, juxta_vec, run_vec, spont_vec)
-        self.__convert_to_series()
+        self._init_vecs()
+        self._fit_frames_to_analog(stim_vec, juxta_vec, run_vec, spont_vec)
+        self._convert_to_series()
 
-    def __turn_run_vec_into_per_frame(self) -> np.ndarray:
+    def _turn_run_vec_into_per_frame(self) -> np.ndarray:
         """
         Squeezes the input running data from a per-row basis to a per
         frame.
         """
         with tifffile.TiffFile(self.tif_filename) as f:
             meta = f.scanimage_metadata
-        num_of_lines = int(meta['SI.hRoiManager.linesPerFrame'])
-        num_of_frames = int(meta['SI.hStackManager.framesPerSlice'])
-        run_data = self.analog_trace.run.abs().rolling(num_of_lines).sum()
-        run_data_per_frame = run_data[num_of_lines-1::num_of_lines]
-
-        sum_of_last_frame = run_data[-num_of_lines+1:].sum()
-        run_data_per_frame = np.concatenate((run_data_per_frame, sum_of_last_frame))
+        num_of_lines = int(meta["FrameData"]["SI.hRoiManager.linesPerFrame"])
+        num_of_frames = int(meta["FrameData"]["SI.hStackManager.framesPerSlice"])
+        run_data = self.analog_trace.run.abs().rolling(num_of_lines).mean()
+        run_data_per_frame = run_data[num_of_lines - 1 :: num_of_lines]
         assert len(run_data_per_frame) == num_of_frames
+        run_data_per_frame -= run_data_per_frame.min()
+        run_data_per_frame /= run_data_per_frame.max()
         return run_data_per_frame
 
-    def __populate_run(self, run_vec):
+    def _populate_run(self, run_vec):
         processed_run_vec = np.full(run_vec.shape, np.nan)
-        processed_run_vec[run_vec > 1] = 1
+        processed_run_vec[run_vec > 0.5] = 1
         return processed_run_vec
 
 
@@ -314,34 +313,34 @@ class AnalogAnalysisTreadmillRows(AnalyzedAnalogTrace):
 class AnalogAnalysisMrduino(AnalyzedAnalogTrace):
     def run(self):
         stim_vec, juxta_vec = self._find_peaks()
-        run_vec = self.__populate_run()
-        spont_vec = self.__populate_spont(stim_vec, juxta_vec)
+        run_vec = self._populate_run()
+        spont_vec = self._populate_spont(stim_vec, juxta_vec)
         if self.occluder:
-            self.__populate_occluder()
+            self._populate_occluder()
 
-        self.__init_vecs()
-        self.__fit_frames_to_analog(stim_vec, juxta_vec, run_vec, spont_vec)
-        self.__convert_to_series()
+        self._init_vecs()
+        self._fit_frames_to_analog(stim_vec, juxta_vec, run_vec, spont_vec)
+        self._convert_to_series()
 
 
 @attr.s
 class AnalogAnalysisOld(AnalyzedAnalogTrace):
     def run(self):
         # Analog peak detection
-        true_stim, juxta = self.__find_peaks()
-        stim_vec, juxta_vec = self.__populate_stims(true_stim, juxta)
-        run_vec = self.__populate_run()
-        spont_vec = self.__populate_spont(stim_vec, juxta_vec)
+        true_stim, juxta = self._find_peaks()
+        stim_vec, juxta_vec = self._populate_stims(true_stim, juxta)
+        run_vec = self._populate_run()
+        spont_vec = self._populate_spont(stim_vec, juxta_vec)
         if self.occluder:
-            self.__populate_occluder()
+            self._populate_occluder()
 
         # Fit the analog vector to frame vector
         # self.__extract_time_series()
-        self.__init_vecs()
-        self.__fit_frames_to_analog(stim_vec, juxta_vec, run_vec, spont_vec)
-        self.__convert_to_series()
+        self._init_vecs()
+        self._fit_frames_to_analog(stim_vec, juxta_vec, run_vec, spont_vec)
+        self._convert_to_series()
 
-    def __find_peaks(self) -> Tuple[np.ndarray, np.ndarray]:
+    def _find_peaks(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         Find the indices in which a peak occurred, and discern between peaks
         that were real stimuli and juxta peaks
@@ -384,7 +383,7 @@ class AnalogAnalysisOld(AnalyzedAnalogTrace):
             idx_juxta = []
         return idx_true_stim, np.array(idx_juxta)
 
-    def __populate_stims(
+    def _populate_stims(
         self, true_stim: np.ndarray, juxta: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
