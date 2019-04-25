@@ -27,19 +27,44 @@ class AnalogAcquisitionType(Enum):
 
 
 def analog_trace_runner(
-    tif_filename, analog_trace, analog_type, framerate, start_time, timestamps
+    tif_filename,
+    analog_trace,
+    analog_type,
+    framerate,
+    start_time,
+    timestamps,
+    occluder,
+    occ_metadata,
 ):
     if analog_type is AnalogAcquisitionType.OLD:
         analysis = AnalogAnalysisOld(
-            tif_filename, analog_trace, framerate, start_time, timestamps
+            tif_filename,
+            analog_trace,
+            framerate,
+            start_time,
+            timestamps,
+            occluder,
+            occ_metadata,
         )
     elif analog_type is AnalogAcquisitionType.MRDUINO:
         analysis = AnalogAnalysisMrduino(
-            tif_filename, analog_trace, framerate, start_time, timestamps
+            tif_filename,
+            analog_trace,
+            framerate,
+            start_time,
+            timestamps,
+            occluder,
+            occ_metadata,
         )
     elif analog_type is AnalogAcquisitionType.TREADMILL:
         analysis = AnalogAnalysisTreadmillRows(
-            tif_filename, analog_trace, framerate, start_time, timestamps
+            tif_filename,
+            analog_trace,
+            framerate,
+            start_time,
+            timestamps,
+            occluder,
+            occ_metadata,
         )
     else:
         raise TypeError("Invalid analog acquisition type")

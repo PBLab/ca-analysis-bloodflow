@@ -16,8 +16,8 @@ colorama.init()
 import copy
 import warnings
 
-from calcium_bflow_analysis.analog_trace import AnalogTraceAnalyzer
-from calcium_bflow_analysis.dff_tools import (
+from calcium_bflow_analysis.analog_trace import AnalogAcquisitionType, analog_trace_runner
+from calcium_bflow_analysis.dff_analysis_and_plotting.dff_analysis import (
     calc_dff,
     calc_dff_batch,
     scatter_spikes,
@@ -45,7 +45,7 @@ class VascOccParser:
     fps = attr.ib(default=15.24, validator=instance_of(float))
     frames_before_stim = attr.ib(default=1000)
     len_of_epoch_in_frames = attr.ib(default=1000)
-    with_analog = attr.ib(default=False, validator=instance_of(bool))
+    analog = attr.ib(default=AnalogAcquisitionType.NONE, validator=instance_of(AnalogAcquisitionType))
     with_colabeling = attr.ib(default=False, validator=instance_of(bool))
     serialize = attr.ib(default=True, validator=instance_of(bool))
     dff = attr.ib(init=False)
@@ -64,7 +64,7 @@ class VascOccParser:
     def run(self):
         self._find_all_files()
         self._get_params()
-        if self.with_analog:
+        if self.analog is not AnalogAcquisitionType.NONE:
             self.__run_with_analog()  # colabeling check is inside there
             self.dff = self.sliced_fluo.loc["all"].values
         elif self.with_colabeling:
@@ -80,20 +80,24 @@ class VascOccParser:
         )  # we have to compare each file with its analog data, individually
         for idx, row in self.data_files.iterrows():
             dff = calc_dff((row["caiman"]))
-            analog_data = pd.read_table(
-                row["analog"], header=None, names=["stimulus", "run"], index_col=False
+            analog_data = pd.read_csv(
+                self.analog_fname,
+                header=None,
+                names=["stimulus", "run"],
+                index_col=False,
             )
             occ_metadata = self.OccMetadata(
                 self.frames_before_stim,
                 self.len_of_epoch_in_frames,
                 self.frames_after_stim,
             )
-            analog_trace = AnalogTraceAnalyzer(
+            analog_trace = analog_trace_runner(
                 row["caiman"],
                 analog_data,
-                framerate=self.fps,
-                start_time=self.start_time,
-                timestamps=self.timestamps,
+                self.analog,
+                self.fps,
+                self.start_time,
+                self.timestamps,
                 occluder=True,
                 occ_metadata=occ_metadata,
             )
@@ -277,16 +281,16 @@ def concat_vasc_occ_dataarrays(da_list: list):
 
 if __name__ == "__main__":
     folder = pathlib.Path(
-        "/data/David/Vascular occluder_ALL/vip_td_gcamp_270818_muscle_only/"
+        "/data/David/vascular_occ_CAMKII_GCaMP/"
     )
-    glob = r"f*60Hz*MUSCLE*_00001*results.npz"
+    glob = r"F*.tif"
     assert folder.exists()
-    frames_before_stim = 2000
-    len_of_epoch_in_frames = 2000
-    fps = 58.2
+    frames_before_stim = 3600
+    len_of_epoch_in_frames = 3600
+    fps = 58.31
     with_analog = True
-    with_colabeling = True
-    display_each_fov = False
+    with_colabeling = False
+    display_each_fov = True
     serialize = True
     vasc = VascOccParser(
         foldername=str(folder),
