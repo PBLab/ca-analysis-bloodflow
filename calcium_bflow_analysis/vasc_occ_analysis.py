@@ -16,8 +16,9 @@ import colorama
 colorama.init()
 from ansimarkup import ansiprint as aprint
 import sklearn.cluster
-from calcium_bflow_analysis.analog_trace import AnalogTraceAnalyzer
-from calcium_bflow_analysis.dff_tools import scatter_spikes, plot_mean_vals, display_heatmap
+
+from calcium_bflow_analysis.dff_analysis_and_plotting.dff_analysis import scatter_spikes, plot_mean_vals
+from calcium_bflow_analysis.dff_analysis_and_plotting.plot_cells_and_traces import display_heatmap
 from calcium_bflow_analysis.vasc_occ_parsing import concat_vasc_occ_dataarrays
 
 
@@ -62,9 +63,8 @@ class VascOccAnalyzer:
             self._scatter_spikes(dff, all_spikes, title, downsample_display=10)
             self._rolling_window(cur_data, dff, all_spikes, title)
             self._per_cell_analysis(all_num_peaks, title)
-            self._corr_dff(dff, self.data.attrs["colabeled"])
-            # self._anova_on_mean_dff(dff, epoch)
-            if "colabeled" in self.data.attrs:
+            if self.with_colabeling:
+                self._corr_dff(dff, self.data.attrs["colabeled"])
                 colabeled_spikes, colabeled_peaks = self._find_spikes(colabeled)
                 self._calc_firing_rate(colabeled_peaks, "Colabeled")
                 self._scatter_spikes(
@@ -290,17 +290,15 @@ class VascOccAnalyzer:
 
 
 if __name__ == "__main__":
-    # folder = pathlib.Path.home() / pathlib.Path('data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_280818')
-    # folder = pathlib.Path('/data/David/Vascular occluder_ALL/vip_td_gcamp_vasc_occ_280818')
-    folder = pathlib.Path("/data/David/Vascular occluder_ALL/SST-TD-GCaMP_VASCULAR_OCC")
+    folder = pathlib.Path("/data/David/vascular_occ_CAMKII_GCaMP/")
     assert folder.exists()
     glob = r"vasc_occ_parsed.nc"
     folder_and_files = {folder: glob}
     invalid_cells: list = []
     with_analog = True
     num_of_channels = 2
-    with_colabeling = True
-    epoch = ("stand_spont",)
+    with_colabeling = False
+    epoch = ("all",)
     vasc = VascOccAnalyzer(
         folder_and_file=folder_and_files,
         invalid_cells=invalid_cells,

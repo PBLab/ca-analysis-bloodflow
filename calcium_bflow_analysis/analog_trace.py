@@ -122,27 +122,27 @@ class AnalyzedAnalogTrace:
         backwards compatability purposes), else uses the given data.
         """
         if vec is None:
-            vec = self.analog_trace.stimulus
+            vec = self.analog_trace.stimulus.to_numpy()
+        else:
+            vec = vec.to_numpy()
         diffs_all = np.where(np.diff(vec) < -100)[0]
         diffs_true = np.where(np.diff(vec) < -1000)[0]
         intersect = np.in1d(diffs_all, diffs_true)
-
-
         true_puff_idx = diffs_all[intersect]
         juxta_puff_idx = diffs_all[~intersect]
         true_puff_times = np.zeros_like(vec)
         juxta_puff_times = np.zeros_like(vec)
         if len(true_puff_idx) > 0:
-            true_puff_times = self._iter_over_puff_times(true_puff_idx)
+            true_puff_times = self._iter_over_puff_times(true_puff_idx, vec.shape)
         if len(juxta_puff_idx) > 0:
-            juxta_puff_times = self._iter_over_puff_times(juxta_puff_idx)
+            juxta_puff_times = self._iter_over_puff_times(juxta_puff_idx, vec.shape)
 
         return true_puff_times, juxta_puff_times
 
-    def _iter_over_puff_times(self, puff_idx):
+    def _iter_over_puff_times(self, puff_idx, vec_len):
         max_puff_length = int(self.framerate * self.puff_length)
         buffer_after_stim_frames = int(self.framerate * self.buffer_after_stim)
-        puff_times = np.zeros_like(self.analog_trace.stimulus)
+        puff_times = np.zeros(vec_len)
         puff_limits = np.where(np.diff(puff_idx) > max_puff_length)[0]
         start_puff_indices = puff_limits + 1
         start_puff_indices = np.concatenate(([0], start_puff_indices))
@@ -305,22 +305,40 @@ class AnalogAnalysisTreadmillRows(AnalyzedAnalogTrace):
     """
     num_of_lines = attr.ib(init=False)
     num_of_frames = attr.ib(init=False)
-    
+
     def run(self):
         self.num_of_lines, self.num_of_frames = self._get_metadata()
         stim_and_juxta_vec = self._turn_analog_vec_into_per_frame(self.analog_trace.stimulus)
-        run_vec = self._turn_analog_vec_into_per_frame(self.analog_trace.run)
         stim_vec, juxta_vec = self._find_peaks(stim_and_juxta_vec)
-        run_vec = self._populate_run(run_vec)
-        spont_vec = self._populate_spont(stim_vec, juxta_vec)
+        self.stim_vec = self._zero_to_nan(stim_vec)
+        self.juxta_vec = self._zero_to_nan(juxta_vec)
+        run_vec = self._turn_analog_vec_into_per_frame(self.analog_trace.run)
+        run_vec = self.normalize_vec(run_vec)
+        self.run_vec = self._populate_run(run_vec)
+        self.spont_vec = self._populate_spont(stim_vec, juxta_vec)
+        self.stand_vec = self._populate_stand()
+
         if self.occluder:
             self._populate_occluder()
 
-        self._init_vecs()
-        self._fit_frames_to_analog(stim_vec, juxta_vec, run_vec, spont_vec)
         self._convert_to_series()
 
-    def _turn_analog_vec_into_per_frame(self, vec: pd.Series) -> np.ndarray:
+    def _zero_to_nan(self, vec: np.ndarray) -> np.ndarray:
+        """
+        Turns zero entries in an array to nans
+        """
+        vec[vec == 0] = np.nan
+        return vec
+
+    def _populate_stand(self) -> np.ndarray:
+        """
+        Create the vector that shows the times at which the mouse
+        was standing, i.e. when it wasn't running.
+        """
+        stand_vec = np.logical_not(np.nan_to_num(self.run_vec))
+        return np.where(stand_vec, 1.0, np.nan)
+
+    def _turn_analog_vec_into_per_frame(self, vec: pd.Series) -> pd.Series:
         """
         Squeezes the input running data from a per-row basis to a per
         frame.
@@ -328,9 +346,13 @@ class AnalogAnalysisTreadmillRows(AnalyzedAnalogTrace):
         mean_data = vec.abs().rolling(self.num_of_lines).mean()
         data_per_frame = mean_data[self.num_of_lines - 1 :: self.num_of_lines]
         assert len(data_per_frame) == self.num_of_frames
-        data_per_frame -= data_per_frame.min()
-        data_per_frame /= data_per_frame.max()
         return data_per_frame
+
+    @staticmethod
+    def normalize_vec(vec: pd.Series) -> pd.Series:
+        vec -= vec.min()
+        vec /= vec.max()
+        return vec
 
     def _populate_run(self, run_vec):
         processed_run_vec = np.full(run_vec.shape, np.nan)

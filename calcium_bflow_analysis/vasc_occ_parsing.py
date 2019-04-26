@@ -17,14 +17,19 @@ import copy
 import warnings
 
 from calcium_bflow_analysis.calcium_over_time import FileFinder
-from calcium_bflow_analysis.analog_trace import AnalogAcquisitionType, analog_trace_runner
+from calcium_bflow_analysis.analog_trace import (
+    AnalogAcquisitionType,
+    analog_trace_runner,
+)
 from calcium_bflow_analysis.dff_analysis_and_plotting.dff_analysis import (
     calc_dff,
     calc_dff_batch,
     scatter_spikes,
     plot_mean_vals,
 )
-from calcium_bflow_analysis.dff_analysis_and_plotting.plot_cells_and_traces import display_heatmap
+from calcium_bflow_analysis.dff_analysis_and_plotting.plot_cells_and_traces import (
+    display_heatmap,
+)
 
 
 @attr.s(slots=True)
@@ -40,11 +45,14 @@ class VascOccParser:
     If one of the data channels contains co-labeling with a different, usually morphological,
     fluorophore indicating the cell type, it will be integrated as well.
     """
+
     data_files = attr.ib(validator=instance_of(pd.DataFrame))
     fps = attr.ib(default=15.24, validator=instance_of(float))
     frames_before_stim = attr.ib(default=1000)
     len_of_epoch_in_frames = attr.ib(default=1000)
-    analog = attr.ib(default=AnalogAcquisitionType.NONE, validator=instance_of(AnalogAcquisitionType))
+    analog = attr.ib(
+        default=AnalogAcquisitionType.NONE, validator=instance_of(AnalogAcquisitionType)
+    )
     with_colabeling = attr.ib(default=False, validator=instance_of(bool))
     serialize = attr.ib(default=True, validator=instance_of(bool))
     dff = attr.ib(init=False)
@@ -60,7 +68,6 @@ class VascOccParser:
         self.OccMetadata = namedtuple("OccMetadata", ["before", "during", "after"])
 
     def run(self):
-        self._get_params()
         if self.analog is not AnalogAcquisitionType.NONE:
             self.__run_with_analog()  # colabeling check is inside there
             self.dff = self.sliced_fluo.loc["all"].values
@@ -76,12 +83,10 @@ class VascOccParser:
             []
         )  # we have to compare each file with its analog data, individually
         for idx, row in self.data_files.iterrows():
+            self._get_params(row["tif"])
             dff = calc_dff((row["caiman"]))
             analog_data = pd.read_csv(
-                row["analog"],
-                header=None,
-                names=["stimulus", "run"],
-                index_col=False,
+                row["analog"], header=None, names=["stimulus", "run"], index_col=False
             )
             occ_metadata = self.OccMetadata(
                 self.frames_before_stim,
@@ -123,17 +128,17 @@ class VascOccParser:
             str(foldername / "vasc_occ_parsed.nc"), mode="w"
         )  # TODO: compress
 
-    def _get_params(self):
+    def _get_params(self, fname: pathlib.Path):
         """ Get general stack parameters from the TiffFile object """
         try:
             print("Getting TIF parameters...")
-            with tifffile.TiffFile(self.data_files["tif"][0]) as f:
+            with tifffile.TiffFile(str(fname)) as f:
                 si_meta = f.scanimage_metadata
                 self.fps = si_meta["FrameData"]["SI.hRoiManager.scanFrameRate"]
                 self.num_of_channels = len(
                     si_meta["FrameData"]["SI.hChannels.channelsActive"]
                 )
-                num_of_frames = len(f.pages) // self.num_of_channels
+                num_of_frames = si_meta["FrameData"]["SI.hStackManager.framesPerSlice"]
                 self.frames_after_stim = num_of_frames - (
                     self.frames_before_stim + self.len_of_epoch_in_frames
                 )
@@ -172,9 +177,7 @@ class VascOccParser:
         dff = np.concatenate(dff)
         return dff
 
-    def _display_analog_traces(
-        self, ax_puff, ax_jux, ax_run, data
-    ):
+    def _display_analog_traces(self, ax_puff, ax_jux, ax_run, data):
         """ Show three Axes of the analog data """
         ax_puff.plot(data.stim_vec)
         ax_puff.invert_yaxis()
@@ -218,7 +221,7 @@ def concat_vasc_occ_dataarrays(da_list: list):
     crd_epoch = da_list[0].epoch.values
     for idx, da in enumerate(da_list):
         crd_neuron = np.arange(num_of_neurons, num_of_neurons + len(da.neuron))
-        if len(da.time) > len(crd_time):
+        if len(da.time) != len(crd_time):
             crd_time = da.time.values
         reindexed_da = xr.DataArray(
             data=da.data,
@@ -233,9 +236,7 @@ def concat_vasc_occ_dataarrays(da_list: list):
 
 
 if __name__ == "__main__":
-    folder = pathlib.Path(
-        "/data/David/vascular_occ_CAMKII_GCaMP/"
-    )
+    folder = pathlib.Path("/data/David/vascular_occ_CAMKII_GCaMP/")
     glob = r"F*.tif"
     assert folder.exists()
     folder_globs = {folder: glob}
