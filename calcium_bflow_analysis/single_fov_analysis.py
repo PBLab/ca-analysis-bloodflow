@@ -66,7 +66,7 @@ class SingleFovParser:
                 index_col=False,
             )
             self.analog_analyzed = analog_trace_runner(
-                str(self.metadata.fname),
+                self.metadata.fname,
                 analog_data,
                 self.analog,
                 self.metadata.fps,

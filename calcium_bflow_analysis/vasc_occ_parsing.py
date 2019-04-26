@@ -16,14 +16,15 @@ colorama.init()
 import copy
 import warnings
 
+from calcium_bflow_analysis.calcium_over_time import FileFinder
 from calcium_bflow_analysis.analog_trace import AnalogAcquisitionType, analog_trace_runner
 from calcium_bflow_analysis.dff_analysis_and_plotting.dff_analysis import (
     calc_dff,
     calc_dff_batch,
     scatter_spikes,
     plot_mean_vals,
-    display_heatmap,
 )
+from calcium_bflow_analysis.dff_analysis_and_plotting.plot_cells_and_traces import display_heatmap
 
 
 @attr.s(slots=True)
@@ -39,9 +40,7 @@ class VascOccParser:
     If one of the data channels contains co-labeling with a different, usually morphological,
     fluorophore indicating the cell type, it will be integrated as well.
     """
-
-    foldername = attr.ib(validator=instance_of(str))
-    glob = attr.ib(default="*results.npz", validator=instance_of(str))
+    data_files = attr.ib(validator=instance_of(pd.DataFrame))
     fps = attr.ib(default=15.24, validator=instance_of(float))
     frames_before_stim = attr.ib(default=1000)
     len_of_epoch_in_frames = attr.ib(default=1000)
@@ -56,13 +55,11 @@ class VascOccParser:
     num_of_channels = attr.ib(init=False)
     sliced_fluo = attr.ib(init=False)
     OccMetadata = attr.ib(init=False)
-    data_files = attr.ib(init=False)
 
     def __attrs_post_init__(self):
         self.OccMetadata = namedtuple("OccMetadata", ["before", "during", "after"])
 
     def run(self):
-        self._find_all_files()
         self._get_params()
         if self.analog is not AnalogAcquisitionType.NONE:
             self.__run_with_analog()  # colabeling check is inside there
@@ -81,7 +78,7 @@ class VascOccParser:
         for idx, row in self.data_files.iterrows():
             dff = calc_dff((row["caiman"]))
             analog_data = pd.read_csv(
-                self.analog_fname,
+                row["analog"],
                 header=None,
                 names=["stimulus", "run"],
                 index_col=False,
@@ -92,7 +89,7 @@ class VascOccParser:
                 self.frames_after_stim,
             )
             analog_trace = analog_trace_runner(
-                row["caiman"],
+                row["tif"],
                 analog_data,
                 self.analog,
                 self.fps,
@@ -125,50 +122,6 @@ class VascOccParser:
         self.sliced_fluo.to_netcdf(
             str(foldername / "vasc_occ_parsed.nc"), mode="w"
         )  # TODO: compress
-
-    def _find_all_files(self):
-        """
-        Locate all fitting files in the folder - The correpsonding "sibling" files
-        for the main TIF recording, like analog data recordings, etc.
-        """
-        self.data_files = pd.DataFrame(
-            [], columns=["caiman", "tif", "analog", "colabeled"]
-        )
-        folder = pathlib.Path(self.foldername)
-        files = folder.rglob(self.glob)
-        print("Found the following files:")
-        for idx, file in enumerate(files):
-            print(file)
-            cur_file = os.path.splitext(str(file.name))[0][
-                :-18
-            ]  # no "_CHANNEL_X_results"
-            try:
-                raw_tif = next(file.parent.glob(cur_file + ".tif"))
-            except StopIteration:
-                print(f"No corresponding Tiff found for file {cur_file}.")
-                raw_tif = ""
-
-            try:
-                analog_file = next(file.parent.glob(cur_file + "_analog.txt"))  # no
-            except StopIteration:
-                print(f"No corresponding analog data found for file {cur_file}.")
-                analog_file = ""
-
-            try:
-                colabeled_file = next(file.parent.glob(cur_file + "*_colabeled*.npy"))
-            except StopIteration:
-                print(
-                    f"No corresponding colabeled channel found for file {cur_file}. Did you run 'batch_colabeled'?"
-                )
-                colabeled_file = ""
-
-            self.data_files = self.data_files.append(
-                pd.DataFrame(
-                    [[str(file), raw_tif, analog_file, colabeled_file]],
-                    columns=["caiman", "tif", "analog", "colabeled"],
-                    index=[idx],
-                )
-            )
 
     def _get_params(self):
         """ Get general stack parameters from the TiffFile object """
@@ -220,7 +173,7 @@ class VascOccParser:
         return dff
 
     def _display_analog_traces(
-        self, ax_puff, ax_jux, ax_run, data: AnalogTraceAnalyzer
+        self, ax_puff, ax_jux, ax_run, data
     ):
         """ Show three Axes of the analog data """
         ax_puff.plot(data.stim_vec)
@@ -285,20 +238,27 @@ if __name__ == "__main__":
     )
     glob = r"F*.tif"
     assert folder.exists()
+    folder_globs = {folder: glob}
+    analog = AnalogAcquisitionType.TREADMILL
+    with_colabeling = False
+    filefinder = FileFinder(
+        results_folder=folder,
+        folder_globs=folder_globs,
+        analog=analog,
+        with_colabeled=with_colabeling,
+    )
+    data_files = filefinder.find_files()
     frames_before_stim = 3600
     len_of_epoch_in_frames = 3600
     fps = 58.31
-    with_analog = True
-    with_colabeling = False
     display_each_fov = True
     serialize = True
     vasc = VascOccParser(
-        foldername=str(folder),
-        glob=glob,
+        data_files=data_files,
         frames_before_stim=frames_before_stim,
         len_of_epoch_in_frames=len_of_epoch_in_frames,
         fps=fps,
-        with_analog=with_analog,
+        analog=analog,
         with_colabeling=with_colabeling,
         serialize=serialize,
     )
