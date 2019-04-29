@@ -1,4 +1,5 @@
 import pathlib
+import pickle
 
 import pexpect
 import datajoint as dj
@@ -39,7 +40,8 @@ class ExpParams(dj.Manual):
     calcium_channel: enum('1', '2', '3', '4')
     lines: smallint unsigned
     columns: smallint unsigned
-    z = 0 : smallint unsigned
+    z_planes = 0 : smallint unsigned
+    fr = 58.23 : float
     magnification: float
     bidirectional: enum('true', 'false')
     slow_scan_coef = 1.0 : float
@@ -60,10 +62,33 @@ class ComputedParams(dj.Computed):
     px_um_x: float
     px_um_y: float
     px_um_z : float
-    fr: float
     files_found: tinyint unsigned
-    file_list: varchar(10000)
+    file_list: longblob
     """
+
+    def make(self, key):
+        params = (ExpParams & key).fetch(as_dict=True)[0]
+
+        if params["objective_lens"] == "x25":
+            key["px_um_x"] = params["columns"] / (870 * params["magnification"])
+            key["px_um_y"] = params["lines"] / (870 * params["magnification"])
+            key["px_um_z"] = params["z_planes"] / (870 * params["magnification"])
+        else:
+            key["px_um_x"] = params["columns"] / (1840 * params["magnification"])
+            key["px_um_y"] = params["lines"] / (1840 * params["magnification"])
+            key["px_um_z"] = params["z_planes"] / (1840 * params["magnification"])
+
+        folder = pathlib.Path(params["foldername"])
+        files_found = 0
+        fnames = []
+        for file in folder.rglob(params["glob"]):
+            if "CHANNEL" in str(file):
+                continue
+            files_found += 1
+            fnames.append(str(file))
+        key["files_found"] = files_found
+        key["file_list"] = pickle.dumps(fnames)
+        self.insert1(key)
 
 
 @schema
