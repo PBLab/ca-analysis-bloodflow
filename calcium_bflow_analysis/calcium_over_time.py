@@ -1,5 +1,7 @@
 """
-__author__ = Hagai Hargil
+A module designed to analyze FOVs of in vivo calcium
+activity. This module's main class, :class:`CalciumOverTime`,
+is used to run 
 """
 
 from enum import Enum
@@ -95,14 +97,14 @@ class FileFinder:
         analog_files = []
         result_files = []
         colabeled_files = []
-        summary_str = "Found {num} files:\nFluo: {fluo}\nAnalog: {analog}\nCaImAn: {caiman}\nColabeled: {colabeled}"
+        summary_str = "Found the following {num} files:\nFluo: {fluo}\nAnalog: {analog}\nCaImAn: {caiman}\nColabeled: {colabeled}"
         for folder, globstr in self.folder_globs.items():
             for file in folder.rglob(globstr):
                 num_of_files_found = 1
                 fname = str(file.name)[:-4]
                 if self.analog is not AnalogAcquisitionType.NONE:
                     try:
-                        analog_file = next(folder.rglob(fname + "*analog.txt"))
+                        analog_file = next(folder.rglob(fname + "*analog*.txt"))
                         num_of_files_found += 1
                     except StopIteration:
                         print(f"File {file} has no analog counterpart.")

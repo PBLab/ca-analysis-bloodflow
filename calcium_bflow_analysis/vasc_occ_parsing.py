@@ -1,5 +1,5 @@
 import attr
-from attr.validators import instance_of
+from attr.validators import instance_of, optional
 import numpy as np
 import pandas as pd
 import pathlib
@@ -47,14 +47,14 @@ class VascOccParser:
     """
 
     data_files = attr.ib(validator=instance_of(pd.DataFrame))
-    fps = attr.ib(default=15.24, validator=instance_of(float))
     frames_before_stim = attr.ib(default=1000)
     len_of_epoch_in_frames = attr.ib(default=1000)
     analog = attr.ib(
         default=AnalogAcquisitionType.NONE, validator=instance_of(AnalogAcquisitionType)
     )
     with_colabeling = attr.ib(default=False, validator=instance_of(bool))
-    serialize = attr.ib(default=True, validator=instance_of(bool))
+    serialize = attr.ib(default=True, validator=optional(instance_of(str)))
+    fps = attr.ib(init=False)
     dff = attr.ib(init=False)
     colabel_idx = attr.ib(init=False)
     frames_after_stim = attr.ib(init=False)
@@ -112,12 +112,15 @@ class VascOccParser:
             self.colabel_idx = self._load_colabeled_idx()
         print("Concatenating FOVs into a single data structure...")
         self.sliced_fluo: xr.DataArray = concat_vasc_occ_dataarrays(list_of_sliced_fluo)
-        if self.serialize:
+        if self.serialize is not False:
             print("Writing to disk...")
             self._serialize_results(row["tif"].parent)
 
     def _serialize_results(self, foldername: pathlib.Path):
         """ Write to disk the generated concatenated DataArray """
+        fname = "vasc_occ_parsed.nc"
+        if self.serialize is not None:
+            fname = self.serialize
         self.sliced_fluo.attrs["fps"] = self.fps
         self.sliced_fluo.attrs["frames_before_occ"] = self.frames_before_stim
         self.sliced_fluo.attrs["frames_during_occ"] = self.len_of_epoch_in_frames
@@ -125,7 +128,7 @@ class VascOccParser:
         if self.with_colabeling:
             self.sliced_fluo.attrs["colabeled"] = self.colabel_idx
         self.sliced_fluo.to_netcdf(
-            str(foldername / "vasc_occ_parsed.nc"), mode="w"
+            str(foldername / (fname + ".nc")), mode="w"
         )  # TODO: compress
 
     def _get_params(self, fname: pathlib.Path):
@@ -145,13 +148,14 @@ class VascOccParser:
                 self.start_time = str(
                     datetime.fromtimestamp(os.path.getmtime(self.data_files["tif"][0]))
                 )
-                self.timestamps = np.arange(num_of_frames)
+                self.timestamps = np.arange(num_of_frames) / self.fps
                 print("Done without errors!")
         except TypeError:
             warnings.warn("Failed to parse ScanImage metadata")
             self.start_time = None
             self.timestamps = None
             self.frames_after_stim = 1000
+            self.fps = 58.31
 
     def _load_colabeled_idx(self):
         """ Loads the indices of the colabeled cells from all found files """
@@ -236,8 +240,8 @@ def concat_vasc_occ_dataarrays(da_list: list):
 
 
 if __name__ == "__main__":
-    folder = pathlib.Path("/data/David/vascular_occ_CAMKII_GCaMP/")
-    glob = r"F*.tif"
+    folder = pathlib.Path("/data/David/Vascular_occ_Laducq_2P/#5_right_hemi_occluder")
+    glob = r"fov*_L_CON*.tif"
     assert folder.exists()
     folder_globs = {folder: glob}
     analog = AnalogAcquisitionType.TREADMILL
@@ -250,15 +254,13 @@ if __name__ == "__main__":
     )
     data_files = filefinder.find_files()
     frames_before_stim = 3600
-    len_of_epoch_in_frames = 3600
-    fps = 58.31
+    len_of_epoch_in_frames = 7200
     display_each_fov = True
-    serialize = True
+    serialize = "vasc_occ_parsed_contra"
     vasc = VascOccParser(
         data_files=data_files,
         frames_before_stim=frames_before_stim,
         len_of_epoch_in_frames=len_of_epoch_in_frames,
-        fps=fps,
         analog=analog,
         with_colabeling=with_colabeling,
         serialize=serialize,

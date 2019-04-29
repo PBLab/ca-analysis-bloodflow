@@ -111,18 +111,14 @@ def scatter_spikes(
         fig = ax.figure
     downsampled_data = raw_data[::downsample_display]
     num_displayed_cells = downsampled_data.shape[0]
-    ax.plot(
-        time_vec, (downsampled_data + np.arange(num_displayed_cells)[:, np.newaxis]).T
-    )
+    y_heights = np.arange(num_displayed_cells)[:, np.newaxis]
+    ax.plot(time_vec, (downsampled_data + y_heights).T, linewidth=0.5)
     if spike_data is not None:
         peakvals = raw_data * spike_data
         peakvals[peakvals == 0] = np.nan
         ax.plot(
             time_vec,
-            (
-                peakvals[::downsample_display]
-                + np.arange(num_displayed_cells)[:, np.newaxis]
-            ).T,
+            (peakvals[::downsample_display] + y_heights).T,
             "r.",
             linewidth=0.1,
         )
@@ -199,7 +195,6 @@ def deinterleave(fname: str, data_channel: int, num_of_channels: int = 2):
     return new_fname
 
 
-
 if __name__ == "__main__":
     # results_file = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003_CHANNEL_2_results.npz'
     # tif = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003.tif'
@@ -220,7 +215,11 @@ if __name__ == "__main__":
     # analog.run()
 
     # rank_dff_by_stim(dff, spikes, analog.stim_vec, 30.03)
-    tif = pathlib.Path('/data/David/new_mickey_thin_skull/fov2_mag_2_256px_30hz_uni_ch1_blood_ch2_neurons_00001_CHANNEL_2.tif')
-    results = pathlib.Path('/data/David/new_mickey_thin_skull/fov2_mag_2_256px_30hz_uni_ch1_blood_ch2_neurons_00001_CHANNEL_2_results.npz')
-    fig = show_side_by_side([tif], [results], cell_radius=5, figsize=(20,16))
+    tif = pathlib.Path(
+        "/data/David/new_mickey_thin_skull/fov2_mag_2_256px_30hz_uni_ch1_blood_ch2_neurons_00001_CHANNEL_2.tif"
+    )
+    results = pathlib.Path(
+        "/data/David/new_mickey_thin_skull/fov2_mag_2_256px_30hz_uni_ch1_blood_ch2_neurons_00001_CHANNEL_2_results.npz"
+    )
+    fig = show_side_by_side([tif], [results], cell_radius=5, figsize=(20, 16))
     plt.show(block=False)

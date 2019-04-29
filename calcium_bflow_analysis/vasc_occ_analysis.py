@@ -17,8 +17,14 @@ colorama.init()
 from ansimarkup import ansiprint as aprint
 import sklearn.cluster
 
-from calcium_bflow_analysis.dff_analysis_and_plotting.dff_analysis import scatter_spikes, plot_mean_vals
-from calcium_bflow_analysis.dff_analysis_and_plotting.plot_cells_and_traces import display_heatmap
+from calcium_bflow_analysis.dff_analysis_and_plotting.dff_analysis import (
+    scatter_spikes,
+    plot_mean_vals,
+    locate_spikes_peakutils,
+)
+from calcium_bflow_analysis.dff_analysis_and_plotting.plot_cells_and_traces import (
+    display_heatmap,
+)
 from calcium_bflow_analysis.vasc_occ_parsing import concat_vasc_occ_dataarrays
 
 
@@ -60,7 +66,7 @@ class VascOccAnalyzer:
             dff = np.delete(cur_data.values.copy(), self.invalid_cells, axis=0)
             all_spikes, all_num_peaks = self._find_spikes(dff)
             self._calc_firing_rate(all_num_peaks, title)
-            self._scatter_spikes(dff, all_spikes, title, downsample_display=10)
+            self._scatter_spikes(dff, all_spikes, title, downsample_display=1)
             self._rolling_window(cur_data, dff, all_spikes, title)
             self._per_cell_analysis(all_num_peaks, title)
             if self.with_colabeling:
@@ -93,33 +99,23 @@ class VascOccAnalyzer:
         return concat_vasc_occ_dataarrays(all_da)
 
     def _find_spikes(self, dff: np.ndarray):
-        """ Calculates a dataframe, each row being a cell, with three columns - before, during and after
+        """
+        Calculates a dataframe, each row being a cell, with three columns - before, during and after
         the occlusion. The numbers for each cell are normalized for the length of the epoch.
-        TODO: NEEDS REFACTORING TO WORK WITH DFF_TOOLS.LOCATE_SPIKES_PEAKUTILS """
-        idx_section1 = []
-        idx_section2 = []
-        idx_section3 = []
-        thresh = 0.8
-        min_dist = int(self.data.attrs["fps"])
+        """
         before_occ = self.data.attrs["frames_before_occ"]
         during_occ = self.data.attrs["frames_during_occ"]
-        summed_after_occ = before_occ + during_occ
+        after_occ = before_occ + during_occ
         norm_factor_during = before_occ / during_occ
         norm_factor_after = before_occ / self.data.attrs["frames_after_occ"]
-        all_spikes = np.zeros_like(dff)
-        for row, cell in enumerate(dff):
-            idx = peakutils.indexes(cell, thres=thresh, min_dist=min_dist)
-            all_spikes[row, idx] = 1
-            idx_section1.append(len(idx[idx < before_occ]))
-            idx_section2.append(
-                len(idx[(idx >= before_occ) & (idx < summed_after_occ)])
-                * norm_factor_during
-            )
-            idx_section3.append(len(idx[idx >= summed_after_occ]) * norm_factor_after)
-
+        all_spikes = locate_spikes_peakutils(dff, fps=self.data.attrs["fps"], thresh=0.8)
+        spikes_before = all_spikes[:, :before_occ].sum(axis=1)
+        spikes_during = (
+            all_spikes[:, before_occ:after_occ].sum(axis=1) * norm_factor_during
+        )
+        spikes_after = all_spikes[:, -after_occ:].sum(axis=1) * norm_factor_after
         num_of_spikes = pd.DataFrame(
-            {"before": idx_section1, "during": idx_section2, "after": idx_section3},
-            index=np.arange(len(idx_section1)),
+            {"before": spikes_before, "during": spikes_during, "after": spikes_after}
         )
         return all_spikes, num_of_spikes
 
@@ -290,9 +286,9 @@ class VascOccAnalyzer:
 
 
 if __name__ == "__main__":
-    folder = pathlib.Path("/data/David/vascular_occ_CAMKII_GCaMP/")
+    folder = pathlib.Path("/data/David/vascular_occ_CAMKII_GCaMP")
     assert folder.exists()
-    glob = r"vasc_occ_parsed.nc"
+    glob = r"vasc_occ_parsed_512px.nc"
     folder_and_files = {folder: glob}
     invalid_cells: list = []
     with_analog = True

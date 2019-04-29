@@ -24,6 +24,7 @@ class AnalogAcquisitionType(Enum):
     OLD = "OLD"
     MRDUINO = "MRDUINO"
     TREADMILL = "TREADMILL"
+    TREADROWS = "TREADROWS"
 
 
 def analog_trace_runner(
@@ -56,8 +57,18 @@ def analog_trace_runner(
             occluder=occluder,
             occ_metadata=occ_metadata,
         )
-    elif analog_type is AnalogAcquisitionType.TREADMILL:
+    elif analog_type is AnalogAcquisitionType.TREADROWS:
         analysis = AnalogAnalysisTreadmillRows(
+            tif_filename,
+            analog_trace,
+            framerate,
+            start_time,
+            timestamps,
+            occluder=occluder,
+            occ_metadata=occ_metadata,
+        )
+    elif analog_type is AnalogAcquisitionType.TREADMILL:
+        analysis = AnalogAnalysisTreadmill(
             tif_filename,
             analog_trace,
             framerate,
@@ -235,6 +246,37 @@ class AnalyzedAnalogTrace:
         stand_vec = np.logical_not(np.nan_to_num(self.run_vec))
         self.stand_vec = np.where(stand_vec, 1.0, np.nan)
 
+    def _zero_to_nan(self, vec: np.ndarray) -> np.ndarray:
+        """
+        Turns zero entries in an array to nans
+        """
+        vec[vec == 0] = np.nan
+        return vec
+
+    def _get_metadata(self) -> Tuple[int, ...]:
+        """
+        Retrieves metadata from ScanImage files.
+        """
+        with tifffile.TiffFile(str(self.tif_filename)) as f:
+            meta = f.scanimage_metadata
+        num_of_lines = int(meta["FrameData"]["SI.hRoiManager.linesPerFrame"])
+        num_of_frames = int(meta["FrameData"]["SI.hStackManager.framesPerSlice"])
+        return num_of_lines, num_of_frames
+
+    @staticmethod
+    def normalize_vec(vec: pd.Series) -> pd.Series:
+        vec -= vec.min()
+        vec = vec / vec.max()
+        return vec
+
+    def _populate_stand(self) -> np.ndarray:
+        """
+        Create the vector that shows the times at which the mouse
+        was standing, i.e. when it wasn't running.
+        """
+        stand_vec = np.logical_not(np.nan_to_num(self.run_vec))
+        return np.where(stand_vec, 1.0, np.nan)
+
     def __mul__(self, other: np.ndarray) -> xr.DataArray:
         """
         Multiplying an AnalogTrace with a numpy array containing the fluorescent trace results
@@ -297,18 +339,59 @@ class AnalyzedAnalogTrace:
 
 
 @attr.s
+class AnalogAnalysisTreadmill(AnalyzedAnalogTrace):
+    """
+    Analysis for the second version of the treadmill output,
+    where each frame of the stack was given an analog value.
+    """
+
+    num_of_lines = attr.ib(init=False)
+    num_of_frames = attr.ib(init=False)
+
+    def run(self):
+        self.num_of_lines, self.num_of_frames = self._get_metadata()
+        stim_vec, juxta_vec = self._find_peaks()
+        self.stim_vec = self._zero_to_nan(stim_vec)
+        self.juxta_vec = self._zero_to_nan(juxta_vec)
+        run_vec = self.normalize_vec(self.analog_trace.run.to_numpy())
+        self.run_vec = self._populate_run(run_vec)
+        self.spont_vec = self._populate_spont(stim_vec, juxta_vec)
+        self.stand_vec = self._populate_stand()
+        if self.occluder:
+            self._populate_occluder()
+
+        self._convert_to_series()
+
+    def _populate_run(self, run_vec: np.ndarray) -> np.ndarray:
+        """
+        Processes the running analog data from the encoders.
+        Looks for 1 second long periods in which the mouse ran
+        by diffing the raw output of the encoder and checking if
+        it passes some magic number that seems to correspond
+        to this proper movement time.
+        """
+        processed_run_vec = np.full(run_vec.shape, np.nan)
+        run = pd.Series(run_vec).diff().abs().rolling(int(self.framerate)).mean()
+        processed_run_vec[run_vec > 0.035] = 1
+        return processed_run_vec
+
+
+@attr.s
 class AnalogAnalysisTreadmillRows(AnalyzedAnalogTrace):
     """
     Analysis for the first version of the treadmill output,
     where each row was given a value, meaning the number of
     outputs is the number of frames times the number of rows.
     """
+
     num_of_lines = attr.ib(init=False)
     num_of_frames = attr.ib(init=False)
 
     def run(self):
         self.num_of_lines, self.num_of_frames = self._get_metadata()
-        stim_and_juxta_vec = self._turn_analog_vec_into_per_frame(self.analog_trace.stimulus)
+        stim_and_juxta_vec = self._turn_analog_vec_into_per_frame(
+            self.analog_trace.stimulus
+        )
         stim_vec, juxta_vec = self._find_peaks(stim_and_juxta_vec)
         self.stim_vec = self._zero_to_nan(stim_vec)
         self.juxta_vec = self._zero_to_nan(juxta_vec)
@@ -323,21 +406,6 @@ class AnalogAnalysisTreadmillRows(AnalyzedAnalogTrace):
 
         self._convert_to_series()
 
-    def _zero_to_nan(self, vec: np.ndarray) -> np.ndarray:
-        """
-        Turns zero entries in an array to nans
-        """
-        vec[vec == 0] = np.nan
-        return vec
-
-    def _populate_stand(self) -> np.ndarray:
-        """
-        Create the vector that shows the times at which the mouse
-        was standing, i.e. when it wasn't running.
-        """
-        stand_vec = np.logical_not(np.nan_to_num(self.run_vec))
-        return np.where(stand_vec, 1.0, np.nan)
-
     def _turn_analog_vec_into_per_frame(self, vec: pd.Series) -> pd.Series:
         """
         Squeezes the input running data from a per-row basis to a per
@@ -348,26 +416,19 @@ class AnalogAnalysisTreadmillRows(AnalyzedAnalogTrace):
         assert len(data_per_frame) == self.num_of_frames
         return data_per_frame
 
-    @staticmethod
-    def normalize_vec(vec: pd.Series) -> pd.Series:
-        vec -= vec.min()
-        vec /= vec.max()
-        return vec
-
-    def _populate_run(self, run_vec):
+    def _populate_run(self, run_vec: np.ndarray) -> np.ndarray:
+        """
+        Processes the running analog data from the encoders.
+        Looks for 1 second long periods in which the mouse ran
+        by diffing the raw output of the encoder and checking if
+        it passes some magic number that seems to correspond
+        to this proper movement time.
+        """
         processed_run_vec = np.full(run_vec.shape, np.nan)
-        processed_run_vec[run_vec > 0.5] = 1
+        run = pd.Series(run_vec).diff().abs().rolling(int(self.framerate)).mean()
+        processed_run_vec[run_vec > 0.035] = 1
         return processed_run_vec
 
-    def _get_metadata(self) -> Tuple[int, ...]:
-        """
-        Retrieves metadata from ScanImage files.
-        """
-        with tifffile.TiffFile(str(self.tif_filename)) as f:
-            meta = f.scanimage_metadata
-        num_of_lines = int(meta["FrameData"]["SI.hRoiManager.linesPerFrame"])
-        num_of_frames = int(meta["FrameData"]["SI.hStackManager.framesPerSlice"])
-        return num_of_lines, num_of_frames
 
 @attr.s
 class AnalogAnalysisMrduino(AnalyzedAnalogTrace):
