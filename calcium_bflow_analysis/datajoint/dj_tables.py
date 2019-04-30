@@ -1,13 +1,17 @@
 import pathlib
 import pickle
+import shutil
+import multiprocessing
+from typing import List
 
 import pexpect
+import paramiko
 import datajoint as dj
 import pandas as pd
 
 
 # To start the image, run `sudo docker-compose up -d`
-# from this fodlder. Then find the host IP address
+# from this folder. Then find the host IP address
 # of the docker container run `ip a` and look for the
 # docker0 port - the IP that is listed there is the
 # one to enter as host in the Helium API.
@@ -21,6 +25,13 @@ dj.config["external-raw"] = {
     "location": f"/data/MatlabCode/PBLabToolkit/CalciumDataAnalysis/python-ca-analysis-bloodflow/datajoint/data/{SCHEMA_NAME}",
 }
 schema = dj.schema(SCHEMA_NAME, locals())
+
+PATH_TO_POWER8_FROM_CORTEX = "/mnt/pblabfs/pblab/pbuser/calcium_data"
+PATH_INSIDE_POWER8 = "/pblab/pblab/pbuser/calcium_data"
+POWER8_ADDRESS = "powerlogin.tau.ac.il"
+POWER8_USERNAME = "pbuser"
+POWER8_PASSWORD = "pablo000!"
+
 
 @schema
 class ExpParams(dj.Manual):
@@ -99,9 +110,93 @@ class CaimanResults(dj.Computed):
     time = CURRENT_TIMESTAMP : timestamp
     deinterleaved: enum('true', 'false')
     caiman_done: enum('true', 'false')
-    dff: longblob  # fov x cel lx time
+    dff: longblob  # fov x cell x time
     errors: varchar(1000)
     """
+
+    def make(self, key):
+        params = (ExpParams & key).fetch(as_dict=True)[0]
+        cparams = (ComputedParams & key).fetch(as_dict=True)[0]
+        file_list = pickle.loads(cparams["file_list"])
+        dest = (pathlib.Path(PATH_TO_POWER8_FROM_CORTEX) / params["exp_id"]).mkdir(
+            parents=True
+        )
+        path_to_folder_from_within_power8 = (
+            pathlib.Path(PATH_INSIDE_POWER8) / params["exp_id"]
+        )
+        self._copy_files_to_power8(file_list, dest)
+        shell_script_fname = 'run_caiman.sh'
+        self._create_and_populate_qsub_script(
+            foldername=dest,
+            folder_in_power8=path_to_folder_from_within_power8,
+            shell_script_fname=shell_script_fname,
+            glob=params["glob"],
+            num_of_channels=params["num_of_channels"],
+            data_channel=params["calcium_channe"],
+            min_SNR=2,
+            K=params["cells_per_patch"],
+            gSig=(params["cell_radius_x"], params["cell_radius_y"]),
+            fr=params["fr"],
+        )
+        script_name_within_power8 = path_to_folder_from_within_power8 / shell_script_fname
+        self._run_caiman(script_name_within_power8)
+
+    def _copy_files_to_power8(self, file_list: List[str], dest: pathlib.Path):
+        """
+        Transfers the given file_list to a different location in
+        a parallel manner.
+        """
+        destinations = ((file, dest) for file in file_list)
+        with multiprocessing.Pool() as pool:
+            pool.starmap(shutil.copy2, destinations)
+
+    def _create_and_populate_qsub_script(
+        self,
+        foldername: pathlib.Path,
+        folder_in_power8: str,
+        shell_script_fname="run_caiman.sh",
+        glob="*.tif",
+        num_of_channels=2,
+        data_channel=2,
+        min_SNR=2,
+        K=2,
+        gSig=(5, 5),
+        fr=30.03,
+    ):
+        shell_script = foldername / shell_script_fname
+        shell_script.touch()
+        script_text = f"""
+        #!/bin/bash
+        #PBS -e /pblab/pblab/pbuser/errors
+        #PBS -o /pblab/pblab/pbuser/outputs
+
+        conda init bash
+        source ~/.bashrc
+        conda activate caiman
+
+        python /pblab/pblab/CaImAn/demos/general/multifile_pipeline.py -f {folder_in_power8} -g {glob} --num-of-channels {num_of_channels} --data-channel {data_channel} --min-SNR {min_SNR} -K {K} --gSig {gSig} --fr {fr}
+        """
+        shell_script.write_text(script_text)
+
+    def _run_caiman(self, script) -> str:
+        power8 = self._login_to_power8()
+        stdin, stdout, stderr = power8.exec_command(f'qsub -q pablo {str(script)}')
+        print(stdout)
+
+    def _login_to_power8(self) -> paramiko.SSHClient:
+        """
+        Log in to the power8 server and return
+        the pexpect object that can run CaImAn.
+        """
+        power8 = paramiko.SSHClient()
+        power8.load_system_host_keys()
+        power8.connect(
+            POWER8_ADDRESS, username=POWER8_USERNAME, password=POWER8_PASSWORD
+        )
+        return power8
+
+    def _verify_run_complete(self):
+        pass
 
 
 @schema
