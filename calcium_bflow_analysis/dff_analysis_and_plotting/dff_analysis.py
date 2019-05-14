@@ -53,18 +53,25 @@ def calc_dff_batch(files):
     return np.concatenate(all_data)
 
 
-def locate_spikes_peakutils(data, fps=30.03, thresh=0.75):
+def locate_spikes_peakutils(data, fps=30.03, thresh=0.75,
+                            min_dist=None, max_allowed_firing_rate=1):
     """
     Find spikes from a dF/F matrix using the peakutils package.
     The fps parameter is used to calculate the minimum allowed distance \
     between consecutive spikes, and to disqualify cells which had no
     evident dF/F peaks, which result in too many false-positives.
+
+    :param float max_allowed_firing_rate: Maximal number of spikes per second
+    that are considered viable.
     """
     assert len(data.shape) == 2 and data.shape[0] > 0
+    if min_dist is None:
+        min_dist = int(fps)
+    else:
+        min_dist = int(min_dist)
     all_spikes = np.zeros_like(data)
-    min_dist = int(fps)
     nan_to_zero = np.nan_to_num(data)
-    max_spike_num = int(data.shape[1] // fps)
+    max_spike_num = int(data.shape[1] // fps) * max_allowed_firing_rate
     for row, cell in enumerate(nan_to_zero):
         peaks = peakutils.indexes(cell, thres=thresh, min_dist=min_dist)
         num_of_peaks = len(peaks)
