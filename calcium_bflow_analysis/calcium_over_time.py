@@ -1,7 +1,7 @@
 """
 A module designed to analyze FOVs of in vivo calcium
 activity. This module's main class, :class:`CalciumOverTime`,
-is used to run 
+is used to run
 """
 
 from enum import Enum
@@ -326,10 +326,11 @@ class CalciumAnalysisOverTime:
         return val
 
 
-if __name__ == "__main__":
-    home = Path("/")
-    # home = Path('/export/home/pblab')
-    folder = Path(r"data/David/vascular_occ_CAMKII_GCaMP/")
+if __name__ == '__main__':
+    # home = Path('/data')
+    home = Path('/mnt/qnap')
+    # home = Path('/export/home/pblab/data')
+    folder = Path(r'David/vascular_occ_CAMKII_GCaMP/')
     results_folder = home / folder
     assert results_folder.exists()
     globstr = "F*.tif"
