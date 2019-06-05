@@ -178,10 +178,11 @@ class CaimanResults(dj.Computed):
         """
         shell_script.write_text(script_text)
 
-    def _run_caiman(self, script) -> str:
+    def _run_caiman(self, script: pathlib.Path) -> str:
         power8 = self._login_to_power8()
         stdin, stdout, stderr = power8.exec_command(f'qsub -q pablo {str(script)}')
         print(stdout)
+        return stdout
 
     def _login_to_power8(self) -> paramiko.SSHClient:
         """
