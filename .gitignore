@@ -22,3 +22,4 @@ doc/_static/
 *.egg-info/
 build/
 *.egg
+calcium_bflow_analysis/datajoint/mysql/data/
