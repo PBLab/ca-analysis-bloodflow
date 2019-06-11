@@ -1,0 +1,11 @@
+version: '2'
+
+services:
+  db:
+    image: datajoint/mysql
+    ports:
+      - "3307:3307"
+    environment:
+      - MYSQL_ROOT_PASSWORD=pw4pblab
+    volumes:
+      - ./data:/var/lib/mysql
