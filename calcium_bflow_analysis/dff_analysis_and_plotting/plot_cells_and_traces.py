@@ -119,7 +119,7 @@ def rank_dff_by_stim(dff: np.ndarray, spikes: np.ndarray, stim: np.ndarray, fps:
 def show_side_by_side(
     tifs: List[pathlib.Path],
     results: List[pathlib.Path],
-    crds: List[np.ndarray]=None,
+    crds: List[np.ndarray] = None,
     cell_radius=5,
     figsize=(36, 32),
 ):
@@ -187,7 +187,7 @@ def extract_cells_from_tif(
     the cell index, the second is time and the other two are the x-y images.
     Returns this 4D array.
     """
-    res_data = np.load(results_file)
+    res_data = np.load(results_file, allow_pickle=True)
     if len(res_data["idx_components"]) == len(res_data["crd"]):  # new file
         coords = res_data["crd"][indices][:num]
     else:
@@ -259,6 +259,10 @@ def display_cell_excerpts_over_time(
         with tifffile.TiffFile(str(tif), movie=True) as f:
             fps = f.scanimage_metadata["FrameData"]["SI.hRoiManager.scanFrameRate"]
 
+    num_to_display = (
+        len(cell_data) if len(cell_data) < num_to_display else num_to_display
+    )
+
     # Start plotting the cell excerpts, the first column is left currently blank
     idx_sample_start = np.linspace(
         start=0,
@@ -277,7 +281,7 @@ def display_cell_excerpts_over_time(
         ax_mean = plt.subplot(gs[row_idx, 0])
         mean_cell = np.nanmean(cell, axis=0)
         vmin, vmax = np.nanmin(mean_cell), np.nanmax(mean_cell)
-        ax_mean.imshow(mean_cell, cmap="gray", vmin=vmin, vmax=vmax)
+        ax_mean.imshow(mean_cell.T, cmap="gray", vmin=vmin, vmax=vmax)
         ax_mean.set_xticks([])
 
         for col_idx, (frame_idx_start, frame_idx_end) in enumerate(
@@ -338,7 +342,7 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=N
         print("Results file not found. Exiting.")
         return
 
-    full_dict = np.load(results_file)
+    full_dict = np.load(results_file, allow_pickle=True)
     if len(full_dict["idx_components"]) == len(full_dict["crd"]):
         rel_crds = full_dict["crd"]
     else:
@@ -357,25 +361,33 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=N
         rect = matplotlib.patches.Rectangle(
             origin,
             *mask[0].shape,
-            edgecolor='w', #  colors[idx % 10],
+            edgecolor="w",  #  colors[idx % 10],
             facecolor="none",
             linewidth=0.5,
         )
         ax_img.add_patch(rect)
         ax_img.text(*origin, str(idx), color="w")
-    ax_img.axis('off')
+    ax_img.axis("off")
 
 
 if __name__ == "__main__":
-    # results_file = pathlib.Path("/data/Amit_QNAP/ForHagai/FOV3/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act3a-940nm_256px_20180313_00001_CHANNEL_2_results.npz")
-    # tif = pathlib.Path("/data/Amit_QNAP/ForHagai/FOV3/355_GCaMP6-Ch2_WFA-590-Ch1_X25_mag3_act3a-940nm_256px_20180313_00001_CHANNEL_2.tif")
-    results_file = pathlib.Path("/data/Amit_QNAP/ForHagai/cropped_355_GCaMP6_WFA-590_X25_mag3_act1_20180313_00001.tif #2 kept stack_results.npz")
-    tif = pathlib.Path("/data/Amit_QNAP/ForHagai/cropped_355_GCaMP6_WFA-590_X25_mag3_act1_20180313_00001.tif #2 kept stack.tif")
-    cell_radius = 12
-    num_of_channels = 1
-    fps = 30
-    # crds = np.array((0, 3, 4, 5))
-    # draw_rois_over_cells(tif, cell_radius=cell_radius)
-    show_side_by_side([tif], [results_file], cell_radius=cell_radius)
+    foldername = pathlib.Path("/data/Amit_QNAP/WFA/Activity/WT_RGECO/B/")
+    results_file = (
+        foldername / "B_WFA-FITC_RGECO_1040nm_x25_mag4_256_20190722_00001_results.npz"
+    )
+    tif = (
+        foldername / "B_WFA-FITC_RGECO_1040nm_x25_mag4_256_20190722_00001.tif"
+    )
+    cell_radius = 19
+    number_of_channels = 2
+    fps = 58.24
+    display_cell_excerpts_over_time(
+        results_file=results_file,
+        tif=tif,
+        cell_radius=cell_radius,
+        number_of_channels=number_of_channels,
+        fps=fps,
+    )
+    draw_rois_over_cells(tif, cell_radius=10)
     plt.show()
 

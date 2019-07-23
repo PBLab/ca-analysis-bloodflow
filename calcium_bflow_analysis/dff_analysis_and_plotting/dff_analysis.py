@@ -118,14 +118,16 @@ def scatter_spikes(
         fig = ax.figure
     downsampled_data = raw_data[::downsample_display]
     num_displayed_cells = downsampled_data.shape[0]
-    y_heights = np.arange(num_displayed_cells)[:, np.newaxis]
+    y_step = 2
+    y_heights = np.arange(0, num_displayed_cells*y_step, y_step)[:, np.newaxis]
     ax.plot(time_vec, (downsampled_data + y_heights).T, linewidth=0.5)
     if spike_data is not None:
         peakvals = raw_data * spike_data
         peakvals[peakvals == 0] = np.nan
+        peakvals = peakvals[::downsample_display]
         ax.plot(
             time_vec,
-            (peakvals[::downsample_display] + y_heights).T,
+            (peakvals + y_heights).T,
             "r.",
             linewidth=0.1,
         )
@@ -133,7 +135,11 @@ def scatter_spikes(
     ax.spines["right"].set_visible(False)
     ax.set_xlabel("Time (seconds)")
     ax.set_ylabel("Cell ID")
-    ax.yaxis.set_major_formatter(FormatStrFormatter("%d"))
+    yticklabels = ax.get_yticklabels()
+    new_ticks = [str(idx) for idx, _ in enumerate(yticklabels)]
+    ax.set_yticklabels(new_ticks)
+    # print([lab for lab in yticklabels])
+    # ax.yaxis.set_major_formatter(FormatStrFormatter("%d"))
     return fig, num_displayed_cells
 
 
@@ -203,30 +209,21 @@ def deinterleave(fname: str, data_channel: int, num_of_channels: int = 2):
 
 
 if __name__ == "__main__":
-    # results_file = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003_CHANNEL_2_results.npz'
-    # tif = '/data/Amit_QNAP/WFA/Activity/WT_RGECO/522/940/522_WFA-FITC_RGECO_X25_mag3_stim_20181017_00003.tif'
-    # folder = pathlib.Path(
-    #     "/export/home/pblab/data/David/NEW_crystal_skull_TAC_161018/DAY_21_ALL/147_HYPO_DAY_21"
-    # )
-    # results = pathlib.Path("147_HYPO_DAY_21_FOV_1_00001_CHANNEL_1_results.npz")
-    # tif = pathlib.Path("147_HYPO_DAY_21_FOV_1_00001.tif")
-    # analog = pathlib.Path("147_HYPO_DAY_21_FOV_1_00001_analog.txt")
-    # df = pd.read_table(
-    #     folder / analog, header=None, names=["stimulus", "run"], index_col=False
-    # )
-    # timestamps = np.arange(9000) / 30.03
-    # with np.load(folder / results) as data:
-    #     dff = data["F_dff"]
-    # spikes = locate_spikes_peakutils(dff)
-    # analog = AnalogTraceAnalyzer(str(tif), df, timestamps, 30.03, "0")
-    # analog.run()
+    foldername = pathlib.Path("/data/Amit_QNAP/WFA/Activity/WT_RGECO/B/")
+    results_file = (
+        foldername / "B_WFA-FITC_RGECO_1040nm_x25_mag4_256_20190722_00001_results.npz"
+    )
+    tif = (
+        foldername / "B_WFA-FITC_RGECO_1040nm_x25_mag4_256_20190722_00001.tif"
+    )
+    cell_radius = 9
+    number_of_channels = 2
+    fps = 58.24
+    raw_data = np.load(results_file, allow_pickle=True)['F_dff']
+    spikes = locate_spikes_peakutils(raw_data, fps)
+    time_vec = np.arange(raw_data.shape[1]) / fps
+    scatter_spikes(raw_data, spikes, downsample_display=1, time_vec=time_vec)
+    plt.show()
 
-    # rank_dff_by_stim(dff, spikes, analog.stim_vec, 30.03)
-    tif = pathlib.Path(
-        "/data/David/new_mickey_thin_skull/fov2_mag_2_256px_30hz_uni_ch1_blood_ch2_neurons_00001_CHANNEL_2.tif"
-    )
-    results = pathlib.Path(
-        "/data/David/new_mickey_thin_skull/fov2_mag_2_256px_30hz_uni_ch1_blood_ch2_neurons_00001_CHANNEL_2_results.npz"
-    )
-    fig = show_side_by_side([tif], [results], cell_radius=5, figsize=(20, 16))
-    plt.show(block=False)
+
+
