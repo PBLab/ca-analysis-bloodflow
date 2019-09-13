@@ -35,7 +35,7 @@ def analog_trace_runner(
     start_time,
     timestamps,
     occluder,
-    occ_metadata,
+    occ_metadata=None,
 ):
     if analog_type is AnalogAcquisitionType.OLD:
         analysis = AnalogAnalysisOld(
@@ -148,7 +148,7 @@ class AnalyzedAnalogTrace:
         if len(juxta_puff_idx) > 0:
             juxta_puff_times = self._iter_over_puff_times(juxta_puff_idx, vec.shape)
 
-        return true_puff_times, juxta_puff_times
+        return true_puff_times.astype(np.float64), juxta_puff_times.astype(np.float64)
 
     def _iter_over_puff_times(self, puff_idx, vec_len):
         max_puff_length = int(self.framerate * self.puff_length)
@@ -532,25 +532,17 @@ class AnalogAnalysisOld(AnalyzedAnalogTrace):
 
 
 if __name__ == "__main__":
-    # home = pathlib.Path("/mnt/qnap")
-    home = pathlib.Path("/data")
-    # home = pathlib.Path("/export/home/pblab/data")
-    npz_file = str(
-        home
-        / r"David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001_CHANNEL_2_results.npz"
-    )
-    # analog_file = str(home / r"David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001_analog.txt")
-    analog_file = str(home / "Hagai/puff_and_run_1.txt")
-    data = np.load(npz_file)
-    filename = str(
-        home / r"David/test_New_head_bar/LH/fov_1_mag_1p5_256Px_30Hz_00001.tif"
-    )
-    analog = pd.read_table(analog_file, sep=",", header=None, names=["stimulus", "run"])
-    an_trace = AnalogTraceAnalyzer(
-        tif_filename=filename,
+    analog_file = pathlib.Path("/data/Amit_QNAP/WFA/Activity/WT_RGECO/B/20190804/WFA-FITC_RGECO_800nm_1040nm_256px_x25_mag3_stk3_20190804_00001_analog_min_max.txt")
+    tif_file = pathlib.Path("/data/Amit_QNAP/WFA/Activity/WT_RGECO/B/20190804/WFA-FITC_RGECO_800nm_1040nm_256px_x25_mag3_stk3_20190804_00001.tif")
+    analog = pd.read_csv(analog_file, header=None, names=["stimulus", "run"], index_col=False)
+    fps = 58.24
+    an_trace = analog_trace_runner(
+        tif_filename=tif_file,
         analog_trace=analog,
-        timestamps=np.arange(9000) / 30.03,
-        framerate=30.03,
+        analog_type=AnalogAcquisitionType.TREADMILL,
+        timestamps=np.arange(18000) / fps,
+        framerate=fps,
         start_time="0",
-    )
+        occluder=False,
+        )
     an_trace.run()

@@ -66,9 +66,7 @@ class FileFinder:
 
     results_folder = attr.ib(validator=instance_of(Path))
     folder_globs = attr.ib(default={Path("."): "*.tif"}, validator=instance_of(dict))
-    analog = attr.ib(
-        default=AnalogAcquisitionType.NONE,
-    )
+    analog = attr.ib(default=AnalogAcquisitionType.NONE)
     with_colabeled = attr.ib(default=False, validator=instance_of(bool))
     data_files = attr.ib(init=False)
 
@@ -165,7 +163,7 @@ class FileFinder:
         return data_files
 
 
-@attr.s(slots=True)
+@attr.s(slots=True, hash=True)
 class CalciumAnalysisOverTime:
     """ Analysis class that parses the output of CaImAn "results.npz" files.
     Usage: run the "run_batch_of_timepoints" method, which will go over all FOVs
@@ -186,13 +184,14 @@ class CalciumAnalysisOverTime:
     analog = attr.ib(
         default=AnalogAcquisitionType.NONE, validator=instance_of(AnalogAcquisitionType)
     )
+    regex = attr.ib(default=attr.Factory(dict), validator=instance_of(dict))
     fluo_files = attr.ib(init=False)
     result_files = attr.ib(init=False)
     analog_files = attr.ib(init=False)
     list_of_fovs = attr.ib(init=False)
     concat = attr.ib(init=False)
 
-    def run_batch_of_timepoints(self, **regex):
+    def run_batch_of_timepoints(self):
         """
         Main method to analyze all FOVs in all timepoints in all experiments.
         Generally used for TAC experiments, which have multiple FOVs per mouse, and
@@ -210,35 +209,34 @@ class CalciumAnalysisOverTime:
         that will parse the metadata from the file name. The default regexes are
         described above. Valid keys are "id_reg", "fov_reg", "cond_reg" and "day_reg".
         """
-        with mp.Pool() as pool:
-            self.list_of_fovs = pool.starmap(
-                self._mp_process_timepoints, self.files_table.iterrows(), **regex
-            )
+        # with mp.Pool() as pool:
+        #     self.list_of_fovs = pool.map(
+        #         self._mp_process_timepoints, self.files_table.itertuples(index=False)
+        #     )
+        for _, row in self.files_table.iterrows():
+            self._mp_process_timepoints(row)
         self.generate_da_per_day()
 
-    def _mp_process_timepoints(self, files_row: pd.Series, **regex):
+    def _mp_process_timepoints(self, files_row: Tuple):
         """
         A function for a single process that takes three conjugated files - i.e.
         three files that belong to the same recording, and processes them.
         """
-        print(f"Parsing {files_row['tif']}")
-        fov = self._analyze_single_fov(files_row, analog=self.analog, **regex)
+        print(f"Parsing {files_row.tif}")
+        fov = self._analyze_single_fov(files_row, analog=self.analog, **self.regex)
         return str(fov.metadata.fname)[:-4] + ".nc"
 
     def _analyze_single_fov(
-        self,
-        files_row,
-        analog=AnalogAcquisitionType.NONE,
-        **regex,
+        self, files_row, analog=AnalogAcquisitionType.NONE, **regex
     ):
         """ Helper function to go file by file, each with its own fluorescence and
         possibly analog data, and run the single FOV parsing on it """
 
-        meta = FluoMetadata(files_row["tif"], **regex)
+        meta = FluoMetadata(files_row.tif, **regex)
         meta.get_metadata()
         fov = SingleFovParser(
-            analog_fname=files_row["analog"],
-            results_fname=files_row["caiman"],
+            analog_fname=files_row.analog,
+            results_fname=files_row.caiman,
             metadata=meta,
             analog=analog,
             summarize_in_plot=True,
@@ -326,15 +324,15 @@ class CalciumAnalysisOverTime:
         return val
 
 
-if __name__ == '__main__':
-    # home = Path('/data')
-    home = Path('/mnt/qnap')
+if __name__ == "__main__":
+    home = Path("/data")
+    # home = Path('/mnt/qnap')
     # home = Path('/export/home/pblab/data')
-    folder = Path(r'David/vascular_occ_CAMKII_GCaMP/')
+    folder = Path(r"David/")
     results_folder = home / folder
     assert results_folder.exists()
-    globstr = "F*.tif"
-    folder_and_files = {home / folder: globstr}
+    globstr = "*256Px*.tif"
+    folder_and_files = {home / "David/TAC_baseline_mouse_1": globstr}
     analog_type = AnalogAcquisitionType.TREADMILL
     filefinder = FileFinder(
         results_folder=results_folder,
@@ -343,13 +341,18 @@ if __name__ == '__main__':
         with_colabeled=False,
     )
     files_table = filefinder.find_files()
+    regex = {
+        "cond_reg": r"fov\d_(\w+?)_",
+        "id_reg": r"0000(\d)",
+        "fov_reg": r"fov(\d)_",
+    }
     res = CalciumAnalysisOverTime(
         files_table=files_table,
         serialize=True,
         folder_globs=folder_and_files,
         analog=analog_type,
+        regex=regex,
     )
-    regex = {"cond_reg": r"FOV_\d_(\w+?)_"}
-    res.run_batch_of_timepoints(**regex)
+    res.run_batch_of_timepoints()
     # day_reg = r'(0)'
     # res.generate_da_per_day('F*.nc', day_reg)

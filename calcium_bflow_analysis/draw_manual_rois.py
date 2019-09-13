@@ -38,6 +38,7 @@ class ManualRoiDrawing:
         self._draw_rois()
         self._get_trace_from_masks()
         self.dff = DffCalculator(self.raw_traces, fps=self.fps).calc()
+        self.dff = self.moving_average(self.dff, int(self.fps / 2))
         self._display_roi_with_trace()
         return self.dff
 
@@ -69,7 +70,7 @@ class ManualRoiDrawing:
         :return:
         """
         self.rois = []
-        self.agg_data = self.data.sum(axis=0)
+        self.agg_data = self.data.mean(axis=0)
         for idx in range(self.num_rois):
             fig_rois, ax_rois = plt.subplots()
             ax_rois.imshow(self.agg_data, cmap='gray')
@@ -85,6 +86,13 @@ class ManualRoiDrawing:
         for idx, roi in enumerate(self.rois):
             cur_mask = roi.getMask(self.agg_data)
             self.raw_traces[idx, :] = np.mean(self.data[:, cur_mask], axis=-1)
+
+    @staticmethod
+    def moving_average(arr, n) :
+        """ From https://stackoverflow.com/questions/14313510/how-to-calculate-moving-average-using-numpy """
+        ret = np.cumsum(arr, axis=1, dtype=float)
+        ret[:, n:] = ret[:, n:] - ret[:, :-n]
+        return ret[:, n - 1:] / n
 
     def _display_roi_with_trace(self):
         """ Show the image of the average stack overlaid with the ROIs, and the dF/F values """
@@ -121,11 +129,10 @@ class ManualRoiDrawing:
 if __name__ == '__main__':
     manual_rois = []
     dffs = []
-    fps = [30.03, 15.24]
-    files = [r'/data/Hagai/Multiscaler/27-9-17/For article/Calcium/si_500_frames.tif',
-             r'/data/Hagai/Multiscaler/27-9-17/For article/Calcium/pysight_500_frames.tif']
+    fps = [58.24]
+    files = [r'/data/Amit_QNAP/WFA/Activity/WT_RGECO/B/20190804/WFA-FITC_RGECO_800nm_1040nm_256px_x25_mag4_stk6_20190804_00001_CHANNEL_2.tif']
     for file, fr in zip(files, fps):
-        manroi = ManualRoiDrawing(fname=file, num_rois=10, fps=fr, scale=0.2)
+        manroi = ManualRoiDrawing(fname=file, num_rois=3, fps=fr, scale=0.2)
         dffs.append(manroi.run())
         manual_rois.append(manroi)
 

@@ -72,6 +72,7 @@ class SingleFovParser:
                 self.metadata.fps,
                 self.metadata.start_time,
                 self.metadata.timestamps,
+                occluder=False,
             )
             self.fluo_analyzed = self.analog_analyzed * self.fluo_trace
         else:

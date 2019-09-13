@@ -188,11 +188,7 @@ def extract_cells_from_tif(
     Returns this 4D array.
     """
     res_data = np.load(results_file, allow_pickle=True)
-    if len(res_data["idx_components"]) == len(res_data["crd"]):  # new file
-        coords = res_data["crd"][indices][:num]
-    else:
-        relevant_indices = res_data["idx_components"][indices][:num]
-        coords = res_data["crd"][relevant_indices]
+    coords = res_data["crd"][indices][:num]
 
     with tifffile.TiffFile(tif, movie=True) as f:
         data = f.asarray(slice(data_channel.value, None, number_of_channels))
@@ -371,14 +367,14 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=N
 
 
 if __name__ == "__main__":
-    foldername = pathlib.Path("/data/Amit_QNAP/WFA/Activity/WT_RGECO/B/")
+    foldername = pathlib.Path("/data/Amit_QNAP/WFA/Activity/WT_RGECO/20190908/")
     results_file = (
-        foldername / "B_WFA-FITC_RGECO_1040nm_x25_mag4_256_20190722_00001_results.npz"
+        foldername / "WFA-FITC_RGECO_X25_mag3__1040nm_256px_20190908_00001_results.npz"
     )
     tif = (
-        foldername / "B_WFA-FITC_RGECO_1040nm_x25_mag4_256_20190722_00001.tif"
+        foldername / "WFA-FITC_RGECO_X25_mag3__1040nm_256px_20190908_00001.tif"
     )
-    cell_radius = 19
+    cell_radius = 8
     number_of_channels = 2
     fps = 58.24
     display_cell_excerpts_over_time(
@@ -388,6 +384,6 @@ if __name__ == "__main__":
         number_of_channels=number_of_channels,
         fps=fps,
     )
-    draw_rois_over_cells(tif, cell_radius=10)
+    draw_rois_over_cells(tif, cell_radius=cell_radius)
     plt.show()
 
