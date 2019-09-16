@@ -294,16 +294,13 @@ class SingleFovViz:
 
 
 def filter_da(
-    data: xr.DataArray, epoch: str, condition: Union[str, None] = None
+    data: xr.DataArray, epoch: str, condition: Union[str, None] = None,
 ) -> np.ndarray:
     """ Filter a DataArray by the given condition and epoch.
          Returns a numpy array in the shape of cells x time """
-    if condition:
-        selected = np.squeeze(
-            data.sel(condition=condition, epoch=epoch, drop=True).values
-        )
-    else:
-        selected = np.squeeze(data.sel(epoch=epoch, drop=True).values)
+    selected = np.squeeze(
+        data.sel(condition=condition, epoch=epoch, drop=True).values
+    )
     selected = np.atleast_2d(selected)
     relevant_idx = np.isfinite(selected).any(axis=1)
     num_of_cells = relevant_idx.sum()

@@ -191,7 +191,7 @@ class CalciumAnalysisOverTime:
     list_of_fovs = attr.ib(init=False)
     concat = attr.ib(init=False)
 
-    def run_batch_of_timepoints(self):
+    def run_batch_of_timepoints(self, results_folder):
         """
         Main method to analyze all FOVs in all timepoints in all experiments.
         Generally used for TAC experiments, which have multiple FOVs per mouse, and
@@ -215,7 +215,7 @@ class CalciumAnalysisOverTime:
         #     )
         for _, row in self.files_table.iterrows():
             self._mp_process_timepoints(row)
-        self.generate_da_per_day()
+        self.generate_da_per_day(results_folder)
 
     def _mp_process_timepoints(self, files_row: Tuple):
         """
@@ -247,7 +247,7 @@ class CalciumAnalysisOverTime:
             fov.add_metadata_and_serialize()
         return fov
 
-    def generate_da_per_day(self, globstr="*FOV*.nc", day_regex=r"_DAY_*(\d+)_"):
+    def generate_da_per_day(self, results_folder: Path, globstr="*FOV*.nc", day_regex=r"_DAY_*(\d+)_", recursive=True):
         """
         Parse .nc files that were generated from the previous analysis
         and chain all "DAY_X" DataArrays together into a single list.
@@ -264,7 +264,10 @@ class CalciumAnalysisOverTime:
         try:  # coming from run_batch_of_timepoints()
             all_files = self.list_of_fovs
         except AttributeError:
-            all_files = [folder.rglob(globstr) for folder in self.folder_globs]
+            if recursive:
+                all_files = [folder.rglob(globstr) for folder in self.folder_globs]
+            else:
+                all_files = [folder.glob(globstr) for folder in self.folder_globs]
             all_files = itertools.chain(*all_files)
 
         for file in all_files:
@@ -275,9 +278,9 @@ class CalciumAnalysisOverTime:
                 day = 999
             fovs_by_day[day].append(file)
 
-        self._concat_fovs(fovs_by_day)
+        self._concat_fovs(fovs_by_day, results_folder)
 
-    def _concat_fovs(self, fovs_by_day: dict):
+    def _concat_fovs(self, fovs_by_day: dict, results_folder: Path):
         """
         Take the list of FOVs and turn them into a single DataArray. Lastly it will
         write this DataArray to disk.
@@ -288,7 +291,7 @@ class CalciumAnalysisOverTime:
         fname_to_save = "data_of_day_"
         for day, file_list in fovs_by_day.items():
             try:
-                file = next(self.results_folder.glob(fname_to_save + str(day) + ".nc"))
+                file = next(results_folder.glob(fname_to_save + str(day) + ".nc"))
                 print(f"Found {str(file)}, not concatenating")
             except StopIteration:  # .nc file doesn't exist
                 print(f"Concatenating day {day}")
@@ -307,7 +310,7 @@ class CalciumAnalysisOverTime:
                 concat.name = str(day)
                 self.concat = concat
                 concat.to_netcdf(
-                    str(self.results_folder / f"{fname_to_save + str(day)}.nc"),
+                    str(results_folder / f"{fname_to_save + str(day)}.nc"),
                     mode="w",
                 )
 
@@ -328,7 +331,7 @@ if __name__ == "__main__":
     home = Path("/data")
     # home = Path('/mnt/qnap')
     # home = Path('/export/home/pblab/data')
-    folder = Path(r"David/")
+    folder = Path(r"David/TAC_baseline_mouse_1")
     results_folder = home / folder
     assert results_folder.exists()
     globstr = "*256Px*.tif"
@@ -353,6 +356,6 @@ if __name__ == "__main__":
         analog=analog_type,
         regex=regex,
     )
-    res.run_batch_of_timepoints()
-    # day_reg = r'(0)'
-    # res.generate_da_per_day('F*.nc', day_reg)
+    # res.run_batch_of_timepoints(results_folder)
+    day_reg = r'(0)'
+    res.generate_da_per_day(results_folder, 'f*.nc', day_reg, recursive=False)

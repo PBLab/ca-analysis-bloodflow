@@ -339,10 +339,7 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=N
         return
 
     full_dict = np.load(results_file, allow_pickle=True)
-    if len(full_dict["idx_components"]) == len(full_dict["crd"]):
-        rel_crds = full_dict["crd"]
-    else:
-        rel_crds = full_dict["crd"][full_dict["idx_components"]]
+    rel_crds = full_dict["crd"]
 
     if crds is not None:
         rel_crds = rel_crds[crds]
@@ -369,10 +366,10 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=N
 if __name__ == "__main__":
     foldername = pathlib.Path("/data/Amit_QNAP/WFA/Activity/WT_RGECO/20190908/")
     results_file = (
-        foldername / "WFA-FITC_RGECO_X25_mag3__1040nm_256px_20190908_00001_results.npz"
+        foldername / "WFA-FITC_RGECO_X25_mag3__1040nm_256px_20190908_00004_results.npz"
     )
     tif = (
-        foldername / "WFA-FITC_RGECO_X25_mag3__1040nm_256px_20190908_00001.tif"
+        foldername / "WFA-FITC_RGECO_X25_mag3__1040nm_256px_20190908_00004.tif"
     )
     cell_radius = 8
     number_of_channels = 2

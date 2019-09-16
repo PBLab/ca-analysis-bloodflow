@@ -7,7 +7,7 @@ def drop_all():
     """
     Removes all manual tables
     """
-    ExppParams().drop_quick()
+    ExpParams().drop_quick()
     # ExpParams().drop_quick()
     # ComputedParams().drop_quick()
     # CaimanResults().drop_quick()
