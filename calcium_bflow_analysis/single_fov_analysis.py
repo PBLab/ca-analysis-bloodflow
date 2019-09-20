@@ -28,6 +28,7 @@ from calcium_bflow_analysis.analog_trace import (
 )
 from calcium_bflow_analysis.fluo_metadata import FluoMetadata
 import calcium_bflow_analysis.dff_analysis_and_plotting.dff_analysis as dff_tools
+from calcium_bflow_analysis.dff_dataset import dff_dataset_init
 
 
 @attr.s(slots=True)
@@ -92,6 +93,7 @@ class SingleFovParser:
                 "mouse_id": self.metadata.mouse_id,
                 "condition": self.metadata.condition,
                 "day": self.metadata.day,
+                "fname": self.matadata.fname.stem,
             }
             attrs = {"fps": self.metadata.fps, "stim_window": 1.5}
             self.fluo_analyzed = dff_dataset_init(data_vars, coords, attrs)
@@ -112,7 +114,7 @@ class SingleFovParser:
             )
         except StopIteration:  # the file doesn't exist, we'll make a new one
             try:
-                raw_data = self.fluo_analyzed.data
+                raw_data = self.fluo_analyzed.dff
             except AttributeError:
                 print("No fluorescent data in this FOV.")
                 return
@@ -288,52 +290,20 @@ class SingleFovViz:
         ax_spikes.set_ylabel("Spikes per second")
 
 
-def dff_dataset_init(
-    data_vars: MutableMapping[str, Tuple[List[str], np.ndarray]],
-    coords: MutableMapping[str, np.ndarray],
-    attrs: MutableMapping[str, Union[int, float]],
-) -> xr.Dataset:
-    """
-    The only place where the datasets holding the sliced dF/F data
-    are allowed to be created. It sanitizes the inputs and always
-    returns a valid xr.Dataset instance. If something in the inputs
-    is invalid, it raises a ValueError. The allowed or mandatory
-    inputs are listed at the start of this function.
-    """
-    allowed_datavars_keys = set(("dff", "epoch_times"))
-    if set(data_vars.keys()) != allowed_datavars_keys:
-        raise ValueError(
-            f"data_vars keys were invalid. Expected {allowed_datavars_keys}, received {data_vars.keys()}."
-        )
-
-    allowed_coords_keys = set(
-        ("neuron", "time", "epoch", "fov", "mouse_id", "condition", "day")
-    )
-    if set(coords.keys()) != allowed_coords_keys:
-        raise ValueError(
-            f"coords keys were invalid. Expected {allowed_coords_keys}, received {coords.keys()}."
-        )
-
-    mandatory_attrs_keys = set(("fps", "stim_window"))
-    if not mandatory_attrs_keys.issubset(set(attrs.keys())):
-        raise ValueError(
-            f"The attrs variable must contain the following keys: {mandatory_attrs_keys}, however it contained the following: {attrs.keys()}"
-        )
-
-    return xr.Dataset(data_vars=data_vars, coords=coords, attrs=attrs)
-
-
 def filter_da(
     data: xr.Dataset, epoch: str, condition: Union[str, None] = None
 ) -> np.ndarray:
     """ Filter a Dataset by the given condition and epoch.
          Returns a numpy array in the shape of cells x time """
-    selected = np.squeeze(data.sel(condition=condition, epoch=epoch, drop=True).values)
-    selected = np.atleast_2d(selected)
-    relevant_idx = np.isfinite(selected).any(axis=1)
-    num_of_cells = relevant_idx.sum()
-    if num_of_cells > 0:
-        selected = selected[relevant_idx].reshape((num_of_cells, -1))
+    sel_kwargs = {"epoch": epoch, "condition": condition}
+    if not condition:
+        sel_kwargs.pop("condition")
+
+    selected = data.sel(**sel_kwargs)["dff"].data
+    shape = selected.shape
+    finite_idx = np.isfinite(selected)
+    selected = selected[finite_idx].reshape(shape)
+    if (selected.shape[0] > 0) and (selected.shape[1] > 0):
         return selected
     return np.array([])
 

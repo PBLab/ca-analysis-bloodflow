@@ -23,12 +23,12 @@ import tifffile
 from scipy.ndimage.morphology import binary_fill_holes
 from attr.validators import instance_of
 
-from fluo_metadata import FluoMetadata
-from analog_trace import AnalogAcquisitionType
-from trace_converter import RawTraceConverter, ConversionMethod
-import caiman_funcs_for_comparison
-from single_fov_analysis import SingleFovParser
-from calcium_trace_analysis import Condition
+from calcium_bflow_analysis.fluo_metadata import FluoMetadata
+from calcium_bflow_analysis.analog_trace import AnalogAcquisitionType
+from calcium_bflow_analysis.trace_converter import RawTraceConverter, ConversionMethod
+import calcium_bflow_analysis.caiman_funcs_for_comparison
+from calcium_bflow_analysis.single_fov_analysis import SingleFovParser
+from calcium_bflow_analysis.calcium_trace_analysis import Condition
 
 
 class Epoch(Enum):
@@ -213,7 +213,7 @@ class CalciumAnalysisOverTime:
         #     self.list_of_fovs = pool.map(
         #         self._mp_process_timepoints, self.files_table.itertuples(index=False)
         #     )
-        for _, row in self.files_table.iterrows():
+        for row in self.files_table.itertuples():
             self._mp_process_timepoints(row)
         self.generate_ds_per_day(results_folder)
 
@@ -301,13 +301,12 @@ class CalciumAnalysisOverTime:
                         data_per_day.append(xr.open_dataset(file).load())
                     except FileNotFoundError:
                         pass
-                concat = xr.concat(data_per_day, dim="neuron")
-                concat.attrs["fps"] = self._get_metadata(data_per_day, "fps", 30)
-                concat.attrs["stim_window"] = self._get_metadata(
-                    data_per_day, "stim_window", 1.5
-                )
-                concat.attrs["day"] = day
-                concat.name = str(day)
+                concat = xr.concat(data_per_day, dim="fname")
+                # Fix datatype conversion of epoch_times to floats:
+                asbool = concat["epoch_times"].data.astype(np.bool)
+                nans = np.where(np.isnan(concat["epoch_times"].data))
+                asbool[nans] = False
+                concat["epoch_times"] = (["fname", "epoch", "time"], asbool)
                 self.concat = concat
                 concat.to_netcdf(
                     str(results_folder / f"{fname_to_save + str(day)}.nc"),
@@ -356,6 +355,6 @@ if __name__ == "__main__":
         analog=analog_type,
         regex=regex,
     )
-    res.run_batch_of_timepoints(results_folder)
-    # day_reg = r'(0)'
-    # res.generate_ds_per_day(results_folder, 'f*.nc', day_reg, recursive=False)
+    # res.run_batch_of_timepoints(results_folder)
+    day_reg = r'(0)'
+    res.generate_ds_per_day(results_folder, 'f*.nc', day_reg, recursive=False)

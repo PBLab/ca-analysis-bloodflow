@@ -14,7 +14,7 @@ import attr
 from attr.validators import instance_of
 import xarray as xr
 
-from calcium_bflow_analysis.single_fov_analysis import dff_dataset_init
+from calcium_bflow_analysis.dff_dataset import dff_dataset_init
 from calcium_bflow_analysis.fluo_metadata import FluoMetadata
 
 # Constant values for the analog acquisiton
@@ -334,6 +334,7 @@ class AnalyzedAnalogTrace:
             "mouse_id": self.metadata.mouse_id,
             "condition": self.metadata.condition,
             "day": self.metadata.day,
+            "fname": self.metadata.fname.stem,
         }
         attrs = {
             "fps": self.metadata.fps,
