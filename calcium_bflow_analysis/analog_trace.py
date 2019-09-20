@@ -289,17 +289,17 @@ class AnalyzedAnalogTrace:
         coords_of_neurons = np.arange(other.shape[0])
 
         # To find all possible combinations of running and stimulus we run a Cartesian product
-        dims = ["epoch", "neuron", "time"]
+        dims = ["neuron", "time"]
         movement = ["run", "stand", None]
         puff = ["stim", "juxta", "spont", None]
         ones = np.ones_like(self.timestamps, dtype=np.uint8)
         move_data = [self.run_vec, self.stand_vec, ones]
         puff_data = [self.stim_vec, self.juxta_vec, self.spont_vec, ones]
-        coords = [movement, puff]
+        epochs = [movement, puff]
         analog_data = [move_data, puff_data]
         if self.occluder:
             occluder = ["before_occ", "during_occ", "after_occ", None]
-            coords.append(occluder)
+            epochs.append(occluder)
             occ_data = [
                 self.before_occ_vec,
                 self.occluder_vec,
@@ -307,35 +307,40 @@ class AnalyzedAnalogTrace:
                 ones,
             ]
             analog_data.append(occ_data)
-        all_coords = []
-        all_data = []
-        for coord, datum in zip(product(*coords), product(*analog_data)):
+        epochs = list(product(*epochs))
+        true_epochs = []
+        times_of_epoch = np.zeros((len(epochs), other.shape[1]), dtype=np.bool)
+        for idx, (epoch, datum) in enumerate(zip(epochs, product(*analog_data))):
             try:
-                all_coords.append("_".join((filter(None.__ne__, coord))))
+                key = "_".join((filter(None.__ne__, epoch)))
             except IndexError:
                 pass
+            true_epochs.append(key)
             # Filter "None"s and multiply to find the joint area
             prod = np.array([x for x in datum if type(x) is pd.Series]).prod(axis=0)
-            all_data.append(prod)
-
-        all_coords[-1] = "all"  # last item is ''
-
-        da = xr.DataArray(
-            np.zeros((len(all_coords), other.shape[0], other.shape[1])),
-            coords=[
-                ("epoch", all_coords),
-                ("neuron", coords_of_neurons),
-                ("time", np.arange(other.shape[1]) / self.framerate),
-            ],
-            dims=dims,
-        )  # self.timestamps
-
-        for coor, vec in zip(all_coords, all_data):
-            da.loc[coor] = other * np.atleast_2d(vec)
-
-        da.attrs["fps"] = self.framerate
-        da.attrs["stim_window"] = self.puff_length + self.buffer_after_stim
-        return da
+            if key == '':
+                relevant_times_of_epoch = np.ones((other.shape[1]), dtype=np.bool)
+            else:
+                relevant_times_of_epoch = np.isfinite(prod)
+            times_of_epoch[idx, :] = relevant_times_of_epoch
+        # Last item is '', and it stands for "all" - so we
+        # just remove it and replace it with "all"
+        true_epochs.pop(-1)
+        true_epochs.append("all")
+        ds = xr.Dataset(
+            data_vars={"dff": (["neuron", "time"], other),
+            "epoch_times": (["epoch", "time"], times_of_epoch)},
+            coords={
+                "neuron": coords_of_neurons,
+                "time": np.arange(other.shape[1]) / self.framerate,
+                "epoch": true_epochs,
+            },
+            attrs={
+                "fps": self.framerate,
+                "stim_window": self.puff_length + self.buffer_after_stim,
+            },
+        )
+        return ds
 
 
 @attr.s
@@ -532,9 +537,18 @@ class AnalogAnalysisOld(AnalyzedAnalogTrace):
 
 
 if __name__ == "__main__":
-    analog_file = pathlib.Path("/data/Amit_QNAP/WFA/Activity/WT_RGECO/B/20190804/WFA-FITC_RGECO_800nm_1040nm_256px_x25_mag3_stk3_20190804_00001_analog_min_max.txt")
-    tif_file = pathlib.Path("/data/Amit_QNAP/WFA/Activity/WT_RGECO/B/20190804/WFA-FITC_RGECO_800nm_1040nm_256px_x25_mag3_stk3_20190804_00001.tif")
-    analog = pd.read_csv(analog_file, header=None, names=["stimulus", "run"], index_col=False)
+    results_file = pathlib.Path(
+        "/data/David/TAC_baseline_mouse_1/fov2_RH_DAY_0_256Px_30Hz_Mag_1_00002_CHANNEL_1_results.npz"
+    )
+    analog_file = pathlib.Path(
+        "/data/David/TAC_baseline_mouse_1/fov2_RH_DAY_0_256Px_30Hz_Mag_1_00002_analog_min_max.txt"
+    )
+    tif_file = pathlib.Path(
+        "/data/David/TAC_baseline_mouse_1/fov2_RH_DAY_0_256Px_30Hz_Mag_1_00002.tif"
+    )
+    analog = pd.read_csv(
+        analog_file, header=None, names=["stimulus", "run"], index_col=False
+    )
     fps = 58.24
     an_trace = analog_trace_runner(
         tif_filename=tif_file,
@@ -544,5 +558,9 @@ if __name__ == "__main__":
         framerate=fps,
         start_time="0",
         occluder=False,
-        )
+    )
     an_trace.run()
+    fluo_trace = np.load(results_file, allow_pickle=True)["F_dff"]
+    ds = an_trace * fluo_trace
+    # to index some epoch, use:
+    # ds["dff"][:, ds["epoch_times"].sel(epoch="spont")]
