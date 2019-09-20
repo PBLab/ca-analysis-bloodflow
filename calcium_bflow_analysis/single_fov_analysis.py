@@ -22,8 +22,11 @@ sys.path.append(
 )
 from matplotlib import gridspec
 
-from analog_trace import analog_trace_runner, AnalogAcquisitionType
-from fluo_metadata import FluoMetadata
+from calcium_bflow_analysis.analog_trace import (
+    analog_trace_runner,
+    AnalogAcquisitionType,
+)
+from calcium_bflow_analysis.fluo_metadata import FluoMetadata
 import calcium_bflow_analysis.dff_analysis_and_plotting.dff_analysis as dff_tools
 
 
@@ -69,16 +72,17 @@ class SingleFovParser:
                 self.metadata.fname,
                 analog_data,
                 self.analog,
-                self.metadata.fps,
-                self.metadata.start_time,
-                self.metadata.timestamps,
+                self.metadata,
                 occluder=False,
             )
             self.fluo_analyzed = self.analog_analyzed * self.fluo_trace
         else:
             data_vars = {
                 "dff": (["neuron", "time"], np.atleast_2d(self.fluo_trace)),
-                "epoch_times": (["epoch", "time"], np.ones((1, self.fluo_trace.shape[1]), dtype=np.bool))
+                "epoch_times": (
+                    ["epoch", "time"],
+                    np.ones((1, self.fluo_trace.shape[1]), dtype=np.bool),
+                ),
             }
             coords = {
                 "neuron": np.arange(self.fluo_trace.shape[0]),
@@ -86,11 +90,10 @@ class SingleFovParser:
                 "epoch": ["spont"],
                 "fov": self.metadata.fov,
                 "mouse_id": self.metadata.mouse_id,
+                "condition": self.metadata.condition,
+                "day": self.metadata.day,
             }
-            attrs = {
-                "fps": self.metadata.fps,
-                "stim_window": 1.5
-            }
+            attrs = {"fps": self.metadata.fps, "stim_window": 1.5}
             self.fluo_analyzed = dff_dataset_init(data_vars, coords, attrs)
         if self.summarize_in_plot:
             viz = SingleFovViz(self)
@@ -107,33 +110,16 @@ class SingleFovParser:
                     str(self.metadata.fname.name)[:-4] + ".nc"
                 )
             )
-        except StopIteration:
+        except StopIteration:  # the file doesn't exist, we'll make a new one
             try:
                 raw_data = self.fluo_analyzed.data
             except AttributeError:
                 print("No fluorescent data in this FOV.")
                 return
             print("Writing new NetCDF to disk.")
-            raw_data = raw_data[..., np.newaxis, np.newaxis, np.newaxis]
-            assert len(raw_data.shape) == 6
-            coords = {}
-            coords["epoch"] = self.fluo_analyzed["epoch"].values
-            coords["neuron"] = self.fluo_analyzed["neuron"].values
-            coords["time"] = self.metadata.timestamps
-            coords["mouse_id"] = np.array([self.metadata.mouse_id])
-            coords["fov"] = np.array([self.metadata.fov])
-            coords["condition"] = np.array([self.metadata.condition])
-            metadata = {
-                "day": np.array([self.metadata.day]),
-                "fps": self.metadata.fps,
-                "stim_window": self.fluo_analyzed.attrs["stim_window"],
-            }
-            darr = xr.DataArray(
-                raw_data, coords=coords, dims=coords.keys(), attrs=metadata
-            )
-            darr.to_netcdf(
+            self.fluo_analyzed.to_netcdf(
                 str(self.metadata.fname)[:-4] + ".nc", mode="w"
-            )  # TODO: compress
+            )
 
 
 @attr.s
@@ -176,7 +162,11 @@ class SingleFovViz:
         """ Main method of the class.
         Generates a summary figure containing the data inside that
         FOV """
-        num_of_axes = 23 if self.fov.analog is not AnalogAcquisitionType.NONE else self.axes_for_dff
+        num_of_axes = (
+            23
+            if self.fov.analog is not AnalogAcquisitionType.NONE
+            else self.axes_for_dff
+        )
         self.fig = plt.figure(figsize=(24, 12))
         if self.fov.analog_analyzed.occluder:
             num_of_axes += 1
@@ -298,7 +288,11 @@ class SingleFovViz:
         ax_spikes.set_ylabel("Spikes per second")
 
 
-def dff_dataset_init(data_vars: MutableMapping[str, Tuple[List[str], np.ndarray]], coords: MutableMapping[str, np.ndarray], attrs: MutableMapping[str, Union[int, float]]) -> xr.Dataset:
+def dff_dataset_init(
+    data_vars: MutableMapping[str, Tuple[List[str], np.ndarray]],
+    coords: MutableMapping[str, np.ndarray],
+    attrs: MutableMapping[str, Union[int, float]],
+) -> xr.Dataset:
     """
     The only place where the datasets holding the sliced dF/F data
     are allowed to be created. It sanitizes the inputs and always
@@ -306,32 +300,35 @@ def dff_dataset_init(data_vars: MutableMapping[str, Tuple[List[str], np.ndarray]
     is invalid, it raises a ValueError. The allowed or mandatory
     inputs are listed at the start of this function.
     """
-    allowed_datavars_keys = set(('dff', "epoch_times"))
+    allowed_datavars_keys = set(("dff", "epoch_times"))
     if set(data_vars.keys()) != allowed_datavars_keys:
-        raise ValueError(f"data_vars keys were invalid. Expected {allowed_datavars_keys}, received {data_vars.keys()}.")
+        raise ValueError(
+            f"data_vars keys were invalid. Expected {allowed_datavars_keys}, received {data_vars.keys()}."
+        )
 
-    allowed_coords_keys = set(("neuron", "time", "epoch", "fov", "mouse_id"))
+    allowed_coords_keys = set(
+        ("neuron", "time", "epoch", "fov", "mouse_id", "condition", "day")
+    )
     if set(coords.keys()) != allowed_coords_keys:
-        raise ValueError(f"coords keys were invalid. Expected {allowed_coords_keys}, received {coords.keys()}.")
+        raise ValueError(
+            f"coords keys were invalid. Expected {allowed_coords_keys}, received {coords.keys()}."
+        )
 
     mandatory_attrs_keys = set(("fps", "stim_window"))
     if not mandatory_attrs_keys.issubset(set(attrs.keys())):
-        raise ValueError(f"The attrs variable must contain the following keys: {mandatory_attrs_keys}, however it contained the following: {attrs.keys()}")
+        raise ValueError(
+            f"The attrs variable must contain the following keys: {mandatory_attrs_keys}, however it contained the following: {attrs.keys()}"
+        )
 
-    return xr.Dataset(
-        data_vars=data_vars,
-        coords=coords,
-        attrs=attrs,
-    )
+    return xr.Dataset(data_vars=data_vars, coords=coords, attrs=attrs)
+
 
 def filter_da(
-    data: xr.Dataset, epoch: str, condition: Union[str, None] = None,
+    data: xr.Dataset, epoch: str, condition: Union[str, None] = None
 ) -> np.ndarray:
     """ Filter a Dataset by the given condition and epoch.
          Returns a numpy array in the shape of cells x time """
-    selected = np.squeeze(
-        data.sel(condition=condition, epoch=epoch, drop=True).values
-    )
+    selected = np.squeeze(data.sel(condition=condition, epoch=epoch, drop=True).values)
     selected = np.atleast_2d(selected)
     relevant_idx = np.isfinite(selected).any(axis=1)
     num_of_cells = relevant_idx.sum()

@@ -172,7 +172,7 @@ class CalciumAnalysisOverTime:
     you to analyze several directories of data, each with its own glob pattern.
     If serialize is True, it will write to disk each FOV's DataArray, as well
     as the concatenated DataArray to make future processing faster.
-    If you've already serialized your data, use "generate_da_per_day" to continue
+    If you've already serialized your data, use "generate_ds_per_day" to continue
     the downstream analysis of your files by concatenating all relevant files into
     one large database which can be analyzed with downstream scripts that may be
     found in "calcium_trace_analysis.py".
@@ -201,7 +201,7 @@ class CalciumAnalysisOverTime:
             Either 'HYPER' or 'HYPO'
             'DAY_0/1/n'
             'FOV_n'
-        After creating a xr.DataArray out of each file, the script will write this DataArray to
+        After creating a xr.Dataset out of each file, the script will write this DataArray to
         disk (only if it doesn't exist yet, and only if self.serialize is True) to make future processing faster.
         Finally, it will take all created DataArrays and concatenate them into a single DataArray,
         that can also be written to disk using the "serialize" attribute.
@@ -215,7 +215,7 @@ class CalciumAnalysisOverTime:
         #     )
         for _, row in self.files_table.iterrows():
             self._mp_process_timepoints(row)
-        self.generate_da_per_day(results_folder)
+        self.generate_ds_per_day(results_folder)
 
     def _mp_process_timepoints(self, files_row: Tuple):
         """
@@ -247,10 +247,10 @@ class CalciumAnalysisOverTime:
             fov.add_metadata_and_serialize()
         return fov
 
-    def generate_da_per_day(self, results_folder: Path, globstr="*FOV*.nc", day_regex=r"_DAY_*(\d+)_", recursive=True):
+    def generate_ds_per_day(self, results_folder: Path, globstr="*FOV*.nc", day_regex=r"_DAY_*(\d+)_", recursive=True):
         """
         Parse .nc files that were generated from the previous analysis
-        and chain all "DAY_X" DataArrays together into a single list.
+        and chain all "DAY_X" Datasets together into a single list.
         This list is then concatenated in to a single DataArray, creating a
         large data structure for each experimental day.
         If we arrived here from "run_batch_of_timepoints()", the data is already
@@ -298,7 +298,7 @@ class CalciumAnalysisOverTime:
                 data_per_day = []
                 for file in file_list:
                     try:
-                        data_per_day.append(xr.open_dataarray(file).load())
+                        data_per_day.append(xr.open_dataset(file).load())
                     except FileNotFoundError:
                         pass
                 concat = xr.concat(data_per_day, dim="neuron")
@@ -356,6 +356,6 @@ if __name__ == "__main__":
         analog=analog_type,
         regex=regex,
     )
-    # res.run_batch_of_timepoints(results_folder)
-    day_reg = r'(0)'
-    res.generate_da_per_day(results_folder, 'f*.nc', day_reg, recursive=False)
+    res.run_batch_of_timepoints(results_folder)
+    # day_reg = r'(0)'
+    # res.generate_ds_per_day(results_folder, 'f*.nc', day_reg, recursive=False)

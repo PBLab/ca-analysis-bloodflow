@@ -34,9 +34,7 @@ def analog_trace_runner(
     tif_filename,
     analog_trace,
     analog_type,
-    framerate,
-    start_time,
-    timestamps,
+    metadata,
     occluder,
     occ_metadata=None,
 ):
@@ -44,9 +42,7 @@ def analog_trace_runner(
         analysis = AnalogAnalysisOld(
             tif_filename,
             analog_trace,
-            framerate,
-            start_time,
-            timestamps,
+            metadata,
             occluder=occluder,
             occ_metadata=occ_metadata,
         )
@@ -54,9 +50,7 @@ def analog_trace_runner(
         analysis = AnalogAnalysisMrduino(
             tif_filename,
             analog_trace,
-            framerate,
-            start_time,
-            timestamps,
+            metadata,
             occluder=occluder,
             occ_metadata=occ_metadata,
         )
@@ -64,9 +58,7 @@ def analog_trace_runner(
         analysis = AnalogAnalysisTreadmillRows(
             tif_filename,
             analog_trace,
-            framerate,
-            start_time,
-            timestamps,
+            metadata,
             occluder=occluder,
             occ_metadata=occ_metadata,
         )
@@ -74,9 +66,7 @@ def analog_trace_runner(
         analysis = AnalogAnalysisTreadmill(
             tif_filename,
             analog_trace,
-            framerate,
-            start_time,
-            timestamps,
+            metadata,
             occluder=occluder,
             occ_metadata=occ_metadata,
         )
@@ -342,6 +332,8 @@ class AnalyzedAnalogTrace:
             "epoch": true_epochs,
             "fov": self.metadata.fov,
             "mouse_id": self.metadata.mouse_id,
+            "condition": self.metadata.condition,
+            "day": self.metadata.day,
         }
         attrs = {
             "fps": self.metadata.fps,
