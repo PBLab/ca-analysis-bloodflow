@@ -43,7 +43,7 @@ class SingleFovParser:
     fluo_trace = attr.ib(init=False, repr=False)  # The specific dF/F trace of that file
     fluo_analyzed = attr.ib(
         init=False
-    )  # DataArray with the different slices of run, stim and dF/F
+    )  # xr.Dataset with the different slices of run, stim and dF/F
 
     def parse(self):
         """ Main method to parse a single duo of analog and fluorescent data """
@@ -76,17 +76,24 @@ class SingleFovParser:
             )
             self.fluo_analyzed = self.analog_analyzed * self.fluo_trace
         else:
+            data_vars = {
+                "dff": (["neuron", "time"], np.atleast_2d(self.fluo_trace)),
+                "epoch_times": (["epoch", "time"], np.ones((1, self.fluo_trace.shape[1]), dtype=np.bool))
+            }
             coords = {
                 "neuron": np.arange(self.fluo_trace.shape[0]),
                 "time": np.arange(self.fluo_trace.shape[1]) / self.metadata.fps,
                 "epoch": ["spont"],
             }
-            dims = ["neuron", "time", "epoch"]
-            self.fluo_analyzed = xr.DataArray(
-                np.atleast_3d(self.fluo_trace), coords=coords, dims=dims
+            attrs = {
+                "fps": self.metadata.fps,
+                "stim_window": 1.5
+            }
+            self.fluo_analyzed = xr.Dataset(
+                data_vars=data_vars,
+                coords=coords,
+                attrs=attrs,
             )
-            self.fluo_analyzed.attrs["fps"] = self.metadata.fps
-            self.fluo_analyzed.attrs["stim_window"] = 1.5
         if self.summarize_in_plot:
             viz = SingleFovViz(self)
             viz.draw()
@@ -294,9 +301,9 @@ class SingleFovViz:
 
 
 def filter_da(
-    data: xr.DataArray, epoch: str, condition: Union[str, None] = None,
+    data: xr.Dataset, epoch: str, condition: Union[str, None] = None,
 ) -> np.ndarray:
-    """ Filter a DataArray by the given condition and epoch.
+    """ Filter a Dataset by the given condition and epoch.
          Returns a numpy array in the shape of cells x time """
     selected = np.squeeze(
         data.sel(condition=condition, epoch=epoch, drop=True).values

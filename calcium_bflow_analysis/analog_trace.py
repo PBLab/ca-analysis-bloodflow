@@ -318,7 +318,7 @@ class AnalyzedAnalogTrace:
             true_epochs.append(key)
             # Filter "None"s and multiply to find the joint area
             prod = np.array([x for x in datum if type(x) is pd.Series]).prod(axis=0)
-            if key == '':
+            if key == "":
                 relevant_times_of_epoch = np.ones((other.shape[1]), dtype=np.bool)
             else:
                 relevant_times_of_epoch = np.isfinite(prod)
@@ -328,8 +328,10 @@ class AnalyzedAnalogTrace:
         true_epochs.pop(-1)
         true_epochs.append("all")
         ds = xr.Dataset(
-            data_vars={"dff": (["neuron", "time"], other),
-            "epoch_times": (["epoch", "time"], times_of_epoch)},
+            data_vars={
+                "dff": (["neuron", "time"], other),
+                "epoch_times": (["epoch", "time"], times_of_epoch),
+            },
             coords={
                 "neuron": coords_of_neurons,
                 "time": np.arange(other.shape[1]) / self.framerate,
