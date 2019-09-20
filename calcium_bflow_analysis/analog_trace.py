@@ -14,6 +14,9 @@ import attr
 from attr.validators import instance_of
 import xarray as xr
 
+from calcium_bflow_analysis.single_fov_analysis import dff_dataset_init
+from calcium_bflow_analysis.fluo_metadata import FluoMetadata
+
 # Constant values for the analog acquisiton
 TYPICAL_JUXTA_VALUE = -480
 TYPICAL_PUFF_VALUE = -27180
@@ -101,9 +104,7 @@ class AnalyzedAnalogTrace:
     analog_trace = attr.ib(
         validator=instance_of(pd.DataFrame)
     )  # .txt file from ScanImage
-    framerate = attr.ib(validator=instance_of(float))
-    start_time = attr.ib(validator=instance_of(str))
-    timestamps = attr.ib(validator=instance_of(np.ndarray))
+    metadata = attr.ib(validator=instance_of(FluoMetadata))
     puff_length = attr.ib(default=1.0, validator=instance_of(float))  # sec
     response_window = attr.ib(default=0.5, validator=instance_of(float))  # sec
     buffer_after_stim = attr.ib(default=1.0, validator=instance_of(float))  # sec
@@ -151,8 +152,8 @@ class AnalyzedAnalogTrace:
         return true_puff_times.astype(np.float64), juxta_puff_times.astype(np.float64)
 
     def _iter_over_puff_times(self, puff_idx, vec_len):
-        max_puff_length = int(self.framerate * self.puff_length)
-        buffer_after_stim_frames = int(self.framerate * self.buffer_after_stim)
+        max_puff_length = int(self.metadata.fps * self.puff_length)
+        buffer_after_stim_frames = int(self.metadata.fps * self.buffer_after_stim)
         puff_times = np.zeros(vec_len)
         puff_limits = np.where(np.diff(puff_idx) > max_puff_length)[0]
         start_puff_indices = puff_limits + 1
@@ -168,9 +169,9 @@ class AnalyzedAnalogTrace:
         return puff_times
 
     def _populate_occluder(self):
-        self.before_occ_vec = np.full(self.timestamps.shape, np.nan)
-        self.occluder_vec = np.full(self.timestamps.shape, np.nan)
-        self.after_occ_vec = np.full(self.timestamps.shape, np.nan)
+        self.before_occ_vec = np.full(self.metadata.timestamps.shape, np.nan)
+        self.occluder_vec = np.full(self.metadata.timestamps.shape, np.nan)
+        self.after_occ_vec = np.full(self.metadata.timestamps.shape, np.nan)
 
         tot_len_during = self.occ_metadata.before + self.occ_metadata.during
         self.before_occ_vec[: self.occ_metadata.before] = 1
@@ -210,11 +211,11 @@ class AnalyzedAnalogTrace:
             self.after_occ_vec = pd.Series(self.after_occ_vec)
 
     def _init_vecs(self):
-        self.stim_vec = np.full(self.timestamps.shape, np.nan)
-        self.juxta_vec = np.full(self.timestamps.shape, np.nan)
-        self.run_vec = np.full(self.timestamps.shape, np.nan)
-        self.spont_vec = np.full(self.timestamps.shape, np.nan)
-        self.stand_vec = np.full(self.timestamps.shape, np.nan)
+        self.stim_vec = np.full(self.metadata.timestamps.shape, np.nan)
+        self.juxta_vec = np.full(self.metadata.timestamps.shape, np.nan)
+        self.run_vec = np.full(self.metadata.timestamps.shape, np.nan)
+        self.spont_vec = np.full(self.metadata.timestamps.shape, np.nan)
+        self.stand_vec = np.full(self.metadata.timestamps.shape, np.nan)
 
     def _fit_frames_to_analog(
         self,
@@ -223,9 +224,13 @@ class AnalyzedAnalogTrace:
         run_vec: np.ndarray,
         spont_vec: np.ndarray,
     ):
-        samples_per_frame = int(np.ceil(self.sample_rate / self.framerate))
+        samples_per_frame = int(np.ceil(self.sample_rate / self.metadata.fps))
         starting_idx = np.linspace(
-            0, len(stim_vec), num=len(self.timestamps), dtype=np.int64, endpoint=False
+            0,
+            len(stim_vec),
+            num=len(self.metadata.timestamps),
+            dtype=np.int64,
+            endpoint=False,
         )
         end_idx = starting_idx + samples_per_frame
 
@@ -289,10 +294,9 @@ class AnalyzedAnalogTrace:
         coords_of_neurons = np.arange(other.shape[0])
 
         # To find all possible combinations of running and stimulus we run a Cartesian product
-        dims = ["neuron", "time"]
         movement = ["run", "stand", None]
         puff = ["stim", "juxta", "spont", None]
-        ones = np.ones_like(self.timestamps, dtype=np.uint8)
+        ones = np.ones_like(self.metadata.timestamps, dtype=np.uint8)
         move_data = [self.run_vec, self.stand_vec, ones]
         puff_data = [self.stim_vec, self.juxta_vec, self.spont_vec, ones]
         epochs = [movement, puff]
@@ -327,22 +331,23 @@ class AnalyzedAnalogTrace:
         # just remove it and replace it with "all"
         true_epochs.pop(-1)
         true_epochs.append("all")
-        ds = xr.Dataset(
-            data_vars={
-                "dff": (["neuron", "time"], other),
-                "epoch_times": (["epoch", "time"], times_of_epoch),
-            },
-            coords={
-                "neuron": coords_of_neurons,
-                "time": np.arange(other.shape[1]) / self.framerate,
-                "epoch": true_epochs,
-            },
-            attrs={
-                "fps": self.framerate,
-                "stim_window": self.puff_length + self.buffer_after_stim,
-            },
-        )
-        return ds
+
+        data_vars = {
+            "dff": (["neuron", "time"], other),
+            "epoch_times": (["epoch", "time"], times_of_epoch),
+        }
+        coords = {
+            "neuron": coords_of_neurons,
+            "time": np.arange(other.shape[1]) / self.metadata.fps,
+            "epoch": true_epochs,
+            "fov": self.metadata.fov,
+            "mouse_id": self.metadata.mouse_id,
+        }
+        attrs = {
+            "fps": self.metadata.fps,
+            "stim_window": self.puff_length + self.buffer_after_stim,
+        }
+        return dff_dataset_init(data_vars, coords, attrs)
 
 
 @attr.s
@@ -378,8 +383,8 @@ class AnalogAnalysisTreadmill(AnalyzedAnalogTrace):
         to this proper movement time.
         """
         processed_run_vec = np.full(run_vec.shape, np.nan)
-        run = pd.Series(run_vec).diff().abs().rolling(int(self.framerate)).mean()
-        processed_run_vec[run_vec > 0.035] = 1
+        run = pd.Series(run_vec).diff().abs().rolling(int(self.metadata.fps)).mean()
+        processed_run_vec[run > 0.035] = 1
         return processed_run_vec
 
 
@@ -432,8 +437,8 @@ class AnalogAnalysisTreadmillRows(AnalyzedAnalogTrace):
         to this proper movement time.
         """
         processed_run_vec = np.full(run_vec.shape, np.nan)
-        run = pd.Series(run_vec).diff().abs().rolling(int(self.framerate)).mean()
-        processed_run_vec[run_vec > 0.035] = 1
+        run = pd.Series(run_vec).diff().abs().rolling(int(self.metadata.fps)).mean()
+        processed_run_vec[run > 0.035] = 1
         return processed_run_vec
 
 
@@ -552,13 +557,12 @@ if __name__ == "__main__":
         analog_file, header=None, names=["stimulus", "run"], index_col=False
     )
     fps = 58.24
+    metadata = FluoMetadata(tif_file, fps)
     an_trace = analog_trace_runner(
         tif_filename=tif_file,
         analog_trace=analog,
         analog_type=AnalogAcquisitionType.TREADMILL,
-        timestamps=np.arange(18000) / fps,
-        framerate=fps,
-        start_time="0",
+        metadata=metadata,
         occluder=False,
     )
     an_trace.run()

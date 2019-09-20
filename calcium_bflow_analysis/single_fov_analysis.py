@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, MutableMapping
 import itertools
 
 import numpy as np
@@ -84,16 +84,14 @@ class SingleFovParser:
                 "neuron": np.arange(self.fluo_trace.shape[0]),
                 "time": np.arange(self.fluo_trace.shape[1]) / self.metadata.fps,
                 "epoch": ["spont"],
+                "fov": self.metadata.fov,
+                "mouse_id": self.metadata.mouse_id,
             }
             attrs = {
                 "fps": self.metadata.fps,
                 "stim_window": 1.5
             }
-            self.fluo_analyzed = xr.Dataset(
-                data_vars=data_vars,
-                coords=coords,
-                attrs=attrs,
-            )
+            self.fluo_analyzed = dff_dataset_init(data_vars, coords, attrs)
         if self.summarize_in_plot:
             viz = SingleFovViz(self)
             viz.draw()
@@ -299,6 +297,32 @@ class SingleFovViz:
         ax_auc.set_ylabel("AUC")
         ax_spikes.set_ylabel("Spikes per second")
 
+
+def dff_dataset_init(data_vars: MutableMapping[str, Tuple[List[str], np.ndarray]], coords: MutableMapping[str, np.ndarray], attrs: MutableMapping[str, Union[int, float]]) -> xr.Dataset:
+    """
+    The only place where the datasets holding the sliced dF/F data
+    are allowed to be created. It sanitizes the inputs and always
+    returns a valid xr.Dataset instance. If something in the inputs
+    is invalid, it raises a ValueError. The allowed or mandatory
+    inputs are listed at the start of this function.
+    """
+    allowed_datavars_keys = set(('dff', "epoch_times"))
+    if set(data_vars.keys()) != allowed_datavars_keys:
+        raise ValueError(f"data_vars keys were invalid. Expected {allowed_datavars_keys}, received {data_vars.keys()}.")
+
+    allowed_coords_keys = set(("neuron", "time", "epoch", "fov", "mouse_id"))
+    if set(coords.keys()) != allowed_coords_keys:
+        raise ValueError(f"coords keys were invalid. Expected {allowed_coords_keys}, received {coords.keys()}.")
+
+    mandatory_attrs_keys = set(("fps", "stim_window"))
+    if not mandatory_attrs_keys.issubset(set(attrs.keys())):
+        raise ValueError(f"The attrs variable must contain the following keys: {mandatory_attrs_keys}, however it contained the following: {attrs.keys()}")
+
+    return xr.Dataset(
+        data_vars=data_vars,
+        coords=coords,
+        attrs=attrs,
+    )
 
 def filter_da(
     data: xr.Dataset, epoch: str, condition: Union[str, None] = None,
