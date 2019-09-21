@@ -136,7 +136,7 @@ class ParseFijiRoiCsv:
     parsed by the other calcium analysis machinery.
     This class assumes that in Fiji the ROIs were analyzed with the
     "bounding box\\rectangle" measurement, and that they're named
-    "*_rois.csv".
+    "*CHANNEL_x_rois.csv".
     """
     fname = attr.ib(validator=instance_of(pathlib.Path))
     movie = attr.ib(init=False)
@@ -161,6 +161,7 @@ class ParseFijiRoiCsv:
         that contain the channel-specific data.
         """
         fname = str(self.fname)
+
         results_fname = pathlib.Path(fname.replace("rois.csv", "results.npz"))
         channel_fname = pathlib.Path(fname.replace("_rois.csv", ".tif"))
         if results_fname.exists():
@@ -172,7 +173,7 @@ class ParseFijiRoiCsv:
         parameters.
         """
         return {
-            "fr": 30,
+            "fr": 58.24,
             "fnames": str(self.results_fname),
         }
 
@@ -242,5 +243,5 @@ def parse_rois(foldername: pathlib.Path, glob='*rois.csv'):
 
 
 if __name__ == '__main__':
-    foldername = pathlib.Path('/data/David/TAC_baseline_mouse_1')
+    foldername = pathlib.Path('/data/Amit_QNAP/WFA/Activity/WT_RGECO/20190916/')
     parse_rois(foldername)

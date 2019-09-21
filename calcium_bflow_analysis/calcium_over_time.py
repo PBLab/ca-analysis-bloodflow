@@ -232,7 +232,7 @@ class CalciumAnalysisOverTime:
         """ Helper function to go file by file, each with its own fluorescence and
         possibly analog data, and run the single FOV parsing on it """
 
-        meta = FluoMetadata(files_row.tif, **regex)
+        meta = FluoMetadata(files_row.tif, num_of_channels=2, **regex)
         meta.get_metadata()
         fov = SingleFovParser(
             analog_fname=files_row.analog,
@@ -330,11 +330,11 @@ if __name__ == "__main__":
     home = Path("/data")
     # home = Path('/mnt/qnap')
     # home = Path('/export/home/pblab/data')
-    folder = Path(r"David/TAC_baseline_mouse_1")
+    folder = Path(r"Amit_QNAP/WFA/Activity/WT_RGECO/20190916")
     results_folder = home / folder
     assert results_folder.exists()
-    globstr = "*256Px*.tif"
-    folder_and_files = {home / "David/TAC_baseline_mouse_1": globstr}
+    globstr = "*.tif"
+    folder_and_files = {home / folder: globstr}
     analog_type = AnalogAcquisitionType.TREADMILL
     filefinder = FileFinder(
         results_folder=results_folder,
@@ -344,9 +344,9 @@ if __name__ == "__main__":
     )
     files_table = filefinder.find_files()
     regex = {
-        "cond_reg": r"fov\d_(\w+?)_",
-        "id_reg": r"0000(\d)",
-        "fov_reg": r"fov(\d)_",
+        "cond_reg": r"(WFA)",
+        "id_reg": r"(198)",
+        "fov_reg": r"0000(\d)_",
     }
     res = CalciumAnalysisOverTime(
         files_table=files_table,
@@ -355,6 +355,6 @@ if __name__ == "__main__":
         analog=analog_type,
         regex=regex,
     )
-    # res.run_batch_of_timepoints(results_folder)
-    day_reg = r'(0)'
-    res.generate_ds_per_day(results_folder, 'f*.nc', day_reg, recursive=False)
+    res.run_batch_of_timepoints(results_folder)
+    # day_reg = r'(0)'
+    # res.generate_ds_per_day(results_folder, 'f*.nc', day_reg, recursive=False)

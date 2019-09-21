@@ -127,7 +127,7 @@ class AnalyzedAnalogTrace:
             vec = self.analog_trace.stimulus.to_numpy()
         else:
             vec = vec.to_numpy()
-        diffs_all = np.where(np.diff(vec) < -100)[0]
+        diffs_all = np.where(np.diff(vec) < -30)[0]
         diffs_true = np.where(np.diff(vec) < -1000)[0]
         intersect = np.in1d(diffs_all, diffs_true)
         true_puff_idx = diffs_all[intersect]
@@ -378,6 +378,7 @@ class AnalogAnalysisTreadmill(AnalyzedAnalogTrace):
         processed_run_vec = np.full(run_vec.shape, np.nan)
         run = pd.Series(run_vec).diff().abs().rolling(int(self.metadata.fps)).mean()
         processed_run_vec[run > 0.035] = 1
+
         return processed_run_vec
 
 

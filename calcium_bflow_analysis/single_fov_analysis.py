@@ -93,7 +93,7 @@ class SingleFovParser:
                 "mouse_id": self.metadata.mouse_id,
                 "condition": self.metadata.condition,
                 "day": self.metadata.day,
-                "fname": self.matadata.fname.stem,
+                "fname": self.metadata.fname.stem,
             }
             attrs = {"fps": self.metadata.fps, "stim_window": 1.5}
             self.fluo_analyzed = dff_dataset_init(data_vars, coords, attrs)
