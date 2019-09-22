@@ -189,7 +189,7 @@ def calc_mean_dff(data):
     """ Return the mean dF/F value, and the SEM of all neurons in the data matrix.
     Subtracts the offset of each cell before the computation.
     """
-    min_vec = np.atleast_2d(data.min(axis=1)).T
+    min_vec = np.atleast_2d(np.nanmin(data, axis=1)).T
     data_no_offset = data - min_vec
     return np.nanmean(data_no_offset, axis=1)
 

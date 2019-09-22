@@ -75,10 +75,10 @@ class CalciumReview:
             self.files.append(file)
             day = int(day_reg.findall(file.name)[0])
             parsed_days.append(day)
-            self.raw_data[day] = xr.open_dataarray(file)
-        self.days = np.array(parsed_days)
+            self.raw_data[day] = xr.open_dataset(file)
+        self.days = np.unique(np.array(parsed_days))
         stats = ["_mean", "_std"]
-        self.conditions = self.raw_data[day].condition.values.tolist()
+        self.conditions = np.unique(self.raw_data[day].condition.values).tolist()
         self.df_columns = [
             "".join(x) for x in itertools.product(self.conditions, stats)
         ] + ["t", "p"]

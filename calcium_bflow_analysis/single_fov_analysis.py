@@ -295,17 +295,29 @@ def filter_da(
 ) -> np.ndarray:
     """ Filter a Dataset by the given condition and epoch.
          Returns a numpy array in the shape of cells x time """
-    sel_kwargs = {"epoch": epoch, "condition": condition}
-    if not condition:
-        sel_kwargs.pop("condition")
+    epoch_data = data.sel(epoch=epoch)
+    if condition:
+        for curr_cond, ds in epoch_data.groupby('condition'):
+            if curr_cond == condition:
+                epoch_data = ds
 
-    selected = data.sel(**sel_kwargs)["dff"].data
-    shape = selected.shape
-    finite_idx = np.isfinite(selected)
-    selected = selected[finite_idx].reshape(shape)
-    if (selected.shape[0] > 0) and (selected.shape[1] > 0):
-        return selected
-    return np.array([])
+    # The final array, in the shape of (all_cells x time), will
+    # be concatenated from nan-filled arrays that will be created on the fly.
+    number_of_files = len(data.fname)
+    number_of_neurons = len(data.neuron)
+    stacked_dff = np.full((number_of_files * number_of_neurons, len(data.time)), np.nan)
+    last_full_row = 0
+    for _, dff_ds in epoch_data.groupby('fname'):
+        relevant_epoch_idx = dff_ds["epoch_times"].data.ravel()
+        dff = dff_ds["dff"].data[0]
+        relevant_epoch_dff = dff[:, relevant_epoch_idx]
+        last_column = relevant_epoch_dff.shape[1]
+        stacked_dff[last_full_row:(last_full_row+number_of_neurons), :last_column] = relevant_epoch_dff
+        last_full_row += number_of_neurons
+
+    full_rows = np.isfinite(stacked_dff).any(axis=1)
+    return stacked_dff[full_rows]
+
 
 
 if __name__ == "__main__":
