@@ -38,7 +38,7 @@ class FluoMetadata:
         try:
             with tifffile.TiffFile(str(self.fname)) as f:
                 si_meta = f.scanimage_metadata
-                self.fps = si_meta['FrameData']['SI.hRoiManager.scanFrameRate']
+                self.fps = self._round_fps(float(si_meta['FrameData']['SI.hRoiManager.scanFrameRate']))
                 save_chans = si_meta['FrameData']['SI.hChannels.channelSave']
                 if type(save_chans) is int:
                     self.num_of_channels = 1
@@ -57,3 +57,16 @@ class FluoMetadata:
             return reg.findall(str(self.fname.name))[0]
         except IndexError:
             return 999
+
+    def _round_fps(self, fps: float):
+        """Due to minor fluctuations in the measured FPS in ScanImage,
+        the resulting time coordinates can vary between otherwise
+        identical datasets. These very minor changes cause issues when trying
+        to concatenate two datasets that were sampled at almost exactly the
+        same rate.
+        The aim of this function is to round off the true FPS value to a
+        unified one, shared between all recordings.
+        """
+        TRUE_FPS_VALUES = np.array([7.68, 15.24, 30.04, 58.24])
+        idx_of_closest_value = np.abs(TRUE_FPS_VALUES - fps).argmin()
+        return TRUE_FPS_VALUES[idx_of_closest_value]

@@ -213,8 +213,9 @@ class CalciumAnalysisOverTime:
         #     self.list_of_fovs = pool.map(
         #         self._mp_process_timepoints, self.files_table.itertuples(index=False)
         #     )
+        self.list_of_fovs = []
         for row in self.files_table.itertuples():
-            self._mp_process_timepoints(row)
+            self.list_of_fovs.append(self._mp_process_timepoints(row))
         self.generate_ds_per_day(results_folder)
 
     def _mp_process_timepoints(self, files_row: Tuple):
@@ -330,7 +331,7 @@ if __name__ == "__main__":
     home = Path("/data")
     # home = Path('/mnt/qnap')
     # home = Path('/export/home/pblab/data')
-    folder = Path(r"Amit_QNAP/WFA/Activity/WT_RGECO/20190916")
+    folder = Path(r"David/TAC_baseline_mouse_1")
     results_folder = home / folder
     assert results_folder.exists()
     globstr = "*.tif"
@@ -344,9 +345,9 @@ if __name__ == "__main__":
     )
     files_table = filefinder.find_files()
     regex = {
-        "cond_reg": r"(WFA)",
-        "id_reg": r"(198)",
-        "fov_reg": r"0000(\d)_",
+        "cond_reg": r"fov\d_(\w\w)_D",
+        "id_reg": r"(1)",
+        "fov_reg": r"fov(\d)_\wH",
     }
     res = CalciumAnalysisOverTime(
         files_table=files_table,

@@ -173,7 +173,7 @@ class ParseFijiRoiCsv:
         parameters.
         """
         return {
-            "fr": 58.24,
+            "fr": 30.03,
             "fnames": str(self.results_fname),
         }
 
