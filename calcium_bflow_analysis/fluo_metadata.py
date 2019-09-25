@@ -56,7 +56,7 @@ class FluoMetadata:
         try:
             return reg.findall(str(self.fname.name))[0]
         except IndexError:
-            return 999
+            return -1
 
     def _round_fps(self, fps: float):
         """Due to minor fluctuations in the measured FPS in ScanImage,

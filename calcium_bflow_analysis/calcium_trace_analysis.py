@@ -66,7 +66,7 @@ class CalciumReview:
          """
         self.files = []
         self.raw_data = {}
-        all_files = folder.glob(self.glob)
+        all_files = folder.rglob(self.glob)
         day_reg = re.compile(r".+?of_day_(\d+).nc")
         parsed_days = []
         print("Found the following files:")
@@ -178,7 +178,7 @@ class CalciumReview:
 
 
 if __name__ == "__main__":
-    folder = pathlib.Path(r"/data/David/TAC_baseline_mouse_1")
+    folder = pathlib.Path(r"/data/David/TAC_baseline_both_mice_test")
     assert folder.exists()
     ca = CalciumReview(folder, "data*.nc")
     analysis_methods = [
@@ -186,7 +186,7 @@ if __name__ == "__main__":
         AvailableFuncs.MEAN,
         AvailableFuncs.SPIKERATE,
     ]
-    epoch = "stand_spont"
+    epoch = "all"
     ca.apply_analysis_funcs(analysis_methods, epoch)
     ca.plot_df(ca.funcs_dict[AvailableFuncs.AUC], f"AUC of Fluo Traces, Epoch: {epoch}")
     ca.plot_df(

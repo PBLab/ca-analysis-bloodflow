@@ -303,13 +303,18 @@ def filter_da(
 
     # The final array, in the shape of (all_cells x time), will
     # be concatenated from nan-filled arrays that will be created on the fly.
-    number_of_files = len(data.fname)
+    try:
+        number_of_files = len(data.fname)
+    except TypeError:  # unsized arrays have no len
+        return epoch_data["dff"].data
     number_of_neurons = len(data.neuron)
     stacked_dff = np.full((number_of_files * number_of_neurons, len(data.time)), np.nan)
     last_full_row = 0
     for _, dff_ds in epoch_data.groupby('fname'):
         relevant_epoch_idx = dff_ds["epoch_times"].data.ravel()
-        dff = dff_ds["dff"].data[0]
+        dff = dff_ds["dff"].data
+        if dff.ndim == 3:
+            dff = dff[0]
         relevant_epoch_dff = dff[:, relevant_epoch_idx]
         last_column = relevant_epoch_dff.shape[1]
         stacked_dff[last_full_row:(last_full_row+number_of_neurons), :last_column] = relevant_epoch_dff
