@@ -53,8 +53,9 @@ def calc_dff_batch(files):
     return np.concatenate(all_data)
 
 
-def locate_spikes_peakutils(data, fps=30.03, thresh=0.75,
-                            min_dist=None, max_allowed_firing_rate=1):
+def locate_spikes_peakutils(
+    data, fps=30.03, thresh=0.75, min_dist=None, max_allowed_firing_rate=1
+) -> np.ndarray:
     """
     Find spikes from a dF/F matrix using the peakutils package.
     The fps parameter is used to calculate the minimum allowed distance \
@@ -69,7 +70,7 @@ def locate_spikes_peakutils(data, fps=30.03, thresh=0.75,
         min_dist = int(fps)
     else:
         min_dist = int(min_dist)
-    all_spikes = np.zeros_like(data)
+    all_spikes: np.ndarray = np.zeros_like(data)
     nan_to_zero = np.nan_to_num(data)
     max_spike_num = int(data.shape[1] // fps) * max_allowed_firing_rate
     for row, cell in enumerate(nan_to_zero):
@@ -119,18 +120,13 @@ def scatter_spikes(
     downsampled_data = raw_data[::downsample_display]
     num_displayed_cells = downsampled_data.shape[0]
     y_step = 2
-    y_heights = np.arange(0, num_displayed_cells*y_step, y_step)[:, np.newaxis]
+    y_heights = np.arange(0, num_displayed_cells * y_step, y_step)[:, np.newaxis]
     ax.plot(time_vec, (downsampled_data + y_heights).T, linewidth=0.5)
     if spike_data is not None:
         peakvals = raw_data * spike_data
         peakvals[peakvals == 0] = np.nan
         peakvals = peakvals[::downsample_display]
-        ax.plot(
-            time_vec,
-            (peakvals + y_heights).T,
-            "r.",
-            linewidth=0.1,
-        )
+        ax.plot(time_vec, (peakvals + y_heights).T, "r.", linewidth=0.1)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.set_xlabel("Time (seconds)")
@@ -208,22 +204,49 @@ def deinterleave(fname: str, data_channel: int, num_of_channels: int = 2):
     return new_fname
 
 
+def generate_spikes_roc_curve(dff: np.ndarray, fps: float):
+    """
+    To better assess the validity of a chosen threshold for spike detection
+    in a dF/F trace, a ROC curve will be plotted. However, since we don't
+    possess the spiking ground truth, we have to use a different heuristic
+    in order to decide on the best threshold. For a given dF/F this function
+    will try multiple spike thresholds and plot the resulting spiking rate,
+    in hopes of identifying a region in which a change threshold doesn't
+    significantly change the resulting spike rate.
+
+    Parameters:
+        :param np.ndarray dff: Cells x time
+        :param float fps: Frames per second
+    """
+    threshold_boundaries = np.arange(0.4, 0.99, 0.05)
+    spike_nums: np.ndarray = np.zeros_like(threshold_boundaries)
+    for idx, thresh in enumerate(threshold_boundaries):
+        spikes: np.ndarray = locate_spikes_peakutils(dff, fps, thresh=thresh, max_allowed_firing_rate=np.inf)
+        spike_nums[idx] = spikes.sum()
+
+    spike_nums /= dff.shape[0]
+    spike_nums /= (dff.shape[1] / fps)
+    fig, ax = plt.subplots()
+    ax.plot(threshold_boundaries, spike_nums)
+    ax.set_title("ROC for spike numbers as a function of the threshold")
+    ax.set_xlabel("Threshold Value")
+    ax.set_ylabel("# spikes / cell / second")
+
+
 if __name__ == "__main__":
     foldername = pathlib.Path("/data/Amit_QNAP/WFA/Activity/WT_RGECO/B/")
     results_file = (
         foldername / "B_WFA-FITC_RGECO_1040nm_x25_mag4_256_20190722_00001_results.npz"
     )
-    tif = (
-        foldername / "B_WFA-FITC_RGECO_1040nm_x25_mag4_256_20190722_00001.tif"
-    )
-    cell_radius = 9
-    number_of_channels = 2
+    tif = foldername / "B_WFA-FITC_RGECO_1040nm_x25_mag4_256_20190722_00001.tif"
+    # cell_radius = 9
+    # number_of_channels = 2
     fps = 58.24
-    raw_data = np.load(results_file, allow_pickle=True)['F_dff']
-    spikes = locate_spikes_peakutils(raw_data, fps)
-    time_vec = np.arange(raw_data.shape[1]) / fps
-    scatter_spikes(raw_data, spikes, downsample_display=1, time_vec=time_vec)
+    raw_data = np.load(results_file, allow_pickle=True)["F_dff"]
+    # spikes = locate_spikes_peakutils(raw_data, fps)
+    # time_vec = np.arange(raw_data.shape[1]) / fps
+    # scatter_spikes(raw_data, spikes, downsample_display=1, time_vec=time_vec)
+    generate_spikes_roc_curve(raw_data, fps)
     plt.show()
-
 
 
