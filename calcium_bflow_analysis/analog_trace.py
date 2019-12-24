@@ -461,14 +461,14 @@ class AnalogAnalysisOld(AnalyzedAnalogTrace):
         if self.occluder:
             self._populate_occluder()
 
-        # Fit the analog vector to frame vector
+        # Fit the analog vector to frame vector@
         # self.__extract_time_series()
         self._init_vecs()
         self._fit_frames_to_analog(stim_vec, juxta_vec, run_vec, spont_vec)
         self._convert_to_series()
 
     def _find_peaks(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
+        """@@@@
         Find the indices in which a peak occurred, and discern between peaks
         that were real stimuli and juxta peaks
         :return: Two numpy arrays with the stimulus and juxta peak indices

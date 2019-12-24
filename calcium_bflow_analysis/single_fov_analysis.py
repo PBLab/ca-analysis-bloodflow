@@ -1,5 +1,4 @@
-from collections import namedtuple
-from typing import List, Tuple, Union, MutableMapping
+from typing import List, Tuple, Union, MutableMapping, Optional
 import itertools
 
 import numpy as np
@@ -13,13 +12,13 @@ import pathlib
 import matplotlib
 import matplotlib.pyplot as plt
 
-sys.path.append(
-    str(
-        pathlib.Path(
-            "/export/home/pblab/data/MatlabCode/PBLabToolkit/CalciumDataAnalysis/python-ca-analysis-bloodflow"
-        )
-    )
-)
+# sys.path.append(
+#     str(
+#         pathlib.Path(
+#             "/export/home/pblab/data/MatlabCode/PBLabToolkit/CalciumDataAnalysis/python-ca-analysis-bloodflow"
+#         )
+#     )
+# )
 from matplotlib import gridspec
 
 from calcium_bflow_analysis.analog_trace import (
@@ -58,7 +57,7 @@ class SingleFovParser:
                 self.fluo_trace = np.array([])
         except ValueError:
             pass
-        if len(self.fluo_trace.shape) == 0:
+        if self.fluo_trace.shape[0] == 0:
             self.fluo_analyzed = None
             return
 
@@ -68,6 +67,7 @@ class SingleFovParser:
                 header=None,
                 names=["stimulus", "run"],
                 index_col=False,
+                sep="\t",  # old data format
             )
             self.analog_analyzed = analog_trace_runner(
                 self.metadata.fname,
@@ -291,15 +291,15 @@ class SingleFovViz:
 
 
 def filter_da(
-    data: xr.Dataset, epoch: str, condition: Union[str, None] = None
+    data: xr.Dataset, epoch: str, condition: Optional[str] = None
 ) -> np.ndarray:
     """ Filter a Dataset by the given condition and epoch.
          Returns a numpy array in the shape of cells x time """
     epoch_data = data.sel(epoch=epoch)
     if condition:
-        for curr_cond, ds in epoch_data.groupby('condition'):
-            if curr_cond == condition:
-                epoch_data = ds
+        temp = epoch_data.where(epoch_data.condition == condition)
+        temp['epoch_times'] = temp['epoch_times'].astype(bool)
+        epoch_data = temp
 
     # The final array, in the shape of (all_cells x time), will
     # be concatenated from nan-filled arrays that will be created on the fly.
@@ -310,19 +310,20 @@ def filter_da(
     number_of_neurons = len(data.neuron)
     stacked_dff = np.full((number_of_files * number_of_neurons, len(data.time)), np.nan)
     last_full_row = 0
-    for _, dff_ds in epoch_data.groupby('fname'):
+    for _, dff_ds in epoch_data.groupby("fname"):
         relevant_epoch_idx = dff_ds["epoch_times"].data.ravel()
         dff = dff_ds["dff"].data
         if dff.ndim == 3:
             dff = dff[0]
         relevant_epoch_dff = dff[:, relevant_epoch_idx]
         last_column = relevant_epoch_dff.shape[1]
-        stacked_dff[last_full_row:(last_full_row+number_of_neurons), :last_column] = relevant_epoch_dff
+        stacked_dff[
+            last_full_row : (last_full_row + number_of_neurons), :last_column
+        ] = relevant_epoch_dff
         last_full_row += number_of_neurons
 
     full_rows = np.isfinite(stacked_dff).any(axis=1)
     return stacked_dff[full_rows]
-
 
 
 if __name__ == "__main__":

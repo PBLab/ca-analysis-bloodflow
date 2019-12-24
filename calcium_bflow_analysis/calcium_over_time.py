@@ -185,9 +185,6 @@ class CalciumAnalysisOverTime:
         default=AnalogAcquisitionType.NONE, validator=instance_of(AnalogAcquisitionType)
     )
     regex = attr.ib(default=attr.Factory(dict), validator=instance_of(dict))
-    fluo_files = attr.ib(init=False)
-    result_files = attr.ib(init=False)
-    analog_files = attr.ib(init=False)
     list_of_fovs = attr.ib(init=False)
     concat = attr.ib(init=False)
 
@@ -209,6 +206,8 @@ class CalciumAnalysisOverTime:
         that will parse the metadata from the file name. The default regexes are
         described above. Valid keys are "id_reg", "fov_reg", "cond_reg" and "day_reg".
         """
+        # Multiprocessing doesn't work due to the fact that not all objects are
+        # pickleable
         # with mp.Pool() as pool:
         #     self.list_of_fovs = pool.map(
         #         self._mp_process_timepoints, self.files_table.itertuples(index=False)
@@ -329,14 +328,12 @@ class CalciumAnalysisOverTime:
 
 if __name__ == "__main__":
     home = Path("/data")
-    # home = Path('/mnt/qnap')
-    # home = Path('/export/home/pblab/data')
-    folder = Path(r"David/TAC_baseline_both_mice_test")
+    folder = Path(r"Amit_QNAP/Calcium_FXS/")
     results_folder = home / folder
     assert results_folder.exists()
     globstr = "*.tif"
     folder_and_files = {home / folder: globstr}
-    analog_type = AnalogAcquisitionType.TREADMILL
+    analog_type = AnalogAcquisitionType.OLD
     filefinder = FileFinder(
         results_folder=results_folder,
         folder_globs=folder_and_files,
@@ -345,10 +342,10 @@ if __name__ == "__main__":
     )
     files_table = filefinder.find_files()
     regex = {
-        "cond_reg": r"fov.*\d_(\w\w)_D",
-        "id_reg": r"(2)",
-        "fov_reg": r"fov.*(\d)_\wH",
-        "day_reg": r"DAY_(\d)_"
+        "cond_reg": r"^(\w+?)_\d",
+        "id_reg": r"^\w+?_(\d+)_",
+        "fov_reg": r"_FOV(\d)_",
+        "day_reg": r"(18987)"
     }
     res = CalciumAnalysisOverTime(
         files_table=files_table,
@@ -358,5 +355,5 @@ if __name__ == "__main__":
         regex=regex,
     )
     # res.run_batch_of_timepoints(results_folder)
-    day_reg = r'(0)'
-    res.generate_ds_per_day(results_folder, 'f*.nc', day_reg, recursive=False)
+    day_reg = r'(1909)'
+    res.generate_ds_per_day(results_folder, '*.nc', day_reg, recursive=True)

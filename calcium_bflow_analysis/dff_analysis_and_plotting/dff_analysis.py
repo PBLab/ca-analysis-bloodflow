@@ -54,7 +54,7 @@ def calc_dff_batch(files):
 
 
 def locate_spikes_peakutils(
-    data, fps=30.03, thresh=0.75, min_dist=None, max_allowed_firing_rate=1
+    data, fps=30.03, thresh=0.65, min_dist=None, max_allowed_firing_rate=1
 ) -> np.ndarray:
     """
     Find spikes from a dF/F matrix using the peakutils package.
