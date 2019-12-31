@@ -6,11 +6,13 @@
 Welcome to calcium_bflow_analysis's documentation!
 ===================================================
 
+This package contains many useful scripts for analysis of calcium data. The
+functions in this package shouldn't be used in one order.
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
-   welcome
    calcium_bflow_analysis
 
 Indices and tables
