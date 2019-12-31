@@ -36,6 +36,14 @@ calcium\_bflow\_analysis.analyze\_ca\_stacks\_with\_vessels module
    :undoc-members:
    :show-inheritance:
 
+calcium\_bflow\_analysis.caiman\_funcs\_for\_comparison module
+--------------------------------------------------------------
+
+.. automodule:: calcium_bflow_analysis.caiman_funcs_for_comparison
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 calcium\_bflow\_analysis.calcium\_over\_time module
 ---------------------------------------------------
 

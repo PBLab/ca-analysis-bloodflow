@@ -10,7 +10,8 @@ Welcome to calcium_bflow_analysis's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   api
+   welcome
+   calcium_bflow_analysis
 
 Indices and tables
 ===================
