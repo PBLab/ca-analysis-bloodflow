@@ -139,7 +139,7 @@ def show_side_by_side(
         crds = tuple([slice(None) for item in tifs])
 
     for tif, result, crd, ax in zip(tifs, results, crds, axes):
-        data = np.load(result)
+        data = np.load(result, allow_pickle=True)
         dff = data["F_dff"][crds]
         fps = data["params"].tolist()["fr"]
         time_vec = np.arange(dff.shape[1]) / fps
@@ -364,23 +364,20 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=N
 
 
 if __name__ == "__main__":
-    foldername = pathlib.Path("/data/Amit_QNAP/WFA/Activity/WT_RGECO/20190908/")
-    results_file = (
-        foldername / "WFA-FITC_RGECO_X25_mag3__1040nm_256px_20190908_00004_results.npz"
-    )
-    tif = (
-        foldername / "WFA-FITC_RGECO_X25_mag3__1040nm_256px_20190908_00004.tif"
-    )
-    cell_radius = 8
-    number_of_channels = 2
-    fps = 58.24
-    display_cell_excerpts_over_time(
-        results_file=results_file,
-        tif=tif,
-        cell_radius=cell_radius,
-        number_of_channels=number_of_channels,
-        fps=fps,
-    )
-    draw_rois_over_cells(tif, cell_radius=cell_radius)
-    plt.show()
+    foldername = pathlib.Path("/data/Amit_QNAP/Calcium_FXS/x10/")
+    fxs = 'FXS_614/FXS_614_X10_FOV3_mag3_20181010_00003'
+    wt = 'WT_674/WT_674_X10_FOV1_mag3_20181009_00001'
 
+    results_files = (foldername / (fxs + '_results.npz'), foldername / (wt + '_results.npz'))
+    tifs = (foldername / (fxs + '.tif'), foldername / (wt + '.tif'))
+
+    cell_radius = 8
+    number_of_channels = 1
+    fps = 30.03
+    show_side_by_side(
+        results=results_files,
+        tifs=tifs,
+        cell_radius=cell_radius,
+        figsize=(12, 12),
+    )
+    plt.show()
