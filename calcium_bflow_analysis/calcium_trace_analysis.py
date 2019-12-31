@@ -63,7 +63,7 @@ class CalciumReview:
         """
         Find all files and parsed days for the experiment, and (partially) load them
         into memory.
-         """
+        """
         self.files = []
         self.raw_data = {}
         all_files = folder.rglob(self.glob)
@@ -178,9 +178,9 @@ class CalciumReview:
 
 
 if __name__ == "__main__":
-    folder = pathlib.Path(r"/data/David/TAC_baseline_both_mice_test")
+    folder = pathlib.Path(r"/data/Amit_QNAP/Calcium_FXS/")
     assert folder.exists()
-    ca = CalciumReview(folder, "data*.nc")
+    ca = CalciumReview(folder, "data_of_day_1.nc")
     analysis_methods = [
         AvailableFuncs.AUC,
         AvailableFuncs.MEAN,
@@ -193,5 +193,6 @@ if __name__ == "__main__":
         ca.funcs_dict[AvailableFuncs.SPIKERATE],
         f"Spike Rate of Fluo Traces, Epoch: {epoch}",
     )
+    ca.plot_df(ca.funcs_dict[AvailableFuncs.MEAN], f"Mean dF/F of Fluo Traces, Epoch: {epoch}")
 
     plt.show(block=False)
