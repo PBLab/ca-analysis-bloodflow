@@ -4,6 +4,7 @@ import numpy as np
 import enum
 from scipy.stats import mode
 
+
 class ConversionMethod(enum.Enum):
     """
     Types of conversion
@@ -12,6 +13,7 @@ class ConversionMethod(enum.Enum):
     DFF = 2
     RAW_SUBTRACT = 3
     NONE = 4
+
 
 @attr.s(slots=True)
 class RawTraceConverter:

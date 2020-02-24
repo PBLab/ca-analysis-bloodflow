@@ -1,3 +1,5 @@
+import pathlib
+
 import attr
 from attr.validators import instance_of
 import numpy as np
@@ -6,8 +8,6 @@ import tifffile
 import matplotlib.pyplot as plt
 import matplotlib
 from matplotlib.gridspec import GridSpec
-import cv2
-import pathlib
 
 
 @attr.s
@@ -40,23 +40,23 @@ class DffHeatmap:
             cur_crd = caiman['crd'][cur_valid]
             self.valid_comps = np.concatenate((self.valid_comps, cur_valid))
             self.crd = np.concatenate((self.crd, cur_crd))
-    
+
     def display_dff(self):
         # self._compute_component_slices()
         self._find_files()
         self._display_heatmap()
-    
+
     def _compute_component_slices(self):
         """ Run through all coordinates and extract the
         slice of their bounding box """
         self.comp_slices = pd.Series(dtype=object)
         for crd in self.crd:
             bbox = [int(val) for val in crd['bbox']]
-            cur_slice = (slice(bbox[0], bbox[1]), 
+            cur_slice = (slice(bbox[0], bbox[1]),
                          slice(bbox[2], bbox[3]))
             cur_neuron_id = crd['neuron_id']
             self.comp_slices.append(pd.Series({cur_neuron_id: cur_slice}, dtype=object))
-    
+
     def _display_heatmap(self):
         fig, ax = plt.subplots()
         normed_dff = self.dff[::8, ::8].copy()

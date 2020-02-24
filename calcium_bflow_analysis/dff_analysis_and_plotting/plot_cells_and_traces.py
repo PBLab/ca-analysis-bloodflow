@@ -364,20 +364,9 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=N
 
 
 if __name__ == "__main__":
-    foldername = pathlib.Path("/data/Amit_QNAP/Calcium_FXS/x10/")
-    fxs = 'FXS_614/FXS_614_X10_FOV3_mag3_20181010_00003'
-    wt = 'WT_674/WT_674_X10_FOV1_mag3_20181009_00001'
-
-    results_files = (foldername / (fxs + '_results.npz'), foldername / (wt + '_results.npz'))
-    tifs = (foldername / (fxs + '.tif'), foldername / (wt + '.tif'))
-
-    cell_radius = 8
-    number_of_channels = 1
-    fps = 30.03
-    show_side_by_side(
-        results=results_files,
-        tifs=tifs,
-        cell_radius=cell_radius,
-        figsize=(12, 12),
-    )
+    foldername = pathlib.Path("/data/David/TAC_group_3_151219/201_1d_after/201_1d_left_stim")
+    tif = next(foldername.glob("*1*CHANNEL_2*.tif"))
+    cell_radius = 4
+    draw_rois_over_cells(tif, cell_radius)
     plt.show()
+

@@ -193,11 +193,11 @@ class CalciumAnalysisOverTime:
         Main method to analyze all FOVs in all timepoints in all experiments.
         Generally used for TAC experiments, which have multiple FOVs per mouse, and
         an experiment design which spans multiple days.
-        The script expects a filename containing the following "self.fov_analysis_files.append(fields)":
-            Mouse ID (digits at the beginning of filename)
-            Either 'HYPER' or 'HYPO'
-            'DAY_0/1/n'
-            'FOV_n'
+        The script expects a filename containing the following "self.fov_analysis_files.append(fields)"::
+            * Mouse ID (digits at the beginning of filename)
+            * Either 'HYPER' or 'HYPO'
+            * 'DAY_0/1/n'
+            * 'FOV_n'
         After creating a xr.Dataset out of each file, the script will write this DataArray to
         disk (only if it doesn't exist yet, and only if self.serialize is True) to make future processing faster.
         Finally, it will take all created DataArrays and concatenate them into a single DataArray,
@@ -206,6 +206,7 @@ class CalciumAnalysisOverTime:
         that will parse the metadata from the file name. The default regexes are
         described above. Valid keys are "id_reg", "fov_reg", "cond_reg" and "day_reg".
         """
+
         # Multiprocessing doesn't work due to the fact that not all objects are
         # pickleable
         # with mp.Pool() as pool:
@@ -328,12 +329,12 @@ class CalciumAnalysisOverTime:
 
 if __name__ == "__main__":
     home = Path("/data")
-    folder = Path(r"Amit_QNAP/Calcium_FXS/")
+    folder = Path(r"David/TAC_group_3_151219/201_1d_after")
     results_folder = home / folder
     assert results_folder.exists()
     globstr = "*.tif"
     folder_and_files = {home / folder: globstr}
-    analog_type = AnalogAcquisitionType.OLD
+    analog_type = AnalogAcquisitionType.TREADMILL
     filefinder = FileFinder(
         results_folder=results_folder,
         folder_globs=folder_and_files,
@@ -342,10 +343,10 @@ if __name__ == "__main__":
     )
     files_table = filefinder.find_files()
     regex = {
-        "cond_reg": r"^(\w+?)_\d",
-        "id_reg": r"^\w+?_(\d+)_",
-        "fov_reg": r"_FOV(\d)_",
-        "day_reg": r"(18987)"
+        "cond_reg": r"_1d_(\w+)_mag_\d",
+        "id_reg": r"(201)_",
+        "fov_reg": r"^Fov_(\d)_1d",
+        "day_reg": r"^Fov_\d_(\d)d"
     }
     res = CalciumAnalysisOverTime(
         files_table=files_table,
@@ -354,6 +355,6 @@ if __name__ == "__main__":
         analog=analog_type,
         regex=regex,
     )
-    # res.run_batch_of_timepoints(results_folder)
-    day_reg = r'(1909)'
-    res.generate_ds_per_day(results_folder, '*.nc', day_reg, recursive=True)
+    res.run_batch_of_timepoints(results_folder)
+    # day_reg = r'(0)'
+    # res.generate_ds_per_day(results_folder, '*.nc', day_reg, recursive=True)

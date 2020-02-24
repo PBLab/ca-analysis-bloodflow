@@ -13,169 +13,111 @@ def CNMFSetParms(Y, n_processes, K=30, gSig=[5, 5], gSiz=None, ssub=2, tsub=2, p
                  min_corr=.85, min_pnr=20, ring_size_factor=1.5, center_psf=False,
                  ssub_B=2, compute_B_3x=True, init_iter=2):
     """Dictionary for setting the CNMF parameters.
-
     Any parameter that is not set get a default value specified
     by the dictionary default options
-
     PRE-PROCESS PARAMS#############
     sn: None,
         noise level for each pixel
-
     noise_range: [0.25, 0.5]
              range of normalized frequencies over which to average
-
     noise_method': 'mean'
              averaging method ('mean','median','logmexp')
-
     max_num_samples_fft': 3*1024
-
     n_pixels_per_process: 1000
-
     compute_g': False
         flag for estimating global time constant
-
     p : 2
          order of AR indicator dynamics
-
     lags: 5
         number of autocovariance lags to be considered for time constant estimation
-
     include_noise: False
             flag for using noise values when estimating g
-
     pixels: None
          pixels to be excluded due to saturation
-
     check_nan: True
-
     INIT PARAMS###############
-
     K:     30
         number of components
-
     gSig: [5, 5]
           size of bounding box
-
     gSiz: [int(round((x * 2) + 1)) for x in gSig],
-
     ssub:   2
         spatial downsampling factor
-
     tsub:   2
         temporal downsampling factor
-
     nIter: 5
         number of refinement iterations
-
     kernel: None
         user specified template for greedyROI
-
     maxIter: 5
         number of HALS iterations
-
     method: method_init
         can be greedy_roi or sparse_nmf, local_NMF
-
     max_iter_snmf : 500
-
     alpha_snmf: 10e2
-
     sigma_smooth_snmf : (.5,.5,.5)
-
     perc_baseline_snmf: 20
-
     nb:  1
         number of background components
-
     normalize_init:
         whether to pixelwise equalize the movies during initialization
-
     options_local_NMF:
         dictionary with parameters to pass to local_NMF initializer
-
     SPATIAL PARAMS##########
-
         dims: dims
             number of rows, columns [and depths]
-
         method: 'dilate','ellipse', 'dilate'
             method for determining footprint of spatial components ('ellipse' or 'dilate')
-
         dist: 3
             expansion factor of ellipse
         n_pixels_per_process: n_pixels_per_process
             number of pixels to be processed by eacg worker
-
         medw: (3,)*len(dims)
             window of median filter
         thr_method: 'nrg'
            Method of thresholding ('max' or 'nrg')
-
         maxthr: 0.1
             Max threshold
-
         nrgthr: 0.9999
             Energy threshold
-
-
         extract_cc: True
             Flag to extract connected components (might want to turn to False for dendritic imaging)
-
         se: np.ones((3,)*len(dims), dtype=np.uint8)
              Morphological closing structuring element
-
         ss: np.ones((3,)*len(dims), dtype=np.uint8)
             Binary element for determining connectivity
-
-
         update_background_components:bool
             whether to update the background components in the spatial phase
-
         low_rank_background:bool
             whether to update the using a low rank approximation. In the False case all the nonzero elements of the background components are updated using hals
             (to be used with one background per patch)
-
         method_ls:'lasso_lars'
             'nnls_L0'. Nonnegative least square with L0 penalty
             'lasso_lars' lasso lars function from scikit learn
             'lasso_lars_old' lasso lars from old implementation, will be deprecated
-
         TEMPORAL PARAMS###########
-
         ITER: 2
             block coordinate descent iterations
-
         method:'oasis', 'cvxpy',  'oasis'
             method for solving the constrained deconvolution problem ('oasis','cvx' or 'cvxpy')
             if method cvxpy, primary and secondary (if problem unfeasible for approx solution)
-
         solvers: ['ECOS', 'SCS']
              solvers to be used with cvxpy, can be 'ECOS','SCS' or 'CVXOPT'
-
         p:
             order of AR indicator dynamics
-
         memory_efficient: False
-
         bas_nonneg: True
             flag for setting non-negative baseline (otherwise b >= min(y))
-
         noise_range: [.25, .5]
             range of normalized frequencies over which to average
-
         noise_method: 'mean'
             averaging method ('mean','median','logmexp')
-
         lags: 5,
             number of autocovariance lags to be considered for time constant estimation
-
         fudge_factor: .96
             bias correction factor (between 0 and 1, close to 1)
-
         nb
-
         verbosity: False
-
         block_size : block_size
             number of pixels to process at the same time for dot product. Make it smaller if memory problems
     """
@@ -331,38 +273,27 @@ def extract_DF_F(Yr, A, C,  bl, quantileMin=8, frames_window=200, block_size=400
     """ Compute DFF function from cnmf output.
 s
      Disclaimer: it might be memory inefficient
-
     Parameters:
     -----------
     Yr: ndarray (2D)
         movie pixels X time
-
     A: scipy.sparse.coo_matrix
         spatial components (from cnmf cnm.A)
-
     C: ndarray
         temporal components (from cnmf cnm.C)
-
     bl: ndarray
         baseline for each component (from cnmf cnm.bl)
-
     quantile_min: float
         quantile minimum of the
-
     frames_window: int
         number of frames for running quantile
-
     Returns:
     -------
-
     Cdf:
         the computed Calcium acitivty to the derivative of f
-
     See Also:
     -------
-
     ..image::docs/img/onlycnmf.png
-
     """
     nA = np.array(np.sqrt(A.power(2).sum(0)).T)
     A = scipy.sparse.coo_matrix(A / nA.T)
@@ -407,35 +338,26 @@ s
 def detrend_df_f(A, b, C, f, YrA=None, quantileMin=8, frames_window=500, block_size=400):
     """ Compute DF/F signal without using the original data.
     In general much faster than extract_DF_F
-
     Parameters:
     -----------
     A: scipy.sparse.csc_matrix
         spatial components (from cnmf cnm.A)
-
     b: ndarray
         spatial backgrounds
-
     C: ndarray
         temporal components (from cnmf cnm.C)
-
     f: ndarray
         temporal background components
-
     YrA: ndarray
         residual signals
-
     quantile_min: float
         quantile minimum of the
-
     frames_window: int
         number of frames for running quantile
-
     Returns:
     ----------
     F_df:
         the computed Calcium acitivty to the derivative of f
-
     """
     if 'csc_matrix' not in str(type(A)):
         A = scipy.sparse.csc_matrix(A)
@@ -511,35 +433,26 @@ def detrend_df_f_auto(A, b, C, f, YrA=None, frames_window=1000, use_fast = False
     """
     Compute DF/F using an automated level of percentile filtering based on
     kernel density estimation.
-
     Parameters:
     -----------
     A: scipy.sparse.csc_matrix
         spatial components (from cnmf cnm.A)
-
     b: ndarray
         spatial backgrounds
-
     C: ndarray
         temporal components (from cnmf cnm.C)
-
     f: ndarray
         temporal background components
-
     YrA: ndarray
         residual signals
-
     frames_window: int
         number of frames for running quantile
-
     use_fast: bool
         flag for using fast approximate percentile filtering
-
     Returns:
     ----------
     F_df:
         the computed Calcium acitivty to the derivative of f
-
     """
     if 'csc_matrix' not in str(type(A)):
         A = scipy.sparse.csc_matrix(A.ravel()[0])
@@ -595,45 +508,31 @@ def detrend_df_f_auto(A, b, C, f, YrA=None, frames_window=1000, use_fast = False
 def manually_refine_components(Y, xxx_todo_changeme, A, C, Cn, thr=0.9, display_numbers=True,
                                max_number=None, cmap=None, **kwargs):
     """Plots contour of spatial components
-
      against a background image and allows to interactively add novel components by clicking with mouse
-
      Parameters
      -----------
      Y: ndarray
                movie in 2D
-
      (dx,dy): tuple
                dimensions of the square used to identify neurons (should be set to the galue of gsiz)
-
      A:   np.ndarray or sparse matrix
                Matrix of Spatial components (d x K)
-
      Cn:  np.ndarray (2D)
                Background image (e.g. mean, correlation)
-
      thr: scalar between 0 and 1
                Energy threshold for computing contours (default 0.995)
-
      display_number:     Boolean
                Display number of ROIs if checked (default True)
-
      max_number:    int
                Display the number for only the first max_number components (default None, display all numbers)
-
      cmap:     string
                User specifies the colormap (default None, default colormap)
-
-
-
      Returns
      --------
      A: np.ndarray
          matrix A os estimated  spatial component contributions
-
      C: np.ndarray
          array of estimated calcium traces
-
     """
     (dx, dy) = xxx_todo_changeme
     if issparse(A):
@@ -727,16 +626,13 @@ def manually_refine_components(Y, xxx_todo_changeme, A, C, Cn, thr=0.9, display_
 #%%
 def app_vertex_cover(A):
     """ Finds an approximate vertex cover for a symmetric graph with adjacency matrix A.
-
      Parameters:
      -----------
      A:    boolean 2d array (K x K)
           Adjacency matrix. A is boolean with diagonal set to 0
-
      Returns:
      --------
      L:   A vertex cover of A
-
      @authors by Eftychios A. Pnevmatikakis, Simons Foundation, 2015
     """
 
@@ -762,14 +658,12 @@ def update_order(A, new_a=None, prev_list=None):
           spatial component that is added, in order to efficiently update the orders in online scenarios
      prev_list: list of list
           orders from previous iteration, you need to pass if new_a is not None
-
      Outputs:
      ---------
      O:   list of sets
           list of subsets of components. The components of each subset can be updated in parallel
      lo:  list
           length of each subset
-
     Written by Eftychios A. Pnevmatikakis, Simons Foundation, 2015
     '''
     K = np.shape(A)[-1]
@@ -824,26 +718,20 @@ def update_order(A, new_a=None, prev_list=None):
 #%%
 def order_components(A, C):
     """Order components based on their maximum temporal value and size
-
     Parameters:
     -----------
     A:   sparse matrix (d x K)
          spatial components
-
     C:   matrix or np.ndarray (K x T)
          temporal components
-
     Returns:
     -------
     A_or:  np.ndarray
         ordered spatial components
-
     C_or:  np.ndarray
         ordered temporal components
-
     srt:   np.ndarray
         sorting mapping
-
     """
     A = np.array(A.todense())
     nA2 = np.sqrt(np.sum(A**2, axis=0))
@@ -861,27 +749,21 @@ def order_components(A, C):
 
 def update_order_greedy(A, flag_AA=True):
     """Determines the update order of the temporal components
-
     this, given the spatial components using a greedy method
     Basically we can update the components that are not overlapping, in parallel
-
     Input:
      -------
      A:       sparse crc matrix
               matrix of spatial components (d x K)
      OR
               A.T.dot(A) matrix (d x d) if flag_AA = true
-
      flag_AA: boolean (default true)
-
      Outputs:
      ---------
      parllcomp:   list of sets
           list of subsets of components. The components of each subset can be updated in parallel
-
      len_parrllcomp:  list
           length of each subset
-
     @author: Eftychios A. Pnevmatikakis, Simons Foundation, 2017
     """
     K = np.shape(A)[-1]
@@ -913,13 +795,10 @@ def compute_residuals(Yr_mmap_file, A_, b_, C_, f_, dview=None, block_size=1000,
         -------
         A_,b_,C_,f_:
                 from CNMF
-
         block_size: int
             number of pixels processed together
-
         num_blocks_per_run: int
             nnumber of parallel blocks processes
-
         Return:
         -------
         YrA: ndarray
@@ -1002,7 +881,6 @@ import numpy as np
 def mode_robust_fast(inputData, axis=None):
     """
     Robust estimator of the mode of a data set using the half-sample mode.
-
     .. versionadded: 1.0.3
     """
 
@@ -1029,7 +907,6 @@ def mode_robust_fast(inputData, axis=None):
 def mode_robust(inputData, axis=None, dtype=None):
     """
     Robust estimator of the mode of a data set using the half-sample mode.
-
     .. versionadded: 1.0.3
     """
     if axis is not None:

@@ -67,7 +67,7 @@ class SingleFovParser:
                 header=None,
                 names=["stimulus", "run"],
                 index_col=False,
-                sep="\t",  # old data format
+                sep=",",  # old data format is \t
             )
             self.analog_analyzed = analog_trace_runner(
                 self.metadata.fname,

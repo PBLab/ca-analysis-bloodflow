@@ -7,7 +7,7 @@ import tifffile
 import h5py
 import numpy as np
 import pandas as pd
-from roipoly import roipoly
+from calcium_bflow_analysis.roipoly import roipoly
 import matplotlib.pyplot as plt
 
 from dff_calc.df_f_calculation import DffCalculator

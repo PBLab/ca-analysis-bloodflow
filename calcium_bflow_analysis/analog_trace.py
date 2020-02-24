@@ -83,10 +83,13 @@ class AnalyzedAnalogTrace:
 
     analog_trace is a DataFrame with its first column being the air puff data,
     and second being the run vector data.
+
     Usage:
-        AnalogTraceAnalyzer(tif_filename, analog_trace).run()
-    # TODO: ADD SUPPORT FOR COLABELING INDICES
+
+    AnalogTraceAnalyzer(tif_filename, analog_trace).run()
     """
+    
+    # TODO: ADD SUPPORT FOR COLABELING INDICES
 
     tif_filename = attr.ib(
         validator=instance_of(pathlib.Path)

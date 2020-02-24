@@ -38,9 +38,10 @@ setup(
                       'ansimarkup >= 1.4',
                       'scikit-learn >= 0.22',
                       'scikit-image >= 0.16',
-                      'jupyter >= 1',],
-
-    package_data={  # Optional
-        'peakutils': ['lucashnegri-peakutils-48c329c177b1'],
-    },
+                      'jupyter >= 1',
+                      'h5py >= 2.10',
+                      'mne >= 0.19',
+                      'dff_calc >= 0.1',
+                      'openpyxl', 
+                      'peakutils >= 1.3',],
 )
