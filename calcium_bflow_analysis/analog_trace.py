@@ -88,7 +88,7 @@ class AnalyzedAnalogTrace:
 
     AnalogTraceAnalyzer(tif_filename, analog_trace).run()
     """
-    
+
     # TODO: ADD SUPPORT FOR COLABELING INDICES
 
     tif_filename = attr.ib(
@@ -551,7 +551,7 @@ if __name__ == "__main__":
         "/data/David/TAC_baseline_mouse_1/fov2_RH_DAY_0_256Px_30Hz_Mag_1_00002.tif"
     )
     analog = pd.read_csv(
-        analog_file, header=None, names=["stimulus", "run"], index_col=False
+        analog_file, header=None, names=["stimulus", "run"], index_col=False, dtype=[float, float],
     )
     fps = 58.24
     metadata = FluoMetadata(tif_file, fps)

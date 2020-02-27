@@ -53,7 +53,7 @@ class SingleFovParser:
         with np.load(str(self.results_fname), "r+") as self.all_fluo_results:
             self.fluo_trace = self.all_fluo_results["F_dff"]
         try:
-            if not self.fluo_trace:  # no cells detected
+            if not self.fluo_trace or len(self.fluo_trace.shape) == 0:  # no cells detected
                 self.fluo_trace = np.array([])
         except ValueError:
             pass
@@ -67,7 +67,7 @@ class SingleFovParser:
                 header=None,
                 names=["stimulus", "run"],
                 index_col=False,
-                sep=",",  # old data format is \t
+                sep="\t",  # old data format is \t
             )
             self.analog_analyzed = analog_trace_runner(
                 self.metadata.fname,

@@ -329,7 +329,7 @@ class CalciumAnalysisOverTime:
 
 if __name__ == "__main__":
     home = Path("/data")
-    folder = Path(r"David/TAC_group_3_151219/201_1d_after")
+    folder = Path(r"Amit_QNAP/Calcium_FXS/")
     results_folder = home / folder
     assert results_folder.exists()
     globstr = "*.tif"
@@ -343,10 +343,10 @@ if __name__ == "__main__":
     )
     files_table = filefinder.find_files()
     regex = {
-        "cond_reg": r"_1d_(\w+)_mag_\d",
-        "id_reg": r"(201)_",
-        "fov_reg": r"^Fov_(\d)_1d",
-        "day_reg": r"^Fov_\d_(\d)d"
+        "cond_reg": r"^(\w+?)_\d",
+        "id_reg": r"WT_(\d+)_X10",
+        "fov_reg": r"0000(\d)_",
+        "day_reg": r"_X(1)0_"
     }
     res = CalciumAnalysisOverTime(
         files_table=files_table,
@@ -355,6 +355,6 @@ if __name__ == "__main__":
         analog=analog_type,
         regex=regex,
     )
-    res.run_batch_of_timepoints(results_folder)
-    # day_reg = r'(0)'
-    # res.generate_ds_per_day(results_folder, '*.nc', day_reg, recursive=True)
+    # res.run_batch_of_timepoints(results_folder)
+    day_reg = '1'
+    res.generate_ds_per_day(results_folder, '*.nc', day_reg, recursive=True)

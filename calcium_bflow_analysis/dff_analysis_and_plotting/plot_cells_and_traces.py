@@ -122,18 +122,25 @@ def show_side_by_side(
     crds: List[np.ndarray] = None,
     cell_radius=5,
     figsize=(36, 32),
+    ax=None,
 ):
     """ Shows a figure where each row is an image of a FOV,
     and all corresponding calcium traces. The image also draws
     a rectangle around each cell. The crds parameter allows you to
     choose which cells to display for each FOV.
+    The ax parameter allows you to use a pre-existing axis, but it only works if
+    you only have a single TIF to show and that axis has a shape of (1, 2).
     """
     assert len(tifs) == len(results)
     num_of_rows = len(tifs)
 
-    fig, axes = plt.subplots(num_of_rows, 2, figsize=figsize)
-    if num_of_rows == 1:
-        axes = [axes]
+    if ax is None:
+        fig, axes = plt.subplots(num_of_rows, 2, figsize=figsize)
+        if num_of_rows == 1:
+            axes = [axes]
+    else:
+        assert len(tifs) == 1
+        axes = [ax]
 
     if not crds:
         crds = tuple([slice(None) for item in tifs])
@@ -144,15 +151,15 @@ def show_side_by_side(
         fps = data["params"].tolist()["fr"]
         time_vec = np.arange(dff.shape[1]) / fps
         draw_rois_over_cells(tif, cell_radius, ax[0], crd)
-        ax[1].plot(time_vec, (dff + np.arange(dff.shape[0])[:, np.newaxis]).T)
+        ax[1].plot(time_vec, (dff + np.arange(dff.shape[0])[:, np.newaxis]).T * 2)
         ax[1].spines["top"].set_visible(False)
         ax[1].spines["right"].set_visible(False)
         ax[1].set_xlabel("Time (seconds)")
         ax[1].set_ylabel("Cell ID")
         ax[1].yaxis.set_major_formatter(FormatStrFormatter("%d"))
 
-    fig.subplots_adjust(left=0.03, right=0.97, top=0.97, bottom=0.03)
-    return fig
+    ax[0].figure.subplots_adjust(left=0.03, right=0.97, top=0.97, bottom=0.03)
+    return ax[0].figure
 
 
 def display_heatmap(data, ax=None, epoch="All cells", downsample_factor=8, fps=30.03):
@@ -171,7 +178,7 @@ def display_heatmap(data, ax=None, epoch="All cells", downsample_factor=8, fps=3
     ax.set_aspect("auto")
     ax.set_ylabel("Cell ID")
     ax.set_xlabel("Time (sec)")
-    ax.set_title(f"dF/F Heatmap for epoch {epoch}")
+    ax.set_title(f"dF/F Heatmap for {epoch}")
 
 
 def extract_cells_from_tif(
@@ -191,7 +198,8 @@ def extract_cells_from_tif(
     coords = res_data["crd"][indices][:num]
 
     with tifffile.TiffFile(tif, movie=True) as f:
-        data = f.asarray(slice(data_channel.value, None, number_of_channels))
+        data = f.asarray()
+        data = data[slice(data_channel.value, None, number_of_channels), ...]
 
     masks = extract_mask_from_coords(coords, data.shape[1:], cell_radius)
     cell_data = [data[:, mask[0], mask[1]] for mask in masks]
@@ -226,6 +234,7 @@ def display_cell_excerpts_over_time(
     number_of_channels=2,
     fps=None,
     title="Cell Excerpts Over Time",
+    output_folder=pathlib.Path('.'),
 ):
     """
     Display cells as they fluoresce during the recording time, each cell in its
@@ -268,8 +277,7 @@ def display_cell_excerpts_over_time(
         dtype=np.uint64,
     )
     idx_sample_end = idx_sample_start + np.uint64(20)
-    w, h = matplotlib.figure.figaspect(1.0)
-    fig = plt.figure(figsize=(w, h))
+    fig = plt.figure(figsize=(18, 18))
     gs = gridspec.GridSpec(
         len(cell_data), num_to_display + 2, figure=fig, wspace=0.01, hspace=0.01
     )
@@ -319,7 +327,7 @@ def display_cell_excerpts_over_time(
     fig.suptitle(title)
     fig.text(0.55, 0.04, "Time (sec)", horizontalalignment="center")
     fig.text(0.04, 0.5, "Cell ID", verticalalignment="center", rotation="vertical")
-    fig.savefig(f"cell_mosaic_{title}.pdf", frameon=False, transparent=True)
+    fig.savefig(output_folder / f"cell_mosaic_{title}.pdf", frameon=False, transparent=True)
 
 
 def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=None):
@@ -364,9 +372,11 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=N
 
 
 if __name__ == "__main__":
-    foldername = pathlib.Path("/data/David/TAC_group_3_151219/201_1d_after/201_1d_left_stim")
-    tif = next(foldername.glob("*1*CHANNEL_2*.tif"))
-    cell_radius = 4
-    draw_rois_over_cells(tif, cell_radius)
+    foldername = pathlib.Path("/data/Amit_QNAP/WFA/Activity/RCaMP701/230")
+    tif = next(foldername.glob("*CHANNEL_2*.tif"))
+    results = next(foldername.glob("*results.npz"))
+    cell_radius = 8
+    # draw_rois_over_cells(tif, cell_radius)
+    show_side_by_side([tif], [results], None, cell_radius, (18, 8))
     plt.show()
 

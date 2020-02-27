@@ -95,6 +95,14 @@ def calc_mean_spike_num(data, fps=30.03, thresh=0.75):
     return mean_of_spikes
 
 
+def calc_mean_spike_num_no_background(data, fps=30.03, thresh=0.75, q=20):
+    """Find the spikes in the data and count them, but do that
+    after removing some quantile that is treated as background.
+    """
+    data = _filter_backgroud_from_dff(data, q=q)
+    return calc_mean_spike_num(data=data, fps=fps, thresh=thresh)
+
+
 def scatter_spikes(
     raw_data, spike_data=None, downsample_display=10, time_vec=None, ax=None
 ):
@@ -190,6 +198,24 @@ def calc_mean_dff(data):
     return np.nanmean(data_no_offset, axis=1)
 
 
+def _filter_backgroud_from_dff(data: np.ndarray, q: int = 20) -> np.ndarray:
+    """Filters out a quantile q from the data, returning it
+    in the same shape but with values below q as nan.
+    """
+    q: np.ndarray = np.nanpercentile(data, 20, axis=1)
+    above = data > q.reshape((len(q), 1))
+    data[~above] = np.nan
+    return data
+
+
+def calc_mean_dff_no_background(data):
+    """Calculates the mean dF/F value of the given data after getting rid
+    of the lower quantiles of it.
+    """
+    filtered = _filter_backgroud_from_dff(data, q=20)
+    return np.nanmean(filtered, axis=1)
+
+
 def deinterleave(fname: str, data_channel: int, num_of_channels: int = 2):
     """ Takes a multichannel TIF and writes back to disk the channel with
     the relevant data. """
@@ -221,11 +247,13 @@ def generate_spikes_roc_curve(dff: np.ndarray, fps: float):
     threshold_boundaries = np.arange(0.4, 0.99, 0.05)
     spike_nums: np.ndarray = np.zeros_like(threshold_boundaries)
     for idx, thresh in enumerate(threshold_boundaries):
-        spikes: np.ndarray = locate_spikes_peakutils(dff, fps, thresh=thresh, max_allowed_firing_rate=np.inf)
+        spikes: np.ndarray = locate_spikes_peakutils(
+            dff, fps, thresh=thresh, max_allowed_firing_rate=np.inf
+        )
         spike_nums[idx] = spikes.sum()
 
     spike_nums /= dff.shape[0]
-    spike_nums /= (dff.shape[1] / fps)
+    spike_nums /= dff.shape[1] / fps
     fig, ax = plt.subplots()
     ax.plot(threshold_boundaries, spike_nums)
     ax.set_title("ROC for spike numbers as a function of the threshold")
@@ -248,5 +276,4 @@ if __name__ == "__main__":
     # scatter_spikes(raw_data, spikes, downsample_display=1, time_vec=time_vec)
     generate_spikes_roc_curve(raw_data, fps)
     plt.show()
-
 
