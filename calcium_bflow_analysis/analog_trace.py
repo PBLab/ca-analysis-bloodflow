@@ -130,11 +130,11 @@ class AnalyzedAnalogTrace:
             vec = self.analog_trace.stimulus.to_numpy()
         else:
             vec = vec.to_numpy()
-        diffs_all = np.where(np.diff(vec) < -30)[0]
+        diffs_puff_and_juxta = np.where(np.diff(vec) < -30)[0]
         diffs_true = np.where(np.diff(vec) < -1000)[0]
-        intersect = np.in1d(diffs_all, diffs_true)
-        true_puff_idx = diffs_all[intersect]
-        juxta_puff_idx = diffs_all[~intersect]
+        intersect = np.in1d(diffs_puff_and_juxta, diffs_true)
+        true_puff_idx = diffs_puff_and_juxta[intersect]
+        juxta_puff_idx = diffs_puff_and_juxta[~intersect]
         true_puff_times = np.zeros_like(vec)
         juxta_puff_times = np.zeros_like(vec)
         if len(true_puff_idx) > 0:
@@ -420,8 +420,10 @@ class AnalogAnalysisTreadmillRows(AnalyzedAnalogTrace):
         Squeezes the input running data from a per-row basis to a per
         frame.
         """
-        mean_data = vec.abs().rolling(self.num_of_lines).mean()
-        data_per_frame = mean_data[self.num_of_lines - 1 :: self.num_of_lines]
+        window_size = len(vec) // self.num_of_frames
+        mean_data = vec.abs().rolling(window_size).mean()
+        sample_at = np.linspace(window_size - 1, len(vec) - 1, num=self.num_of_frames, dtype=np.uint32)
+        data_per_frame = mean_data[sample_at]
         assert len(data_per_frame) == self.num_of_frames
         return data_per_frame
 
@@ -435,8 +437,33 @@ class AnalogAnalysisTreadmillRows(AnalyzedAnalogTrace):
         """
         processed_run_vec = np.full(run_vec.shape, np.nan)
         run = pd.Series(run_vec).diff().abs().rolling(int(self.metadata.fps)).mean()
-        processed_run_vec[run > 0.035] = 1
+        processed_run_vec[run > 0.01] = 1
         return processed_run_vec
+
+    def _find_peaks(self, vec=None) -> Tuple[np.ndarray, np.ndarray]:
+        """ Find the starts of the puff events and mark their duration.
+        Returns a vector length of which is the same size as the TIF data,
+        with 1 wherever the a puff or a juxta puff occurred, and 0 elsewhere.
+        If vec is None (default), uses self.analog_trace.stimulus (for
+        backwards compatability purposes), else uses the given data.
+        """
+        if vec is None:
+            vec = self.analog_trace.stimulus.to_numpy()
+        else:
+            vec = vec.to_numpy()
+        diffs_puff_and_juxta = np.where(np.diff(vec) > 1)[0]
+        diffs_true = np.where(np.diff(vec) > 3.8)[0]
+        intersect = np.in1d(diffs_puff_and_juxta, diffs_true)
+        true_puff_idx = diffs_puff_and_juxta[intersect]
+        juxta_puff_idx = diffs_puff_and_juxta[~intersect]
+        true_puff_times = np.zeros_like(vec)
+        juxta_puff_times = np.zeros_like(vec)
+        if len(true_puff_idx) > 0:
+            true_puff_times = self._iter_over_puff_times(true_puff_idx, vec.shape)
+        if len(juxta_puff_idx) > 0:
+            juxta_puff_times = self._iter_over_puff_times(juxta_puff_idx, vec.shape)
+
+        return true_puff_times.astype(np.float64), juxta_puff_times.astype(np.float64)
 
 
 @attr.s

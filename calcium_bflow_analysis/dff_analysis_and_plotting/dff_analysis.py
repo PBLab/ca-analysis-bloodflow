@@ -54,7 +54,7 @@ def calc_dff_batch(files):
 
 
 def locate_spikes_peakutils(
-    data, fps=30.03, thresh=0.65, min_dist=None, max_allowed_firing_rate=1
+    data, fps=30.03, thresh=0.7, min_dist=None, max_allowed_firing_rate=1
 ) -> np.ndarray:
     """
     Find spikes from a dF/F matrix using the peakutils package.
@@ -138,9 +138,8 @@ def scatter_spikes(
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.set_xlabel("Time (seconds)")
-    ax.set_ylabel("Cell ID")
-    yticklabels = ax.get_yticklabels()
-    new_ticks = [str(idx) for idx, _ in enumerate(yticklabels)]
+    ax.set_ylabel("Cell")
+    new_ticks = []
     ax.set_yticklabels(new_ticks)
     # print([lab for lab in yticklabels])
     # ax.yaxis.set_major_formatter(FormatStrFormatter("%d"))
@@ -262,18 +261,18 @@ def generate_spikes_roc_curve(dff: np.ndarray, fps: float):
 
 
 if __name__ == "__main__":
-    foldername = pathlib.Path("/data/Amit_QNAP/WFA/Activity/WT_RGECO/B/")
-    results_file = (
-        foldername / "B_WFA-FITC_RGECO_1040nm_x25_mag4_256_20190722_00001_results.npz"
-    )
-    tif = foldername / "B_WFA-FITC_RGECO_1040nm_x25_mag4_256_20190722_00001.tif"
+    baseline_folder = pathlib.Path('/data/Amit_QNAP/Calcium_FXS/x10')
+    basic_fmr_filename = 'FXS_614_X10_FOV5_mag3_20181010_00005'
+    fmr_tif = baseline_folder / 'FXS_614' / f'{basic_fmr_filename}.tif'
+    fmr_results = fmr_tif.with_name(f'{basic_fmr_filename}_results.npz')
+    fmr_analog = fmr_tif.with_name(f'{basic_fmr_filename}_analog.txt')
+
     # cell_radius = 9
     # number_of_channels = 2
-    fps = 58.24
-    raw_data = np.load(results_file, allow_pickle=True)["F_dff"]
-    # spikes = locate_spikes_peakutils(raw_data, fps)
-    # time_vec = np.arange(raw_data.shape[1]) / fps
-    # scatter_spikes(raw_data, spikes, downsample_display=1, time_vec=time_vec)
-    generate_spikes_roc_curve(raw_data, fps)
+    fps = 30.04
+    raw_data = np.load(fmr_results, allow_pickle=True)["F_dff"]
+    spikes = locate_spikes_peakutils(raw_data, fps)
+    time_vec = np.arange(raw_data.shape[1]) / fps
+    scatter_spikes(raw_data, spikes, downsample_display=1, time_vec=time_vec)
     plt.show()
 

@@ -11,14 +11,6 @@ import sys
 import pathlib
 import matplotlib
 import matplotlib.pyplot as plt
-
-# sys.path.append(
-#     str(
-#         pathlib.Path(
-#             "/export/home/pblab/data/MatlabCode/PBLabToolkit/CalciumDataAnalysis/python-ca-analysis-bloodflow"
-#         )
-#     )
-# )
 from matplotlib import gridspec
 
 from calcium_bflow_analysis.analog_trace import (
