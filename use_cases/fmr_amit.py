@@ -1,3 +1,8 @@
+"""
+This file shows how to generate dF/F plots of two FOVs. The plots show all
+of the cell's dF/F, the running and evoked activity epochs, and simple
+statistics calculated from the data.
+"""
 import pathlib
 
 import matplotlib.pyplot as plt
@@ -33,4 +38,3 @@ wt_meta = FluoMetadata(wt_tif, 30.03, 1, 0, id_reg, day_reg, fov_reg, cond_reg)
 wt_meta.get_metadata()
 wt_fov = SingleFovParser(wt_analog, wt_results, wt_meta, AnalogAcquisitionType.TREADROWS, True)
 wt_fov.parse()
-

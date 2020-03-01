@@ -298,16 +298,17 @@ def filter_da(
     try:
         number_of_files = len(data.fname)
     except TypeError:  # unsized arrays have no len
-        return epoch_data["dff"].data
+        stacked_dff = np.full((len(data.neuron), len(data.time)), np.nan)
+        relevant_epoch_dff = _generate_epoch_df(epoch_data)
+        last_column = relevant_epoch_dff.shape[1]
+        stacked_dff[:, :last_column] = relevant_epoch_dff
+        return stacked_dff[np.isfinite(stacked_dff).any(axis=1)]
+
     number_of_neurons = len(data.neuron)
     stacked_dff = np.full((number_of_files * number_of_neurons, len(data.time)), np.nan)
     last_full_row = 0
     for _, dff_ds in epoch_data.groupby("fname"):
-        relevant_epoch_idx = dff_ds["epoch_times"].data.ravel()
-        dff = dff_ds["dff"].data
-        if dff.ndim == 3:
-            dff = dff[0]
-        relevant_epoch_dff = dff[:, relevant_epoch_idx]
+        relevant_epoch_dff = _generate_epoch_df(dff_ds)
         last_column = relevant_epoch_dff.shape[1]
         stacked_dff[
             last_full_row : (last_full_row + number_of_neurons), :last_column
@@ -316,6 +317,15 @@ def filter_da(
 
     full_rows = np.isfinite(stacked_dff).any(axis=1)
     return stacked_dff[full_rows]
+
+
+def _generate_epoch_df(ds):
+    relevant_epoch_idx = ds["epoch_times"].data.ravel()
+    dff = ds["dff"].data
+    if dff.ndim == 3:
+        dff = dff[0]
+    relevant_epoch_dff = dff[:, relevant_epoch_idx]
+    return relevant_epoch_dff
 
 
 if __name__ == "__main__":
