@@ -18,6 +18,7 @@ import sklearn.metrics
 import skimage.draw
 import tifffile
 import scipy.ndimage
+import scipy.signal
 
 from calcium_bflow_analysis import caiman_funcs_for_comparison
 from calcium_bflow_analysis.colabeled_cells.find_colabeled_cells import TiffChannels
@@ -81,6 +82,44 @@ def locate_spikes_peakutils(
     return all_spikes
 
 
+def locate_spikes_scipy(data, fps=30.03, thresh=2.2, min_dist=None, max_allowed_firing_rate=1):
+    """Find spikes from a dF/F matrix using the find_peaks function.
+    The fps parameter is used to calculate the minimum allowed distance
+    between consecutive spikes, and to disqualify cells which had no
+    evident dF/F peaks, which result in too many false-positives.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        (cell x time) np.ndarray which contains the dF/F data
+    max_allowed_firing_rate : float
+        Maximal number of spikes per second that are considered viable.
+    fps : float, optional
+        Frame rate
+    thresh : float, optional
+        Spike-finding threshold between (0, 1)
+    min_dist : int or None, optional
+        Number of measurements between consecutive spikes
+    max_allowed_firing_rate : float, optional
+        Maximal number of spikes. Used to filter out cells with "too many
+        spikes".
+    """
+    assert len(data.shape) == 2 and data.shape[0] > 0
+    if min_dist is None:
+        min_dist = int(fps)
+    else:
+        min_dist = int(min_dist)
+    all_spikes: np.ndarray = np.zeros_like(data)
+    nan_to_zero = np.nan_to_num(data)
+    max_spike_num = int(data.shape[1] // fps) * max_allowed_firing_rate
+    for row, cell in enumerate(nan_to_zero):
+        peaks, _ = scipy.signal.find_peaks(cell, prominence=thresh, threshold=(0.1, 5), distance=min_dist)
+        num_of_peaks = len(peaks)
+        if (num_of_peaks > 0) and (num_of_peaks < max_spike_num):
+            all_spikes[row, peaks] = 1
+    return all_spikes
+
+
 def calc_mean_spike_num(data, fps=30.03, thresh=0.75):
     """
     Find the spikes in the data (using "locate_spikes_peakutils") and count
@@ -126,6 +165,7 @@ def scatter_spikes(
     else:
         fig = ax.figure
     downsampled_data = raw_data[::downsample_display]
+    downsampled_data = np.where(downsampled_data < np.float64(8), downsampled_data, np.float64(0))
     num_displayed_cells = downsampled_data.shape[0]
     y_step = 2
     y_heights = np.arange(0, num_displayed_cells * y_step, y_step)[:, np.newaxis]
@@ -271,7 +311,7 @@ if __name__ == "__main__":
     # number_of_channels = 2
     fps = 30.04
     raw_data = np.load(fmr_results, allow_pickle=True)["F_dff"]
-    spikes = locate_spikes_peakutils(raw_data, fps)
+    spikes = locate_spikes_scipy(raw_data, fps)
     time_vec = np.arange(raw_data.shape[1]) / fps
     scatter_spikes(raw_data, spikes, downsample_display=1, time_vec=time_vec)
     plt.show()

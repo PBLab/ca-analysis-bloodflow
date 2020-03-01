@@ -223,7 +223,7 @@ class SingleFovViz:
 
     def _scat_spikes(self, ax):
         """ Plots all dF/F traces and spikes on a given axes """
-        spikes = dff_tools.locate_spikes_peakutils(
+        spikes = dff_tools.locate_spikes_scipy(
             self.fov.fluo_trace, self.fov.metadata.fps
         )
         time_vec = np.arange(self.fov.fluo_trace.shape[1]) / self.fov.metadata.fps

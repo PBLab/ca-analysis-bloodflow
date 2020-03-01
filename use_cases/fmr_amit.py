@@ -29,8 +29,8 @@ fmr_meta.get_metadata()
 fmr_fov = SingleFovParser(fmr_analog, fmr_results, fmr_meta, AnalogAcquisitionType.TREADROWS, True)
 fmr_fov.parse()
 
-# wt_meta = FluoMetadata(wt_tif, 30.03, 1, 0, id_reg, day_reg, fov_reg, cond_reg)
-# wt_meta.get_metadata()
-# wt_fov = SingleFovParser(wt_analog, wt_results, wt_meta, AnalogAcquisitionType.TREADROWS, True)
-# wt_fov.parse()
+wt_meta = FluoMetadata(wt_tif, 30.03, 1, 0, id_reg, day_reg, fov_reg, cond_reg)
+wt_meta.get_metadata()
+wt_fov = SingleFovParser(wt_analog, wt_results, wt_meta, AnalogAcquisitionType.TREADROWS, True)
+wt_fov.parse()
 
