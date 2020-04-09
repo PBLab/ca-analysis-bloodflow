@@ -147,7 +147,7 @@ def show_side_by_side(
 
     for tif, result, crd, ax in zip(tifs, results, crds, axes):
         data = np.load(result, allow_pickle=True)
-        dff = data["F_dff"][crds]
+        dff = data["F_dff"][crd]
         fps = data["params"].tolist()["fr"]
         time_vec = np.arange(dff.shape[1]) / fps
         draw_rois_over_cells(tif, cell_radius, ax[0], crd)
@@ -372,11 +372,12 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=N
 
 
 if __name__ == "__main__":
-    foldername = pathlib.Path("/data/Amit_QNAP/WFA/Activity/RCaMP701/230")
-    tif = next(foldername.glob("*CHANNEL_2*.tif"))
-    results = next(foldername.glob("*results.npz"))
-    cell_radius = 8
+    foldername = pathlib.Path("/data/Amit_QNAP/rcamp107_wfa_120320")
+    tifs = list(foldername.glob("*CHANNEL_2*.tif"))
+    results = list(foldername.glob("*results.npz"))
+    cell_radius = 13
     # draw_rois_over_cells(tif, cell_radius)
-    show_side_by_side([tif], [results], None, cell_radius, (18, 8))
+    fig = show_side_by_side(tifs, results, None, cell_radius)
+    fig.savefig('/data/Amit_QNAP/rcamp107_wfa_120320/all_fovs.pdf', transparent=True, dpi=300)
     plt.show()
 

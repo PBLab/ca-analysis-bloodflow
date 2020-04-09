@@ -29,10 +29,10 @@ day_reg = '(1)'
 fov_reg = r'_FOV(\d)_'
 cond_reg = '^([A-Z]){2, 3}_'
 
-fmr_meta = FluoMetadata(fmr_tif, 30.03, 1, 0, id_reg, day_reg, fov_reg, cond_reg)
-fmr_meta.get_metadata()
-fmr_fov = SingleFovParser(fmr_analog, fmr_results, fmr_meta, AnalogAcquisitionType.TREADROWS, True)
-fmr_fov.parse()
+# fmr_meta = FluoMetadata(fmr_tif, 30.03, 1, 0, id_reg, day_reg, fov_reg, cond_reg)
+# fmr_meta.get_metadata()
+# fmr_fov = SingleFovParser(fmr_analog, fmr_results, fmr_meta, AnalogAcquisitionType.TREADROWS, True)
+# fmr_fov.parse()
 
 wt_meta = FluoMetadata(wt_tif, 30.03, 1, 0, id_reg, day_reg, fov_reg, cond_reg)
 wt_meta.get_metadata()
