@@ -21,6 +21,7 @@ xarray = "^0.15.1"
 h5py = "^2.10.0"
 roipoly = "^0.5.2"
 colorama = "^0.4.3"
+jupyter = "^1.0.0"
 
 [tool.poetry.dev-dependencies]
 pylint = "^2.4.4"
