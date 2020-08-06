@@ -1,5 +1,5 @@
 import pathlib
-from typing import Tuple, List
+from typing import Tuple, List, Union
 import sys
 
 import numpy as np
@@ -324,23 +324,25 @@ def display_cell_excerpts_over_time(
     fig.savefig(output_folder / f"cell_mosaic_{title}.pdf", frameon=False, transparent=True)
 
 
-def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=None, results_file=None):
+def draw_rois_over_cells(tif: Union[pathlib.Path, np.ndarray], cell_radius=5, ax_img=None, crds=None, results_file=None):
     """
     Draw ROIs around cells in the FOV, and mark their number (ID).
     Parameters:
-        fname (pathlib.Path): Deinterleaved TIF filename.
+        tif (rray or pathlib.Path): The image to show, or a deinterleaved TIF filename.
         cell_radius (int): Number of pixels in a cell's radius
         ax_img (Axes): matplotlib Axes object to draw on. If None - will be created
         crds (List of ints): Specific indices of the cells to be shown. If None shows all.
         results_file(pathlib.Path): Path to the results file associated with the tif.
     """
-    assert fname.exists()
-    if not results_file:
-        try:
-            results_file = next(fname.parent.glob(fname.name[:-4] + "*results.npz"))
-        except StopIteration:
-            print("Results file not found. Exiting.")
+    if isinstance(tif, pathlib.Path):
+        assert tif.exists()
+        if not results_file:
+            try:
+                results_file = next(tif.parent.glob(tif.name[:-4] + "*results.npz"))
+            except StopIteration:
+                print("Results file not found. Exiting.")
             return
+        tif = tifffile.imread(str(tif)).mean(0)
 
     full_dict = np.load(results_file, allow_pickle=True)
     rel_crds = full_dict["crd"]
@@ -349,10 +351,9 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=N
         rel_crds = rel_crds[crds]
     if ax_img is None:
         fig, ax_img = plt.subplots()
-    data = tifffile.imread(str(fname)).mean(0)
-    ax_img.imshow(data, cmap="gray")
+    ax_img.imshow(tif)
     colors = [f"C{idx}" for idx in range(10)]
-    masks = extract_mask_from_coords(rel_crds, data.shape, cell_radius)
+    masks = extract_mask_from_coords(rel_crds, tif.shape, cell_radius)
     for idx, mask in enumerate(masks):
         origin = mask[1].min(), mask[0].min()
         rect = matplotlib.patches.Rectangle(
