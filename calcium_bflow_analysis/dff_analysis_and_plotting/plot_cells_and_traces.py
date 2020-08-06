@@ -4,20 +4,14 @@ import sys
 
 import numpy as np
 import pandas as pd
-import xarray as xr
 import seaborn as sns
-from ansimarkup import ansiprint as aprint
-import peakutils
 import matplotlib
 import matplotlib.gridspec as gridspec
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
 import matplotlib.patches
-import sklearn.metrics
-import skimage.draw
 import tifffile
-import scipy.ndimage
+import skimage
 
 from calcium_bflow_analysis.colabeled_cells.find_colabeled_cells import TiffChannels
 
@@ -150,8 +144,8 @@ def show_side_by_side(
         dff = data["F_dff"][crd]
         fps = data["params"].tolist()["fr"]
         time_vec = np.arange(dff.shape[1]) / fps
-        draw_rois_over_cells(tif, cell_radius, ax[0], crd)
-        ax[1].plot(time_vec, (dff + np.arange(dff.shape[0])[:, np.newaxis]).T * 2)
+        draw_rois_over_cells(tif, cell_radius, ax[0], crd, result)
+        ax[1].plot(time_vec, (dff + np.arange(dff.shape[0])[:, np.newaxis]).T * 2, alpha=0.4)
         ax[1].spines["top"].set_visible(False)
         ax[1].spines["right"].set_visible(False)
         ax[1].set_xlabel("Time (seconds)")
@@ -330,7 +324,7 @@ def display_cell_excerpts_over_time(
     fig.savefig(output_folder / f"cell_mosaic_{title}.pdf", frameon=False, transparent=True)
 
 
-def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=None):
+def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=None, results_file=None):
     """
     Draw ROIs around cells in the FOV, and mark their number (ID).
     Parameters:
@@ -338,13 +332,15 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=N
         cell_radius (int): Number of pixels in a cell's radius
         ax_img (Axes): matplotlib Axes object to draw on. If None - will be created
         crds (List of ints): Specific indices of the cells to be shown. If None shows all.
+        results_file(pathlib.Path): Path to the results file associated with the tif.
     """
     assert fname.exists()
-    try:
-        results_file = next(fname.parent.glob(fname.name[:-4] + "*results.npz"))
-    except StopIteration:
-        print("Results file not found. Exiting.")
-        return
+    if not results_file:
+        try:
+            results_file = next(fname.parent.glob(fname.name[:-4] + "*results.npz"))
+        except StopIteration:
+            print("Results file not found. Exiting.")
+            return
 
     full_dict = np.load(results_file, allow_pickle=True)
     rel_crds = full_dict["crd"]
@@ -372,12 +368,12 @@ def draw_rois_over_cells(fname: pathlib.Path, cell_radius=5, ax_img=None, crds=N
 
 
 if __name__ == "__main__":
-    foldername = pathlib.Path("/data/Amit_QNAP/rcamp107_wfa_120320")
-    tifs = list(foldername.glob("*CHANNEL_2*.tif"))
-    results = list(foldername.glob("*results.npz"))
-    cell_radius = 13
+    foldername = pathlib.Path("/data/Amit_QNAP/WFA/WFA-FITC_RCaMP7_LV-chABC/774/747_activity/")
+    tifs = list(foldername.glob("*420*CHANNEL_1*z*.tif"))
+    results = list(foldername.glob("*420*CHANNEL_1_results.npz"))
+    cell_radius = 6
     # draw_rois_over_cells(tif, cell_radius)
     fig = show_side_by_side(tifs, results, None, cell_radius)
-    fig.savefig('/data/Amit_QNAP/rcamp107_wfa_120320/all_fovs.pdf', transparent=True, dpi=300)
+    # fig.savefig('/data/Amit_QNAP/rcamp107_wfa_120320/all_fovs.pdf', transparent=True, dpi=300)
     plt.show()
 
