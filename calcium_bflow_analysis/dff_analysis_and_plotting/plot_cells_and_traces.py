@@ -144,13 +144,14 @@ def show_side_by_side(
         dff = data["F_dff"][crd]
         fps = data["params"].tolist()["fr"]
         time_vec = np.arange(dff.shape[1]) / fps
-        draw_rois_over_cells(tif, cell_radius, ax[0], crd, result)
-        ax[1].plot(time_vec, (dff + np.arange(dff.shape[0])[:, np.newaxis]).T * 2, alpha=0.4)
+        ax_img = draw_rois_over_cells(tif, cell_radius, ax[0], crd, result)
+        ax[1].plot(time_vec, (dff + np.arange(dff.shape[0])[:, np.newaxis]).T * 1, alpha=0.5)
         ax[1].spines["top"].set_visible(False)
         ax[1].spines["right"].set_visible(False)
         ax[1].set_xlabel("Time (seconds)")
         ax[1].set_ylabel("Cell ID")
         ax[1].yaxis.set_major_formatter(FormatStrFormatter("%d"))
+        # ax[1].set_yticklabels(np.arange(len(dff)))
 
     ax[0].figure.subplots_adjust(left=0.03, right=0.97, top=0.97, bottom=0.03)
     return ax[0].figure
@@ -364,8 +365,9 @@ def draw_rois_over_cells(tif: Union[pathlib.Path, np.ndarray], cell_radius=5, ax
             linewidth=0.5,
         )
         ax_img.add_patch(rect)
-        ax_img.text(*origin, str(idx), color="w")
+        ax_img.text(*origin, str(idx), color="w", size=14)
     ax_img.axis("off")
+    return ax_img
 
 
 if __name__ == "__main__":

@@ -456,6 +456,21 @@ version = "0.31.0"
 
 [[package]]
 category = "main"
+description = "build GUIs from functions, using magic."
+name = "magicgui"
+optional = false
+python-versions = ">=3.6"
+version = "0.1.6"
+
+[package.dependencies]
+qtpy = ">=1.7.0"
+
+[package.extras]
+pyqt5 = ["PyQt5 (>=5.12.0)", "PyQt5 (<5.15)"]
+pyside2 = ["PySide2 (>=5.12.0)", "PySide2 (<5.15)"]
+
+[[package]]
+category = "main"
 description = "Safely add untrusted strings to HTML/XML markup."
 name = "markupsafe"
 optional = false
@@ -765,7 +780,7 @@ wcwidth = "*"
 [[package]]
 category = "main"
 description = "Run a subprocess in a pseudo terminal"
-marker = "sys_platform != \"win32\" or os_name != \"nt\" or python_version >= \"3.3\" and sys_platform != \"win32\""
+marker = "python_version >= \"3.3\" and sys_platform != \"win32\" or sys_platform != \"win32\" or os_name != \"nt\" or python_version >= \"3.3\" and sys_platform != \"win32\" and (python_version >= \"3.3\" and sys_platform != \"win32\" or sys_platform != \"win32\")"
 name = "ptyprocess"
 optional = false
 python-versions = "*"
@@ -1165,7 +1180,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["jaraco.itertools", "func-timeout"]
 
 [metadata]
-content-hash = "cfd3e64de13b6034cef1a53b006ac4e97655b76a41eda54f49531027a6c1a2b2"
+content-hash = "11c687a85c0fef2b1f1661a79a4e83d8845f5e39cfdaa36afc2165a608d4d46e"
 python-versions = "^3.6.1"
 
 [metadata.files]
@@ -1409,6 +1424,10 @@ llvmlite = [
     {file = "llvmlite-0.31.0-cp38-cp38-win32.whl", hash = "sha256:3601a869da83e5fb1abbe55ecfcecb957f9d899179a4ef66fc4b3b82b461fc5a"},
     {file = "llvmlite-0.31.0-cp38-cp38-win_amd64.whl", hash = "sha256:947b81539aa751ff627626172a3bdb0ba0a92bfd1de1847f4c1ad7928ea2ea70"},
     {file = "llvmlite-0.31.0.tar.gz", hash = "sha256:22ab2b9d7ec79fab66ac8b3d2133347de86addc2e2df1b3793e523ac84baa3c8"},
+]
+magicgui = [
+    {file = "magicgui-0.1.6-py2.py3-none-any.whl", hash = "sha256:2b1a5b3a6d4c613acb0a7cdfe27627e65e41327029187bd18e382181772aeb02"},
+    {file = "magicgui-0.1.6.tar.gz", hash = "sha256:2f05ba85fe8be39d36975dfb25e53cae9e17a5ccc5c15fb68334683735cdce83"},
 ]
 markupsafe = [
     {file = "MarkupSafe-1.1.1-cp27-cp27m-macosx_10_6_intel.whl", hash = "sha256:09027a7803a62ca78792ad89403b1b7a73a01c8cb65909cd876f7fcebd79b161"},

@@ -2,6 +2,9 @@ import pathlib
 import json
 
 from magicgui import magicgui, event_loop
+import colorcet as cc
+import skimage.transform
+import skimage.exposure
 import cv2
 import tifffile
 import numpy as np
@@ -57,9 +60,11 @@ def _normalize_arrays(ch1: np.ndarray, ch2: np.ndarray):
     if ch1.shape == ch2.shape:
         return ch1, ch2
     if ch1.shape[0] < ch2.shape[0]:
-        ch2 = cv2.resize(ch2, (ch1.shape))
+        ch2 = skimage.transform.resize(ch2, ch1.shape, anti_aliasing=True, preserve_range=True)
     else:
-        ch1 = cv2.resize(ch1, ch2.shape)
+        ch1 = skimage.transform.resize(ch1, ch2.shape, anti_aliasing=True, preserve_range=True)
+    ch1 = skimage.exposure.rescale_intensity(ch1, out_range='int16').astype('int16')
+    ch2 = skimage.exposure.rescale_intensity(ch2, out_range='int16').astype('int16')
     return ch1, ch2
 
 
@@ -69,7 +74,7 @@ def overlay_channels_and_show_traces(ch1_fname: str = ".tif", ch1_frames: str = 
     if not ch1_fname.exists():
         return "Channel 1 path doesn't exist"
     ch2_fname = pathlib.Path(ch2_fname)
-    if not ch1_fname.exists():
+    if not ch2_fname.exists():
         return "Channel 2 path doesn't exist"
     results_fname = pathlib.Path(results_fname)
     if not results_fname.exists():
@@ -77,7 +82,7 @@ def overlay_channels_and_show_traces(ch1_fname: str = ".tif", ch1_frames: str = 
     ch1_slice = _find_start_end_frames(ch1_frames)
     ch2_slice = _find_start_end_frames(ch2_frames)
     write_to_cache(CACHE_FOLDER, {'ch1_fname': str(ch1_fname), 'ch1_frames': ch1_frames, 'ch2_fname': str(ch2_fname), 'ch2_frames': ch2_frames, 'results_fname': str(results_fname), 'cell_radius': cell_radius})
-    print("reading files...")
+    print("reading files")
     ch1 = tifffile.imread(str(ch1_fname))[ch1_slice].mean(axis=0)
     ch2 = tifffile.imread(str(ch2_fname))[ch2_slice].mean(axis=0)
     ch1, ch2 = _normalize_arrays(ch1, ch2)
@@ -85,8 +90,18 @@ def overlay_channels_and_show_traces(ch1_fname: str = ".tif", ch1_frames: str = 
     im = cv2.addWeighted(ch1, 0.5, ch2, 0.5, 0)
     new_fname = str(ch1_fname.parent / ('combined_' + ch1_fname.stem + '_' + ch2_fname.stem + '.tif'))
     tifffile.imwrite(new_fname, np.stack([ch1, ch2]))
-    plot_cells_and_traces.show_side_by_side([im], [results_fname], None, cell_radius)
+    fig = plot_cells_and_traces.show_side_by_side([im], [results_fname], None, cell_radius)
+    # ch1 -= ch1.min()
+    # ch2 -= ch2.min()
+    vmin1, vmax1 = ch1.min() * 1.1, ch1.max() * 0.9
+    vmin2, vmax2 = ch2.min() * 1.1, ch2.max() * 0.9
+    fig.axes[0].images.pop()
+    fig.axes[0].imshow(ch1, cmap=cc.cm.kg, vmin=vmin1, vmax=vmax1)
+    fig.axes[0].imshow(ch2, cmap=cc.cm.kr, alpha=0.55, vmin=vmin2, vmax=vmax2)
+    fig.axes[0].set_title('Ch1 is green, Ch2 is red')
+    fig.canvas.set_window_title(f"{new_fname}")
     plt.show(block=False)
+    fig.savefig(str(pathlib.Path(new_fname).with_suffix('.pdf')), transparent=True, dpi=300)
     return new_fname
 
 
