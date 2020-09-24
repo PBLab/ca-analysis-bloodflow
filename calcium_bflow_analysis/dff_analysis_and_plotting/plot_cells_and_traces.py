@@ -325,25 +325,28 @@ def display_cell_excerpts_over_time(
     fig.savefig(output_folder / f"cell_mosaic_{title}.pdf", frameon=False, transparent=True)
 
 
-def draw_rois_over_cells(tif: Union[pathlib.Path, np.ndarray], cell_radius=5, ax_img=None, crds=None, results_file=None):
+def draw_rois_over_cells(tif_fname: Union[pathlib.Path, np.ndarray], cell_radius=5, ax_img=None, crds=None, results_file=None, roi_fname=None):
     """
     Draw ROIs around cells in the FOV, and mark their number (ID).
     Parameters:
-        tif (rray or pathlib.Path): The image to show, or a deinterleaved TIF filename.
+        tif_fname (array or pathlib.Path): The image to show, or a deinterleaved TIF filename.
         cell_radius (int): Number of pixels in a cell's radius
         ax_img (Axes): matplotlib Axes object to draw on. If None - will be created
         crds (List of ints): Specific indices of the cells to be shown. If None shows all.
         results_file(pathlib.Path): Path to the results file associated with the tif.
+        roi_fname (pathlib.Path): Path to save a black image only with the ROIs
     """
-    if isinstance(tif, pathlib.Path):
-        assert tif.exists()
+    if isinstance(tif_fname, pathlib.Path):
+        assert tif_fname.exists()
         if not results_file:
             try:
-                results_file = next(tif.parent.glob(tif.name[:-4] + "*results.npz"))
+                results_file = next(tif_fname.parent.glob(tif_fname.name[:-4] + "*results.npz"))
             except StopIteration:
                 print("Results file not found. Exiting.")
             return
-        tif = tifffile.imread(str(tif)).mean(0)
+        tif = tifffile.imread(str(tif_fname)).mean(0)
+    elif isinstance(tif_fname, np.ndarray):
+        tif = tif_fname
 
     full_dict = np.load(results_file, allow_pickle=True)
     rel_crds = full_dict["crd"]
@@ -352,21 +355,30 @@ def draw_rois_over_cells(tif: Union[pathlib.Path, np.ndarray], cell_radius=5, ax
         rel_crds = rel_crds[crds]
     if ax_img is None:
         fig, ax_img = plt.subplots()
-    ax_img.imshow(tif)
-    colors = [f"C{idx}" for idx in range(10)]
-    masks = extract_mask_from_coords(rel_crds, tif.shape, cell_radius)
-    for idx, mask in enumerate(masks):
-        origin = mask[1].min(), mask[0].min()
+    if roi_fname:
+        fig.set_size_inches(4.8, 4.8)
+    ax_img.imshow(np.zeros_like(tif), cmap='gray')
+    ax_img.axis("off")
+    ax_img.set_aspect('equal')
+    for idx, coord in enumerate(rel_crds):
+        bbox = coord['bbox']
+        origin = bbox[0], bbox[2]
+        size = (abs(bbox[1] - bbox[0]), abs(bbox[3] - bbox[2]))
         rect = matplotlib.patches.Rectangle(
             origin,
-            *mask[0].shape,
-            edgecolor="w",  #  colors[idx % 10],
+            *size,
+            edgecolor="w",
             facecolor="none",
             linewidth=0.5,
         )
         ax_img.add_patch(rect)
         ax_img.text(*origin, str(idx), color="w", size=14)
-    ax_img.axis("off")
+    if roi_fname:
+        ax_img.figure.savefig(str(roi_fname), transparent=True, format='tif', bbox_inches='tight', pad_inches=0)
+        i = tifffile.imread(str(roi_fname))
+        b = skimage.transform.resize(skimage.color.rgb2gray(i), tif.shape, anti_aliasing=True)
+        tifffile.imsave(str(roi_fname), b)
+    ax_img.images.pop()
     return ax_img
 
 

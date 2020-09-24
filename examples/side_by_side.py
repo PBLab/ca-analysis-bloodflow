@@ -1,3 +1,4 @@
+from calcium_bflow_analysis.dff_analysis_and_plotting.plot_cells_and_traces import draw_rois_over_cells
 import pathlib
 import json
 
@@ -83,14 +84,21 @@ def overlay_channels_and_show_traces(ch1_fname: str = ".tif", ch1_frames: str = 
     ch2_slice = _find_start_end_frames(ch2_frames)
     write_to_cache(CACHE_FOLDER, {'ch1_fname': str(ch1_fname), 'ch1_frames': ch1_frames, 'ch2_fname': str(ch2_fname), 'ch2_frames': ch2_frames, 'results_fname': str(results_fname), 'cell_radius': cell_radius})
     print("reading files")
-    ch1 = tifffile.imread(str(ch1_fname))[ch1_slice].mean(axis=0)
-    ch2 = tifffile.imread(str(ch2_fname))[ch2_slice].mean(axis=0)
+    ch1 = tifffile.imread(str(ch1_fname))[ch1_slice]
+    if ch1.ndim == 3:
+        ch1 = ch1.mean(axis=0)
+    ch2 = tifffile.imread(str(ch2_fname))[ch2_slice]
+    if ch2.ndim == 3:
+        ch2 = ch2.mean(axis=0)
     ch1, ch2 = _normalize_arrays(ch1, ch2)
     print("finished reading tiffs")
     im = cv2.addWeighted(ch1, 0.5, ch2, 0.5, 0)
-    new_fname = str(ch1_fname.parent / ('combined_' + ch1_fname.stem + '_' + ch2_fname.stem + '.tif'))
+    new_fname = ch1_fname.parent / ('combined_' + ch1_fname.stem + '_' + ch2_fname.stem + '.tif')
+    roi_fname = str(new_fname.parent / ('only_roi_' + ch1_fname.stem + '_' + ch2_fname.stem + '.tif'))
+    new_fname = str(new_fname)
     tifffile.imwrite(new_fname, np.stack([ch1, ch2]))
     fig = plot_cells_and_traces.show_side_by_side([im], [results_fname], None, cell_radius)
+    plot_cells_and_traces.draw_rois_over_cells(im, cell_radius, results_file=results_fname, roi_fname=roi_fname)
     # ch1 -= ch1.min()
     # ch2 -= ch2.min()
     vmin1, vmax1 = ch1.min() * 1.1, ch1.max() * 0.9
