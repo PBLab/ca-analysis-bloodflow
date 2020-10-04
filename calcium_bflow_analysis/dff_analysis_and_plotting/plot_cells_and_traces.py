@@ -144,7 +144,7 @@ def show_side_by_side(
         dff = data["F_dff"][crd]
         fps = data["params"].tolist()["fr"]
         time_vec = np.arange(dff.shape[1]) / fps
-        ax_img = draw_rois_over_cells(tif, cell_radius, ax[0], crd, result)
+        ax[0] = draw_rois_over_cells(tif, cell_radius, ax[0], crd, result)
         ax[1].plot(time_vec, (dff + np.arange(dff.shape[0])[:, np.newaxis]).T * 1, alpha=0.5)
         ax[1].spines["top"].set_visible(False)
         ax[1].spines["right"].set_visible(False)
@@ -362,8 +362,8 @@ def draw_rois_over_cells(tif_fname: Union[pathlib.Path, np.ndarray], cell_radius
     ax_img.set_aspect('equal')
     for idx, coord in enumerate(rel_crds):
         bbox = coord['bbox']
-        origin = bbox[0], bbox[2]
-        size = (abs(bbox[1] - bbox[0]), abs(bbox[3] - bbox[2]))
+        origin = bbox[2], bbox[0]
+        size = (abs(bbox[3] - bbox[2]), abs(bbox[1] - bbox[0]))
         rect = matplotlib.patches.Rectangle(
             origin,
             *size,
@@ -378,7 +378,9 @@ def draw_rois_over_cells(tif_fname: Union[pathlib.Path, np.ndarray], cell_radius
         i = tifffile.imread(str(roi_fname))
         b = skimage.transform.resize(skimage.color.rgb2gray(i), tif.shape, anti_aliasing=True)
         tifffile.imsave(str(roi_fname), b)
-    ax_img.images.pop()
+    else:
+        ax_img.images.pop()
+        ax_img.imshow(tif, cmap='gray')
     return ax_img
 
 

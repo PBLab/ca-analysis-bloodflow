@@ -32,7 +32,7 @@ setup(
                       'scipy >= 1.4',
                       'tifffile',
                       'ipython >= 7',
-                      'pandas >= 0.25',
+                      'pandas >= 1',
                       'xarray >= 0.14',
                       'seaborn >= 0.9',
                       'ansimarkup >= 1.4',

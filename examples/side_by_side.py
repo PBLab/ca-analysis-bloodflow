@@ -1,12 +1,12 @@
-from calcium_bflow_analysis.dff_analysis_and_plotting.plot_cells_and_traces import draw_rois_over_cells
 import pathlib
 import json
 
+import matplotlib
+matplotlib.use('TkAgg')
 from magicgui import magicgui, event_loop
 import colorcet as cc
 import skimage.transform
 import skimage.exposure
-import cv2
 import tifffile
 import numpy as np
 import matplotlib.pyplot as plt
@@ -92,7 +92,7 @@ def overlay_channels_and_show_traces(ch1_fname: str = ".tif", ch1_frames: str = 
         ch2 = ch2.mean(axis=0)
     ch1, ch2 = _normalize_arrays(ch1, ch2)
     print("finished reading tiffs")
-    im = cv2.addWeighted(ch1, 0.5, ch2, 0.5, 0)
+    im = ch1 * 0.5 + ch2 * 0.5
     new_fname = ch1_fname.parent / ('combined_' + ch1_fname.stem + '_' + ch2_fname.stem + '.tif')
     roi_fname = str(new_fname.parent / ('only_roi_' + ch1_fname.stem + '_' + ch2_fname.stem + '.tif'))
     new_fname = str(new_fname)

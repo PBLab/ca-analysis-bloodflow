@@ -130,7 +130,7 @@ class AnalyzedAnalogTrace:
             vec = self.analog_trace.stimulus.to_numpy()
         else:
             vec = vec.to_numpy()
-        diffs_puff_and_juxta = np.where(np.diff(vec) < -30)[0]
+        diffs_puff_and_juxta = np.where(np.diff(vec) < -50)[0]
         diffs_true = np.where(np.diff(vec) < -1000)[0]
         intersect = np.in1d(diffs_puff_and_juxta, diffs_true)
         true_puff_idx = diffs_puff_and_juxta[intersect]
@@ -257,8 +257,13 @@ class AnalyzedAnalogTrace:
         """
         with tifffile.TiffFile(str(self.tif_filename)) as f:
             meta = f.scanimage_metadata
-        num_of_lines = int(meta["FrameData"]["SI.hRoiManager.linesPerFrame"])
-        num_of_frames = int(meta["FrameData"]["SI.hStackManager.framesPerSlice"])
+            if "FrameData" not in meta:
+                data = f.asarray()
+                num_of_lines = data.shape[1]
+                num_of_frames = data.shape[0] // self.metadata.num_of_channels
+            else:
+                num_of_lines = int(meta["FrameData"]["SI.hRoiManager.linesPerFrame"])
+                num_of_frames = int(meta["FrameData"]["SI.hStackManager.framesPerSlice"])
         return num_of_lines, num_of_frames
 
     @staticmethod
@@ -352,12 +357,12 @@ class AnalogAnalysisTreadmill(AnalyzedAnalogTrace):
     Analysis for the second version of the treadmill output,
     where each frame of the stack was given an analog value.
     """
-
-    num_of_lines = attr.ib(init=False)
-    num_of_frames = attr.ib(init=False)
+    num_of_lines = attr.ib(default=False)
+    num_of_frames = attr.ib(default=False)
 
     def run(self):
-        self.num_of_lines, self.num_of_frames = self._get_metadata()
+        if not self.num_of_lines or self.num_of_frames:
+            self.num_of_lines, self.num_of_frames = self._get_metadata()
         stim_vec, juxta_vec = self._find_peaks()
         self.stim_vec = self._zero_to_nan(stim_vec)
         self.juxta_vec = self._zero_to_nan(juxta_vec)
@@ -392,7 +397,6 @@ class AnalogAnalysisTreadmillRows(AnalyzedAnalogTrace):
     where each row was given a value, meaning the number of
     outputs is the number of frames times the number of rows.
     """
-
     num_of_lines = attr.ib(init=False)
     num_of_frames = attr.ib(init=False)
 

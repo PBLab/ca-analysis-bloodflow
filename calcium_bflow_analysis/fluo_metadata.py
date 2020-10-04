@@ -47,7 +47,7 @@ class FluoMetadata:
                 self.start_time = str(datetime.fromtimestamp(os.path.getmtime(str(self.fname))))
                 length = len(f.pages)//self.num_of_channels
                 self.timestamps = np.arange(length)/self.fps
-        except TypeError:
+        except (TypeError, KeyError):
             self.timestamps = None
 
     def _get_meta_using_regex(self, reg: str):

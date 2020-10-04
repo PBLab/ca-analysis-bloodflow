@@ -25,3 +25,6 @@ build/
 calcium_bflow_analysis/datajoint/mysql/data/
 docs/source/
 docs/build/
+.venv/
+.vim/
+.ipynb_checkpoints/
