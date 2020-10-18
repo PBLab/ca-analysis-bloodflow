@@ -424,7 +424,7 @@ class AnalogAnalysisTreadmillRows(AnalyzedAnalogTrace):
         Squeezes the input running data from a per-row basis to a per
         frame.
         """
-        window_size = len(vec) // self.num_of_frames
+        window_size = max(len(vec) // self.num_of_frames, 1)
         mean_data = vec.abs().rolling(window_size).mean()
         sample_at = np.linspace(window_size - 1, len(vec) - 1, num=self.num_of_frames, dtype=np.uint32)
         data_per_frame = mean_data[sample_at]

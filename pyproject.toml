@@ -29,6 +29,7 @@ ipython-genutils = "^0.2.0"
 napari = "^0.3.8"
 colorcet = "^2.0.2"
 opencv-python = "^4.4.0"
+pyqt5 = "^5.15.1"
 
 [tool.poetry.dev-dependencies]
 pylint = "^2.4.4"

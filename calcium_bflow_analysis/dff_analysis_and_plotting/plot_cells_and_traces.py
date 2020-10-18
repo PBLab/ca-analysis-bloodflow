@@ -151,7 +151,7 @@ def show_side_by_side(
         ax[1].set_xlabel("Time (seconds)")
         ax[1].set_ylabel("Cell ID")
         ax[1].yaxis.set_major_formatter(FormatStrFormatter("%d"))
-        # ax[1].set_yticklabels(np.arange(len(dff)))
+        ax[1].set_yticklabels(np.arange(len(dff)))
 
     ax[0].figure.subplots_adjust(left=0.03, right=0.97, top=0.97, bottom=0.03)
     return ax[0].figure
@@ -376,7 +376,7 @@ def draw_rois_over_cells(tif_fname: Union[pathlib.Path, np.ndarray], cell_radius
     if roi_fname:
         ax_img.figure.savefig(str(roi_fname), transparent=True, format='tif', bbox_inches='tight', pad_inches=0)
         i = tifffile.imread(str(roi_fname))
-        b = skimage.transform.resize(skimage.color.rgb2gray(i), tif.shape, anti_aliasing=True)
+        b = skimage.util.img_as_int(skimage.transform.resize(skimage.color.rgb2gray(i), tif.shape, anti_aliasing=True))
         tifffile.imsave(str(roi_fname), b)
     else:
         ax_img.images.pop()
@@ -385,12 +385,29 @@ def draw_rois_over_cells(tif_fname: Union[pathlib.Path, np.ndarray], cell_radius
 
 
 if __name__ == "__main__":
-    foldername = pathlib.Path("/data/Amit_QNAP/WFA/WFA-FITC_RCaMP7_LV-chABC/774/747_activity/")
-    tifs = list(foldername.glob("*420*CHANNEL_1*z*.tif"))
-    results = list(foldername.glob("*420*CHANNEL_1_results.npz"))
+    foldername = pathlib.Path("/data/Hagai/WFA_InVivo/new/")
+    tifs = [
+        '774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z200_200802_00001_CHANNEL_1.tif',
+        '774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z270_200802_00001_CHANNEL_1.tif',
+        '774_WFA-FITC_RCaMP7_x10_FOV2_mag4_1040nm_256px_z275_200818_00001_CHANNEL_1.tif',
+        '774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV2_z330_500802_00001_CHANNEL_1.tif',
+    ]
+    tifs = [foldername / tif for tif in tifs]
+    results = [
+        '774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z200_200802_00001_CHANNEL_1_results.npz',
+        '774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z270_200802_00001_CHANNEL_1_results.npz',
+        '774_WFA-FITC_RCaMP7_x10_FOV2_mag4_1040nm_256px_z275_200818_00001_CHANNEL_1_results.npz',
+        '774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV2_z330_500802_00001_CHANNEL_1_results.npz',
+    ]
+    results = [foldername / result for result in results]
+    coords = [
+        np.array([6]),  # 5
+        np.array([7]),  # 13
+        np.array([11]),  # 10
+        np.array([8]),  # 3, 6
+    ]
     cell_radius = 6
-    # draw_rois_over_cells(tif, cell_radius)
-    fig = show_side_by_side(tifs, results, None, cell_radius)
+    fig = show_side_by_side(tifs, results, coords, cell_radius)
     # fig.savefig('/data/Amit_QNAP/rcamp107_wfa_120320/all_fovs.pdf', transparent=True, dpi=300)
     plt.show()
 

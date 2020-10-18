@@ -2,7 +2,7 @@ import pathlib
 import json
 
 import matplotlib
-matplotlib.use('TkAgg')
+# matplotlib.use('TkAgg')
 from magicgui import magicgui, event_loop
 import colorcet as cc
 import skimage.transform
@@ -109,7 +109,6 @@ def overlay_channels_and_show_traces(ch1_fname: str = ".tif", ch1_frames: str = 
     fig.axes[0].set_title('Ch1 is green, Ch2 is red')
     fig.canvas.set_window_title(f"{new_fname}")
     plt.show(block=False)
-    fig.savefig(str(pathlib.Path(new_fname).with_suffix('.pdf')), transparent=True, dpi=300)
     return new_fname
 
 
