@@ -50,20 +50,25 @@ if __name__ == "__main__":
     fig_pnn.suptitle('PNN cells')
     fig_non_pnn = show_side_by_side(channel1, results, non_pnn_coords, cell_radius)
     fig_non_pnn.suptitle('Non-PNN cells')
-    # fig_pnn.savefig(foldername / 'pnn_cells.pdf', transparent=True, dpi=300)
-    # fig_non_pnn.savefig(foldername / 'non_pnn_cells.pdf', transparent=True, dpi=300)
     for idx, tif in enumerate(tifs):
         meta = FluoMetadata((foldername / tif).with_suffix('.tif'), fps,
                             1, 0, id_reg, day_reg, fov_reg, cond_reg)
         meta.get_metadata()
+        analog_fname = (foldername / tif).with_name(tif + '_analog.txt')
+        if not analog_fname.exists():
+            continue
         single_fov = SingleFovParser(
-            (foldername / tif).with_name(tif + '_analog.txt'), results[0],
+            analog_fname,
+            results[0],
             meta, AnalogAcquisitionType.TREADMILL, False)
         single_fov.parse()
         puff_coords: np.ndarray = single_fov.fluo_analyzed['epoch_times'].sel(epoch='stim').values
         diff = np.diff(np.concatenate([puff_coords, [0]]))
         starts = np.where(diff == 1)[0]
         ends = np.where(diff == -1)[0]
+        legit_diffs = np.concatenate([[1000], np.diff(starts)]) > (fps * 12)
+        starts = starts[legit_diffs]
+        ends = ends[legit_diffs]
         ax_pnn = fig_pnn.axes[idx * 2 + 1]
         ax_non_pnn = fig_non_pnn.axes[idx * 2 + 1]
         for start, end in zip(starts, ends):
@@ -71,4 +76,6 @@ if __name__ == "__main__":
             ax_non_pnn.add_artist(matplotlib.patches.Rectangle((start / fps, 0), width=(end - start) / fps, height=10, facecolor=(0.1, 0.1, 0.1), alpha=0.5, edgecolor="None"))
 
     plt.show(block=False)
+    fig_pnn.savefig(foldername / 'pnn_cells.pdf', transparent=True, dpi=300)
+    fig_non_pnn.savefig(foldername / 'non_pnn_cells.pdf', transparent=True, dpi=300)
 

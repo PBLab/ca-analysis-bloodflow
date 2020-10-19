@@ -145,7 +145,7 @@ def show_side_by_side(
         fps = data["params"].tolist()["fr"]
         time_vec = np.arange(dff.shape[1]) / fps
         ax[0] = draw_rois_over_cells(tif, cell_radius, ax[0], crd, result)
-        ax[1].plot(time_vec, (dff + np.arange(dff.shape[0])[:, np.newaxis]).T * 1, alpha=0.5)
+        ax[1].plot(time_vec, (dff + np.arange(dff.shape[0])[:, np.newaxis]).T * 1, alpha=0.5, linewidth=2)
         ax[1].spines["top"].set_visible(False)
         ax[1].spines["right"].set_visible(False)
         ax[1].set_xlabel("Time (seconds)")
