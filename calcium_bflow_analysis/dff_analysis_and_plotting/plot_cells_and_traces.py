@@ -143,6 +143,7 @@ def show_side_by_side(
         data = np.load(result, allow_pickle=True)
         dff = data["F_dff"][crd]
         fps = data["params"].tolist()["fr"]
+        dff = pd.DataFrame(dff.T).rolling(int(fps)).mean().to_numpy().T
         time_vec = np.arange(dff.shape[1]) / fps
         ax[0] = draw_rois_over_cells(tif, cell_radius, ax[0], crd, result)
         ax[1].plot(time_vec, (dff + np.arange(dff.shape[0])[:, np.newaxis]).T * 1, alpha=0.5, linewidth=2)

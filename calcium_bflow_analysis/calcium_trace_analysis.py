@@ -178,7 +178,7 @@ class CalciumReview:
 
 
 if __name__ == "__main__":
-    folder = pathlib.Path(r"/data/David/TAC_group_3_151219")
+    folder = pathlib.Path(r"/data/David/D_751_all_after_caiman")
     assert folder.exists()
     ca = CalciumReview(folder, "data_*.nc")
     analysis_methods = [

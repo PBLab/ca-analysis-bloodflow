@@ -276,7 +276,8 @@ class CalciumAnalysisOverTime:
             try:
                 day = int(day_reg.findall(str(file))[0])
             except IndexError:
-                day = -1
+                start, end = day_regex.find('('), day_regex.find(')')
+                day = int(day_regex[start+1:end])
             fovs_by_day[day].append(file)
 
         self._concat_fovs(fovs_by_day, results_folder)
@@ -329,7 +330,7 @@ class CalciumAnalysisOverTime:
 
 if __name__ == "__main__":
     home = Path("/data")
-    folder = Path(r"Amit_QNAP/Calcium_FXS/")
+    folder = Path(r"David/D_751_all_after_caiman/D-751-baseline")
     results_folder = home / folder
     assert results_folder.exists()
     globstr = "*.tif"
@@ -343,10 +344,10 @@ if __name__ == "__main__":
     )
     files_table = filefinder.find_files()
     regex = {
-        "cond_reg": r"^(\w+?)_\d",
-        "id_reg": r"WT_(\d+)_X10",
-        "fov_reg": r"0000(\d)_",
-        "day_reg": r"_X(1)0_"
+        "cond_reg": r"mag_3_([RL])_256px",
+        "id_reg": r"^D_(\d+)_",
+        "fov_reg": r"FOV_(\d)_",
+        "day_reg": r"751_(\w)_FOV"
     }
     res = CalciumAnalysisOverTime(
         files_table=files_table,
@@ -356,5 +357,5 @@ if __name__ == "__main__":
         regex=regex,
     )
     # res.run_batch_of_timepoints(results_folder)
-    day_reg = '1'
+    day_reg = r"(0)"
     res.generate_ds_per_day(results_folder, '*.nc', day_reg, recursive=True)

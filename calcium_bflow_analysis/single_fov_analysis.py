@@ -39,8 +39,63 @@ class SingleFovParser:
         init=False
     )  # xr.Dataset with the different slices of run, stim and dF/F
 
+    def _analyze_analog_data(self):
+        """Run the analog analysis pipeline assuming that the analog
+        data exists.
+
+        This calls to the external `analog_trace_runner` function to do
+        the heavy lifting.
+        """
+        analog_data = pd.read_csv(
+            self.analog_fname,
+            header=None,
+            names=["stimulus", "run"],
+            index_col=False,
+            # sep="\",  # old data format is \t
+        ).iloc[:self.fluo_trace.shape[1]]
+
+        self.analog_analyzed = analog_trace_runner(
+            self.metadata.fname,
+            analog_data,
+            self.analog,
+            self.metadata,
+            occluder=False,
+        )
+        self.fluo_analyzed = self.analog_analyzed * self.fluo_trace
+
+    def _mock_data(self):
+        """Generates a Dataset when the analog data is missing.
+
+        When we have no analog data we can divide the experiment into
+        meaningful epochs, so we have to have a special function that
+        takes care of that.
+        """
+        data_vars = {
+            "dff": (["neuron", "time"], np.atleast_2d(self.fluo_trace)),
+            "epoch_times": (
+                ["epoch", "time"],
+                np.ones((1, self.fluo_trace.shape[1]), dtype=np.bool),
+            ),
+        }
+        coords = {
+            "neuron": np.arange(self.fluo_trace.shape[0]),
+            "time": np.arange(self.fluo_trace.shape[1]) / self.metadata.fps,
+            "epoch": ["spont"],
+            "fov": self.metadata.fov,
+            "mouse_id": self.metadata.mouse_id,
+            "condition": self.metadata.condition,
+            "day": self.metadata.day,
+            "fname": self.metadata.fname.stem,
+        }
+        attrs = {"fps": self.metadata.fps, "stim_window": 1.5}
+        self.fluo_analyzed = dff_dataset_init(data_vars, coords, attrs)
+
     def parse(self):
-        """ Main method to parse a single duo of analog and fluorescent data """
+        """Main method to parse a single duo of analog and fluorescent data.
+
+        After it's run, self.fluo_analyzed is populated with a Dataset containing
+        the analyzed data.
+        """
         with np.load(str(self.results_fname), "r+") as self.all_fluo_results:
             self.fluo_trace = self.all_fluo_results["F_dff"]
         try:
@@ -53,41 +108,10 @@ class SingleFovParser:
             return
 
         if self.analog is not AnalogAcquisitionType.NONE:
-            analog_data = pd.read_csv(
-                self.analog_fname,
-                header=None,
-                names=["stimulus", "run"],
-                index_col=False,
-                # sep="\",  # old data format is \t
-            )
-            self.analog_analyzed = analog_trace_runner(
-                self.metadata.fname,
-                analog_data,
-                self.analog,
-                self.metadata,
-                occluder=False,
-            )
-            self.fluo_analyzed = self.analog_analyzed * self.fluo_trace
+            self._analyze_analog_data()
         else:
-            data_vars = {
-                "dff": (["neuron", "time"], np.atleast_2d(self.fluo_trace)),
-                "epoch_times": (
-                    ["epoch", "time"],
-                    np.ones((1, self.fluo_trace.shape[1]), dtype=np.bool),
-                ),
-            }
-            coords = {
-                "neuron": np.arange(self.fluo_trace.shape[0]),
-                "time": np.arange(self.fluo_trace.shape[1]) / self.metadata.fps,
-                "epoch": ["spont"],
-                "fov": self.metadata.fov,
-                "mouse_id": self.metadata.mouse_id,
-                "condition": self.metadata.condition,
-                "day": self.metadata.day,
-                "fname": self.metadata.fname.stem,
-            }
-            attrs = {"fps": self.metadata.fps, "stim_window": 1.5}
-            self.fluo_analyzed = dff_dataset_init(data_vars, coords, attrs)
+            self._mock_data()
+
         if self.summarize_in_plot:
             viz = SingleFovViz(self)
             viz.draw()
@@ -176,8 +200,8 @@ class SingleFovViz:
             )
             [scatter_ax.add_artist(p) for p in gen_patches]
             cur_used_axes = self._draw_analog_plots(gs, colors)
-            auc_axes = plt.subplot(gs[cur_used_axes + 1 :, 0])
-            spikes_axes = plt.subplot(gs[cur_used_axes + 1 :, 1])
+            auc_axes = plt.subplot(gs[cur_used_axes + 1:, 0])
+            spikes_axes = plt.subplot(gs[cur_used_axes + 1:, 1])
             self._summarize_stats_in_epochs(auc_axes, spikes_axes)
         if self.save:
             self.fig.savefig(
@@ -236,7 +260,7 @@ class SingleFovViz:
         labels = ["Air puff", "Juxtaposed\npuff", "Run time", "CCA\nocclusion times"]
 
         for idx, (label, data, color) in enumerate(
-            zip(labels, self.analog_vectors, colors), self.axes_for_dff
+                zip(labels, self.analog_vectors, colors), self.axes_for_dff
         ):
             cur_ax = plt.subplot(gs[idx, :])
             cur_ax.plot(data, color=color)
@@ -282,7 +306,7 @@ class SingleFovViz:
 
 
 def filter_da(
-    data: xr.Dataset, epoch: str, condition: Optional[str] = None
+        data: xr.Dataset, epoch: str, condition: Optional[str] = None
 ) -> np.ndarray:
     """ Filter a Dataset by the given condition and epoch.
          Returns a numpy array in the shape of cells x time """
@@ -310,7 +334,7 @@ def filter_da(
         relevant_epoch_dff = _generate_epoch_df(dff_ds)
         last_column = relevant_epoch_dff.shape[1]
         stacked_dff[
-            last_full_row : (last_full_row + number_of_neurons), :last_column
+        last_full_row: (last_full_row + number_of_neurons), :last_column
         ] = relevant_epoch_dff
         last_full_row += number_of_neurons
 
