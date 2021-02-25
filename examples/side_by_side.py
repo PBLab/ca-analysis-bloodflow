@@ -2,7 +2,7 @@ import pathlib
 import json
 
 import matplotlib
-# matplotlib.use('TkAgg')
+matplotlib.use('Agg')
 from magicgui import magicgui, event_loop
 import colorcet as cc
 import skimage.transform

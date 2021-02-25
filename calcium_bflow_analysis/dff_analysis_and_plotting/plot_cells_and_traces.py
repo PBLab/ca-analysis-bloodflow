@@ -5,7 +5,9 @@ import sys
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import imageio
 import matplotlib
+matplotlib.use('Agg')
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
@@ -357,7 +359,8 @@ def draw_rois_over_cells(tif_fname: Union[pathlib.Path, np.ndarray], cell_radius
     if ax_img is None:
         fig, ax_img = plt.subplots()
     if roi_fname:
-        fig.set_size_inches(4.8, 4.8)
+        new_size = tif.shape[0] / 100
+        fig.set_size_inches((new_size, new_size))
     ax_img.imshow(np.zeros_like(tif), cmap='gray')
     ax_img.axis("off")
     ax_img.set_aspect('equal')
@@ -373,9 +376,13 @@ def draw_rois_over_cells(tif_fname: Union[pathlib.Path, np.ndarray], cell_radius
             linewidth=0.5,
         )
         ax_img.add_patch(rect)
-        ax_img.text(*origin, str(idx), color="w", size=14)
+        # ax_img.text(*origin, str(idx), color="w", size=14)
     if roi_fname:
-        ax_img.figure.savefig(str(roi_fname), transparent=True, format='tif', bbox_inches='tight', pad_inches=0)
+        # ax_img.figure.savefig(str(roi_fname), transparent=True, format='tif', bbox_inches='tight', pad_inches=0)
+        ax_img.figure.tight_layout(pad=0)
+        ax_img.figure.canvas.draw()
+        data = np.frombuffer(ax_img.figure.canvas.tostring_rgb(), dtype=np.uint8).reshape((ax_img.figure.canvas.get_width_height()[::-1] + (3,)))
+        imageio.imwrite(roi_fname, data)
         i = tifffile.imread(str(roi_fname))
         b = skimage.util.img_as_int(skimage.transform.resize(skimage.color.rgb2gray(i), tif.shape, anti_aliasing=True))
         tifffile.imsave(str(roi_fname), b)

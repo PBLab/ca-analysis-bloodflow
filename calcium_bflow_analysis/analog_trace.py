@@ -130,7 +130,7 @@ class AnalyzedAnalogTrace:
             vec = self.analog_trace.stimulus.to_numpy()
         else:
             vec = vec.to_numpy()
-        diffs_puff_and_juxta = np.where(np.diff(vec) < -50)[0]
+        diffs_puff_and_juxta = np.where(np.diff(vec) < -40)[0]
         diffs_true = np.where(np.diff(vec) < -1000)[0]
         intersect = np.in1d(diffs_puff_and_juxta, diffs_true)
         true_puff_idx = diffs_puff_and_juxta[intersect]

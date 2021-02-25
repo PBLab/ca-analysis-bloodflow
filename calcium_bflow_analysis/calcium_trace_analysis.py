@@ -2,6 +2,11 @@
 __author__ = Hagai Har-Gil
 Many analysis functions for dF/F. Main class is CalciumReview.
 """
+import pathlib
+import re
+import itertools
+import warnings
+
 import attr
 from attr.validators import instance_of
 import numpy as np
@@ -10,9 +15,6 @@ import xarray as xr
 import matplotlib.pyplot as plt
 from typing import List, Tuple, Dict
 from enum import Enum
-import pathlib
-import re
-import itertools
 from scipy import stats
 
 from calcium_bflow_analysis.dff_analysis_and_plotting import dff_analysis
@@ -73,12 +75,15 @@ class CalciumReview:
         for file in all_files:
             print(file)
             self.files.append(file)
-            day = int(day_reg.findall(file.name)[0])
+            try:
+                day = int(day_reg.findall(file.name)[0])
+            except IndexError:
+                continue
             parsed_days.append(day)
             self.raw_data[day] = xr.open_dataset(file)
         self.days = np.unique(np.array(parsed_days))
         stats = ["_mean", "_std"]
-        self.conditions = np.unique(self.raw_data[day].condition.values).tolist()
+        self.conditions = ["LH", "RH"]
         self.df_columns = [
             "".join(x) for x in itertools.product(self.conditions, stats)
         ] + ["t", "p"]
@@ -118,6 +123,8 @@ class CalciumReview:
             selected_second = filter_da(
                 raw_datum, condition=self.conditions[1], epoch=epoch
             )
+            if selected_first.shape[0] == 0 or selected_second.shape[0] == 0:
+                continue
             for func in funcs:
                 cond1 = getattr(dff_analysis, func.value)(selected_first)
                 cond1_mean, cond1_sem = (
@@ -178,9 +185,11 @@ class CalciumReview:
 
 
 if __name__ == "__main__":
-    folder = pathlib.Path(r"/data/David/D_751_all_after_caiman")
+    folder = pathlib.Path(r"/data/David/TAC_survivors")
     assert folder.exists()
     ca = CalciumReview(folder, "data_*.nc")
+    if len(ca.conditions) == 1:
+        warnings.warn(f"Issue with")
     analysis_methods = [
         AvailableFuncs.AUC,
         AvailableFuncs.MEAN,

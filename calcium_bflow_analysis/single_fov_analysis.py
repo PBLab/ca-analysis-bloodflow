@@ -343,10 +343,12 @@ def filter_da(
 
 
 def _generate_epoch_df(ds):
-    relevant_epoch_idx = ds["epoch_times"].data.ravel()
+    relevant_epoch_idx = ds["epoch_times"].data
     dff = ds["dff"].data
     if dff.ndim == 3:
         dff = dff[0]
+    if relevant_epoch_idx.shape[0] != dff.shape[1]:
+        relevant_epoch_idx = relevant_epoch_idx[0].ravel()
     relevant_epoch_dff = dff[:, relevant_epoch_idx]
     return relevant_epoch_dff
 

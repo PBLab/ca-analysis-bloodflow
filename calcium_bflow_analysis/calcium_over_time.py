@@ -248,7 +248,7 @@ class CalciumAnalysisOverTime:
             fov.add_metadata_and_serialize()
         return fov
 
-    def generate_ds_per_day(self, results_folder: Path, globstr="*FOV*.nc", day_regex=r"_DAY_*(\d+)_", recursive=True):
+    def generate_ds_per_day(self, results_folder: Path, globstr="*FOV*.nc", recursive=True):
         """
         Parse .nc files that were generated from the previous analysis
         and chain all "DAY_X" Datasets together into a single list.
@@ -261,7 +261,6 @@ class CalciumAnalysisOverTime:
         Saves all day-data into self.results_folder.
         """
         fovs_by_day = defaultdict(list)
-        day_reg = re.compile(day_regex)
         try:  # coming from run_batch_of_timepoints()
             all_files = self.list_of_fovs
         except AttributeError:
@@ -272,12 +271,13 @@ class CalciumAnalysisOverTime:
             all_files = itertools.chain(*all_files)
 
         for file in all_files:
+            if "NEW_crystal_skull_TAC_161018" in str(file) or "crystal_skull_TAC_180719" in str(file) or "602_HYPER_HYPO_DAY_0_AND_ALL" in str(file):
+                continue
             print(file)
             try:
-                day = int(day_reg.findall(str(file))[0])
-            except IndexError:
-                start, end = day_regex.find('('), day_regex.find(')')
-                day = int(day_regex[start+1:end])
+                day = int(xr.open_dataset(file).day)
+            except AttributeError:  # older datasets
+                continue
             fovs_by_day[day].append(file)
 
         self._concat_fovs(fovs_by_day, results_folder)
@@ -329,8 +329,8 @@ class CalciumAnalysisOverTime:
 
 
 if __name__ == "__main__":
-    home = Path("/data")
-    folder = Path(r"David/D_751_all_after_caiman/D-751-baseline")
+    home = Path("/data/David/")
+    folder = Path(r"TAC_survivors")
     results_folder = home / folder
     assert results_folder.exists()
     globstr = "*.tif"
@@ -344,10 +344,10 @@ if __name__ == "__main__":
     )
     files_table = filefinder.find_files()
     regex = {
-        "cond_reg": r"mag_3_([RL])_256px",
+        "cond_reg": r"_mag_3_(\w)_",
         "id_reg": r"^D_(\d+)_",
         "fov_reg": r"FOV_(\d)_",
-        "day_reg": r"751_(\w)_FOV"
+        "day_reg": r"DAY_(\d+)_"
     }
     res = CalciumAnalysisOverTime(
         files_table=files_table,
@@ -357,5 +357,4 @@ if __name__ == "__main__":
         regex=regex,
     )
     # res.run_batch_of_timepoints(results_folder)
-    day_reg = r"(0)"
-    res.generate_ds_per_day(results_folder, '*.nc', day_reg, recursive=True)
+    res.generate_ds_per_day(results_folder, '*.nc', recursive=True)
