@@ -3,9 +3,6 @@ import pathlib
 import json
 from typing import Optional
 
-import matplotlib
-
-matplotlib.use("TkAgg")
 from magicgui import magicgui
 import colorcet as cc
 import skimage.transform
@@ -172,6 +169,7 @@ def show_traces_and_rois(
     ch1 = _process_single_channel_data(ch1_fname, ch1_frames)
     ch2_fname = _determine_ch2_validity(ch2_fname)
     if ch2_fname:
+        print("hi")
         ch2 = _process_single_channel_data(ch2_fname, ch2_frames)
         im = combine_two_images(ch1, ch2)
     else:
@@ -185,8 +183,10 @@ def show_traces_and_rois(
     plot_cells_and_traces.draw_rois_over_cells(
         im, results_file=results_fname, roi_fname=roi_fname
     )
+    plt.show(block=False)
     return roi_fname
 
 
 if __name__ == "__main__":
     show_traces_and_rois.show(run=True)
+    # show_traces_and_rois()

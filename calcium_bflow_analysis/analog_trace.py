@@ -257,7 +257,7 @@ class AnalyzedAnalogTrace:
         """
         with tifffile.TiffFile(str(self.tif_filename)) as f:
             meta = f.scanimage_metadata
-            if "FrameData" not in meta:
+            if meta is None:
                 data = f.asarray()
                 num_of_lines = data.shape[1]
                 num_of_frames = data.shape[0] // self.metadata.num_of_channels

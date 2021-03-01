@@ -6,8 +6,6 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import imageio
-import matplotlib
-matplotlib.use("Qt5Agg")
 from matplotlib.collections import LineCollection
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
@@ -120,7 +118,6 @@ def show_side_by_side(
     tifs: List[pathlib.Path],
     results: List[pathlib.Path],
     crds: List[np.ndarray] = None,
-    cell_radius=5,
     figsize=(36, 32),
     ax=None,
 ):
@@ -151,7 +148,7 @@ def show_side_by_side(
             fps = data["params"]["data"]["fr"][()]
         dff = pd.DataFrame(dff.T).rolling(int(fps)).mean().to_numpy().T
         time_vec = np.arange(dff.shape[1]) / fps
-        ax[0] = draw_rois_over_cells(tif, cell_radius, ax[0], crd, result)
+        ax[0] = draw_rois_over_cells(tif, ax[0], crd, result)
         ax[1].plot(
             time_vec,
             (dff + np.arange(dff.shape[0])[:, np.newaxis]).T * 1,
@@ -364,7 +361,6 @@ def get_accepted_components_idx(hdf_fname: pathlib.Path) -> Optional[np.ndarray]
 
 def draw_rois_over_cells(
     tif_fname: Union[pathlib.Path, np.ndarray],
-    cell_radius=5,
     ax_img=None,
     crds=None,
     results_file=None,
@@ -374,7 +370,6 @@ def draw_rois_over_cells(
     Draw ROIs around cells in the FOV, and mark their number (ID).
     Parameters:
         tif_fname (array or pathlib.Path): The image to show, or a deinterleaved TIF filename.
-        cell_radius (int): Number of pixels in a cell's radius
         ax_img (Axes): matplotlib Axes object to draw on. If None - will be created
         crds (List of ints): Specific indices of the cells to be shown. If None shows all.
         results_file(pathlib.Path): Path to the results file associated with the tif.
@@ -427,33 +422,17 @@ def draw_rois_over_cells(
         tifffile.imsave(str(roi_fname), b)
     else:
         ax_img.images.pop()
-        ax_img.imshow(tif, cmap="gray")
+        ax_img.imshow(np.fliplr(np.flipud(tif)), cmap="gray")
     return ax_img
 
 
 if __name__ == "__main__":
-    foldername = pathlib.Path("/data/Hagai/WFA_InVivo/new/")
     tifs = [
-        "774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z200_200802_00001_CHANNEL_1.tif",
-        "774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z270_200802_00001_CHANNEL_1.tif",
-        "774_WFA-FITC_RCaMP7_x10_FOV2_mag4_1040nm_256px_z275_200818_00001_CHANNEL_1.tif",
-        "774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV2_z330_500802_00001_CHANNEL_1.tif",
+        pathlib.Path("/data/Amit_QNAP/WT_WFA-FITC_RCaMP_chABC/285/285_WT_RCaMP7_WFA-FITC_x10_mag3_FOV1_z490_1040nm_256px_210218_00001_CHANNEL_2.tif"),
     ]
-    tifs = [foldername / tif for tif in tifs]
     results = [
-        "774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z200_200802_00001_CHANNEL_1_results.npz",
-        "774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z270_200802_00001_CHANNEL_1_results.npz",
-        "774_WFA-FITC_RCaMP7_x10_FOV2_mag4_1040nm_256px_z275_200818_00001_CHANNEL_1_results.npz",
-        "774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV2_z330_500802_00001_CHANNEL_1_results.npz",
+        pathlib.Path("/data/Amit_QNAP/WT_WFA-FITC_RCaMP_chABC/285/285_WT_RCaMP7_WFA-FITC_x10_mag3_FOV1_z200_1040nm_256px_210218_00001_CHANNEL_2_memmap__d1_256_d2_256_d3_1_order_C_frames_9000_.hdf5"),
     ]
-    results = [foldername / result for result in results]
-    coords = [
-        np.array([6]),  # 5
-        np.array([7]),  # 13
-        np.array([11]),  # 10
-        np.array([8]),  # 3, 6
-    ]
-    cell_radius = 6
-    fig = show_side_by_side(tifs, results, coords, cell_radius)
+    fig = show_side_by_side(tifs, results)
     # fig.savefig('/data/Amit_QNAP/rcamp107_wfa_120320/all_fovs.pdf', transparent=True, dpi=300)
-    plt.show()
+    plt.show(block=True)

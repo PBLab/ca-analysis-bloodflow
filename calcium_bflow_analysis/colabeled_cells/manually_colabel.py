@@ -47,7 +47,7 @@ class ManualLabeling:
         Draws the FOV with the ROIS and receives from the user
         a list of cell indices which are the colabeled cells
         """
-        draw_rois_over_cells(tif, cell_radius=cell_radius)
+        draw_rois_over_cells(tif)
         plt.show(block=False)
         while True:
             idx_as_str = input(f'Tif: {tif}\nEnter colabeled cell indices as a list of numbers, separated by a comma. If none are colabeld, enter -1:\n')

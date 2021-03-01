@@ -10,7 +10,7 @@ from pathlib import Path
 
 import matplotlib
 
-matplotlib.use("TkAgg")
+matplotlib.use("Qt5Agg")
 import sys
 import tifffile
 import numpy as np
