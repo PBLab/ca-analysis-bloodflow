@@ -42,6 +42,9 @@ setup(
                       'h5py >= 2.10',
                       'mne >= 0.19',
                       'dff_calc >= 0.1',
-                      'openpyxl', 
-                      'peakutils >= 1.3',],
+                      'openpyxl',
+                      'peakutils',
+                      'magicgui[pyqt5] >= 0.2.6',
+                   ],
+    dependency_links=['git+https://github.com/napari/magicgui.git'],
 )

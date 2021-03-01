@@ -1,3 +1,4 @@
+import warnings
 import pathlib
 import json
 from typing import Optional
@@ -6,13 +7,13 @@ import matplotlib
 
 matplotlib.use("TkAgg")
 from magicgui import magicgui
-from magicgui.widgets import RangeEdit
 import colorcet as cc
 import skimage.transform
 import skimage.exposure
 import tifffile
 import numpy as np
 import matplotlib.pyplot as plt
+from caiman.utils.visualization import get_contours
 
 from calcium_bflow_analysis.dff_analysis_and_plotting import plot_cells_and_traces
 
@@ -81,7 +82,13 @@ def combine_two_images(ch1: np.ndarray, ch2: np.ndarray):
     return im
 
 
-def two_channel_pipeline(ch1: np.ndarray, ch1_fname: pathlib.Path, ch2: np.ndarray, ch2_fname: pathlib.Path, fig):
+def two_channel_pipeline(
+    ch1: np.ndarray,
+    ch1_fname: pathlib.Path,
+    ch2: np.ndarray,
+    ch2_fname: pathlib.Path,
+    fig,
+):
     new_fname = ch1_fname.parent / (
         "combined_" + ch1_fname.stem + "_" + ch2_fname.stem + ".tif"
     )
@@ -104,23 +111,32 @@ def two_channel_pipeline(ch1: np.ndarray, ch1_fname: pathlib.Path, ch2: np.ndarr
     return roi_fname
 
 
+def _determine_ch2_validity(ch2_fname: pathlib.Path) -> Optional[pathlib.Path]:
+    if (ch2_fname.is_dir()) or (not ch2_fname.exists()) or (ch2_fname.suffix != ".tif"):
+        warnings.warn(
+            "The given filename for the other data channel was not found. Continuing without it."
+        )
+        return None
+    return ch2_fname
+
+
 @magicgui(
     call_button="Show",
     persist=True,
     result_widget=True,
     main_window=True,
-    ch1_fname= {'label': 'Data file', 'filter': ['.tif', '.tiff']},
-    ch1_frames={'label': 'Relevant data frames', 'start': 0, 'stop': 40_000},
-    results_fname={'label': "CaImAn's HDF5", 'filter': ['.h5', '.hdf5']},
-    ch2_fname={'label': 'Overlay data with', 'filter': ['.tif', '.tiff']},
-    ch2_frames={'label': 'Relevant overlay frames', 'start': 0, 'stop': 40_000},
+    ch1_fname={"label": "Data file", "filter": "*.tif"},
+    ch1_frames={"label": "Relevant data frames", "stop": 100_000},
+    results_fname={"label": "CaImAn's HDF5", "filter": "*.hdf5"},
+    ch2_fname={"label": "Overlay data with", "filter": "*.tif"},
+    ch2_frames={"label": "Second channel frames", "stop": 100_000},
 )
 def show_traces_and_rois(
     ch1_fname: pathlib.Path,
-    ch1_frames: RangeEdit,
+    ch1_frames: slice,
     results_fname: pathlib.Path,
-    ch2_fname: Optional[pathlib.Path],
-    ch2_frames: Optional[RangeEdit],
+    ch2_fname: pathlib.Path,
+    ch2_frames: slice,
 ):
     """Shows calicum traces and cell ROIs with a possible overlay of a second
     color.
@@ -140,32 +156,32 @@ def show_traces_and_rois(
     ch1_fname : pathlib.Path
         Main data channel to use as the baseline image, usually the calcium
         activity data
-    ch1_frames : napari.widgets.RangeEdit
-        Frame numbers to use (0-based)
+    ch1_frames : slice
+        Frames to take from the main data channel
     results_fname : pathlib.Path
         The CaImAn-generated HDF5 results file
     ch2_fname : pathlib.Path, optional
         A second color to overlay on top of the first, optional
-    ch2_frames : napari.widgets.RangeEdit
-        Frame numbers to use (0-based)
+    ch2_frames : slice, optional
+        Frames to take from the second color channel
     """
     try:
         _verify_fnames(ch1_fname, ch2_fname, results_fname)
     except ValueError:
         return "Filepath error, please re-try"
     ch1 = _process_single_channel_data(ch1_fname, ch1_frames)
+    ch2_fname = _determine_ch2_validity(ch2_fname)
     if ch2_fname:
         ch2 = _process_single_channel_data(ch2_fname, ch2_frames)
         im = combine_two_images(ch1, ch2)
     else:
         im = ch1
-    fig = plot_cells_and_traces.show_side_by_side(
-        [im], [results_fname], None
-    )
+    fig = plot_cells_and_traces.show_side_by_side([im], [results_fname], None)
     if ch2_fname:
         roi_fname = two_channel_pipeline(ch1, ch1_fname, ch2, ch2_fname, fig)
     else:
         roi_fname = ch1_fname.parent / ("only_roi" + ch1_fname.name)
+
     plot_cells_and_traces.draw_rois_over_cells(
         im, results_file=results_fname, roi_fname=roi_fname
     )

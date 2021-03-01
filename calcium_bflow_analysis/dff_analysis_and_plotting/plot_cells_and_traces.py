@@ -1,5 +1,5 @@
 import pathlib
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Dict, Optional
 import sys
 
 import numpy as np
@@ -7,19 +7,23 @@ import pandas as pd
 import seaborn as sns
 import imageio
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use("Qt5Agg")
+from matplotlib.collections import LineCollection
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
 import matplotlib.patches
 import tifffile
 import skimage
+import caiman as cm
+import scipy.sparse
+import h5py
 
 from calcium_bflow_analysis.colabeled_cells.find_colabeled_cells import TiffChannels
 
 
 def rank_dff_by_stim(dff: np.ndarray, spikes: np.ndarray, stim: np.ndarray, fps: float):
-    """ Draws a plot of neurons ranked by the correlation they exhibit between
+    """Draws a plot of neurons ranked by the correlation they exhibit between
     a spike an air puff.
 
     Parameters:
@@ -120,7 +124,7 @@ def show_side_by_side(
     figsize=(36, 32),
     ax=None,
 ):
-    """ Shows a figure where each row is an image of a FOV,
+    """Shows a figure where each row is an image of a FOV,
     and all corresponding calcium traces. The image also draws
     a rectangle around each cell. The crds parameter allows you to
     choose which cells to display for each FOV.
@@ -142,13 +146,18 @@ def show_side_by_side(
         crds = tuple([slice(None) for item in tifs])
 
     for tif, result, crd, ax in zip(tifs, results, crds, axes):
-        data = np.load(result, allow_pickle=True)
-        dff = data["F_dff"][crd]
-        fps = data["params"].tolist()["fr"]
+        with h5py.File(result, "r") as data:
+            dff = np.asarray(data["estimates"]["F_dff"])[crd]
+            fps = data["params"]["data"]["fr"][()]
         dff = pd.DataFrame(dff.T).rolling(int(fps)).mean().to_numpy().T
         time_vec = np.arange(dff.shape[1]) / fps
         ax[0] = draw_rois_over_cells(tif, cell_radius, ax[0], crd, result)
-        ax[1].plot(time_vec, (dff + np.arange(dff.shape[0])[:, np.newaxis]).T * 1, alpha=0.5, linewidth=2)
+        ax[1].plot(
+            time_vec,
+            (dff + np.arange(dff.shape[0])[:, np.newaxis]).T * 1,
+            alpha=0.5,
+            linewidth=2,
+        )
         ax[1].spines["top"].set_visible(False)
         ax[1].spines["right"].set_visible(False)
         ax[1].set_xlabel("Time (seconds)")
@@ -188,7 +197,7 @@ def extract_cells_from_tif(
     data_channel=TiffChannels.ONE,
     number_of_channels=2,
 ) -> np.ndarray:
-    """ Load a raw TIF stack and extract an array of cells. The first dimension is
+    """Load a raw TIF stack and extract an array of cells. The first dimension is
     the cell index, the second is time and the other two are the x-y images.
     Returns this 4D array.
     """
@@ -205,7 +214,7 @@ def extract_cells_from_tif(
 
 
 def extract_mask_from_coords(coords, img_shape, cell_radius) -> List[List[np.ndarray]]:
-    """ Takes the coordinates ['crd' key] from a loaded results.npz file
+    """Takes the coordinates ['crd' key] from a loaded results.npz file
     and extract masks around cells from it.
     Returns a list with a length of all detected cells. Each element in that
     list is a 2-element list containing two arrays with the row and column
@@ -232,7 +241,7 @@ def display_cell_excerpts_over_time(
     number_of_channels=2,
     fps=None,
     title="Cell Excerpts Over Time",
-    output_folder=pathlib.Path('.'),
+    output_folder=pathlib.Path("."),
 ):
     """
     Display cells as they fluoresce during the recording time, each cell in its
@@ -325,10 +334,42 @@ def display_cell_excerpts_over_time(
     fig.suptitle(title)
     fig.text(0.55, 0.04, "Time (sec)", horizontalalignment="center")
     fig.text(0.04, 0.5, "Cell ID", verticalalignment="center", rotation="vertical")
-    fig.savefig(output_folder / f"cell_mosaic_{title}.pdf", frameon=False, transparent=True)
+    fig.savefig(
+        output_folder / f"cell_mosaic_{title}.pdf", frameon=False, transparent=True
+    )
 
 
-def draw_rois_over_cells(tif_fname: Union[pathlib.Path, np.ndarray], cell_radius=5, ax_img=None, crds=None, results_file=None, roi_fname=None):
+def get_coords_from_hdf5(hdf_fname: pathlib.Path) -> List[Dict]:
+    """Extracts the coordinates of the detected components from the CaImAn
+    results file."""
+    with h5py.File(hdf_fname, "r") as f:
+        a = f["estimates"]["A"]
+        A = scipy.sparse.csc_matrix(
+            (a["data"], a["indices"], a["indptr"]), shape=a["shape"]
+        )
+        dims = f["dims"][()]
+    coordinates = cm.utils.visualization.get_contours(A, dims=dims)
+    coordinates = [c['coordinates'] for c in coordinates]
+    return coordinates
+
+
+def get_accepted_components_idx(hdf_fname: pathlib.Path) -> Optional[np.ndarray]:
+    """Returns the 0-based indices of the accepted components"""
+    with h5py.File(hdf_fname, 'r') as f:
+        idx = f['estimates']['idx_components'][()]
+    if idx == 'NoneType':
+        return None
+    return idx
+
+
+def draw_rois_over_cells(
+    tif_fname: Union[pathlib.Path, np.ndarray],
+    cell_radius=5,
+    ax_img=None,
+    crds=None,
+    results_file=None,
+    roi_fname=None,
+):
     """
     Draw ROIs around cells in the FOV, and mark their number (ID).
     Parameters:
@@ -343,7 +384,9 @@ def draw_rois_over_cells(tif_fname: Union[pathlib.Path, np.ndarray], cell_radius
         assert tif_fname.exists()
         if not results_file:
             try:
-                results_file = next(tif_fname.parent.glob(tif_fname.name[:-4] + "*results.npz"))
+                results_file = next(
+                    tif_fname.parent.glob(tif_fname.name[:-4] + "*results.npz")
+                )
             except StopIteration:
                 print("Results file not found. Exiting.")
             return
@@ -351,61 +394,57 @@ def draw_rois_over_cells(tif_fname: Union[pathlib.Path, np.ndarray], cell_radius
     elif isinstance(tif_fname, np.ndarray):
         tif = tif_fname
 
-    full_dict = np.load(results_file, allow_pickle=True)
-    rel_crds = full_dict["crd"]
+    all_rois = get_coords_from_hdf5(results_file)
+    accepted_indices = get_accepted_components_idx(results_file)
+    if accepted_indices is not None:
+        all_rois = [all_rois[i] for i in accepted_indices]
 
     if crds is not None:
-        rel_crds = rel_crds[crds]
+        all_rois = all_rois[crds]
     if ax_img is None:
         fig, ax_img = plt.subplots()
     if roi_fname:
         new_size = tif.shape[0] / 100
         fig.set_size_inches((new_size, new_size))
-    ax_img.imshow(np.zeros_like(tif), cmap='gray')
+    ax_img.imshow(np.zeros_like(tif), cmap="gray")
     ax_img.axis("off")
-    ax_img.set_aspect('equal')
-    for idx, coord in enumerate(rel_crds):
-        bbox = coord['bbox']
-        origin = bbox[2], bbox[0]
-        size = (abs(bbox[3] - bbox[2]), abs(bbox[1] - bbox[0]))
-        rect = matplotlib.patches.Rectangle(
-            origin,
-            *size,
-            edgecolor="w",
-            facecolor="none",
-            linewidth=0.5,
-        )
-        ax_img.add_patch(rect)
-        # ax_img.text(*origin, str(idx), color="w", size=14)
+    ax_img.set_aspect("equal")
+    ax_img.add_collection(LineCollection(all_rois, colors='white', linewidths=0.7))
     if roi_fname:
         # ax_img.figure.savefig(str(roi_fname), transparent=True, format='tif', bbox_inches='tight', pad_inches=0)
         ax_img.figure.tight_layout(pad=0)
         ax_img.figure.canvas.draw()
-        data = np.frombuffer(ax_img.figure.canvas.tostring_rgb(), dtype=np.uint8).reshape((ax_img.figure.canvas.get_width_height()[::-1] + (3,)))
+        data = np.frombuffer(
+            ax_img.figure.canvas.tostring_rgb(), dtype=np.uint8
+        ).reshape((ax_img.figure.canvas.get_width_height()[::-1] + (3,)))
         imageio.imwrite(roi_fname, data)
         i = tifffile.imread(str(roi_fname))
-        b = skimage.util.img_as_int(skimage.transform.resize(skimage.color.rgb2gray(i), tif.shape, anti_aliasing=True))
+        b = skimage.util.img_as_int(
+            skimage.transform.resize(
+                skimage.color.rgb2gray(i), tif.shape, anti_aliasing=True
+            )
+        )
         tifffile.imsave(str(roi_fname), b)
     else:
         ax_img.images.pop()
-        ax_img.imshow(tif, cmap='gray')
+        ax_img.imshow(tif, cmap="gray")
     return ax_img
 
 
 if __name__ == "__main__":
     foldername = pathlib.Path("/data/Hagai/WFA_InVivo/new/")
     tifs = [
-        '774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z200_200802_00001_CHANNEL_1.tif',
-        '774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z270_200802_00001_CHANNEL_1.tif',
-        '774_WFA-FITC_RCaMP7_x10_FOV2_mag4_1040nm_256px_z275_200818_00001_CHANNEL_1.tif',
-        '774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV2_z330_500802_00001_CHANNEL_1.tif',
+        "774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z200_200802_00001_CHANNEL_1.tif",
+        "774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z270_200802_00001_CHANNEL_1.tif",
+        "774_WFA-FITC_RCaMP7_x10_FOV2_mag4_1040nm_256px_z275_200818_00001_CHANNEL_1.tif",
+        "774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV2_z330_500802_00001_CHANNEL_1.tif",
     ]
     tifs = [foldername / tif for tif in tifs]
     results = [
-        '774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z200_200802_00001_CHANNEL_1_results.npz',
-        '774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z270_200802_00001_CHANNEL_1_results.npz',
-        '774_WFA-FITC_RCaMP7_x10_FOV2_mag4_1040nm_256px_z275_200818_00001_CHANNEL_1_results.npz',
-        '774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV2_z330_500802_00001_CHANNEL_1_results.npz',
+        "774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z200_200802_00001_CHANNEL_1_results.npz",
+        "774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z270_200802_00001_CHANNEL_1_results.npz",
+        "774_WFA-FITC_RCaMP7_x10_FOV2_mag4_1040nm_256px_z275_200818_00001_CHANNEL_1_results.npz",
+        "774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV2_z330_500802_00001_CHANNEL_1_results.npz",
     ]
     results = [foldername / result for result in results]
     coords = [
@@ -418,4 +457,3 @@ if __name__ == "__main__":
     fig = show_side_by_side(tifs, results, coords, cell_radius)
     # fig.savefig('/data/Amit_QNAP/rcamp107_wfa_120320/all_fovs.pdf', transparent=True, dpi=300)
     plt.show()
-
