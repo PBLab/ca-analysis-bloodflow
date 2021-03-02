@@ -351,7 +351,8 @@ def get_coords_from_hdf5(hdf_fname: pathlib.Path) -> List[Dict]:
 
 
 def _add_text_labels(ax: plt.Axes, rois: List):
-    
+    coms = [c['CoM'] for c in rois]
+
     pass
 
 
