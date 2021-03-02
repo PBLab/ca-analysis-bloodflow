@@ -139,7 +139,7 @@ def show_side_by_side(
         assert len(tifs) == 1
         axes = [ax]
 
-    if not crds:
+    if crds is None:
         crds = tuple([slice(None) for item in tifs])
 
     for tif, result, crd, ax in zip(tifs, results, crds, axes):
@@ -160,7 +160,8 @@ def show_side_by_side(
         ax[1].set_xlabel("Time (seconds)")
         ax[1].set_ylabel("Cell ID")
         ax[1].yaxis.set_major_formatter(FormatStrFormatter("%d"))
-        ax[1].set_yticklabels(np.arange(len(dff)))
+        ax[1].set_yticks(np.arange(len(dff)))
+        ax[1].set_yticklabels(crd)
 
     ax[0].figure.subplots_adjust(left=0.03, right=0.97, top=0.97, bottom=0.03)
     return ax[0].figure
@@ -346,8 +347,12 @@ def get_coords_from_hdf5(hdf_fname: pathlib.Path) -> List[Dict]:
         )
         dims = f["dims"][()]
     coordinates = cm.utils.visualization.get_contours(A, dims=dims)
-    coordinates = [c['coordinates'] for c in coordinates]
     return coordinates
+
+
+def _add_text_labels(ax: plt.Axes, rois: List):
+    
+    pass
 
 
 def get_accepted_components_idx(hdf_fname: pathlib.Path) -> Optional[np.ndarray]:
@@ -389,13 +394,10 @@ def draw_rois_over_cells(
     elif isinstance(tif_fname, np.ndarray):
         tif = tif_fname
 
-    all_rois = get_coords_from_hdf5(results_file)
-    accepted_indices = get_accepted_components_idx(results_file)
-    if accepted_indices is not None:
-        all_rois = [all_rois[i] for i in accepted_indices]
+    all_rois_objects = get_coords_from_hdf5(results_file)
+    all_rois_objects = [all_rois_objects[i] for i in crds]
+    all_rois = [c['coordinates'] for c in all_rois_objects]
 
-    if crds is not None:
-        all_rois = all_rois[crds]
     if ax_img is None:
         fig, ax_img = plt.subplots()
     if roi_fname:
@@ -405,6 +407,7 @@ def draw_rois_over_cells(
     ax_img.axis("off")
     ax_img.set_aspect("equal")
     ax_img.add_collection(LineCollection(all_rois, colors='white', linewidths=0.7))
+    # _add_text_labels(ax_img, all_rois_objects)
     if roi_fname:
         # ax_img.figure.savefig(str(roi_fname), transparent=True, format='tif', bbox_inches='tight', pad_inches=0)
         ax_img.figure.tight_layout(pad=0)

@@ -11,6 +11,7 @@ import tifffile
 import numpy as np
 import matplotlib.pyplot as plt
 from caiman.utils.visualization import get_contours
+import h5py
 
 from calcium_bflow_analysis.dff_analysis_and_plotting import plot_cells_and_traces
 
@@ -76,7 +77,7 @@ def combine_two_images(ch1: np.ndarray, ch2: np.ndarray):
     """Used in case the GUI has to show an overlay of two channels"""
     ch1, ch2 = _normalize_arrays(ch1, ch2)
     im = ch1 * 0.5 + ch2 * 0.5
-    return im
+    return im, ch1, ch2
 
 
 def two_channel_pipeline(
@@ -100,12 +101,20 @@ def two_channel_pipeline(
     vmin1, vmax1 = ch1.min() * 1.1, ch1.max() * 0.9
     vmin2, vmax2 = ch2.min() * 1.1, ch2.max() * 0.9
     fig.axes[0].images.pop()
-    fig.axes[0].imshow(ch1, cmap=cc.cm.kg, alpha=0.55, vmin=vmin1, vmax=vmax1)
+    fig.axes[0].imshow(ch1, cmap=cc.cm.kgy, vmin=vmin1, vmax=vmax1)
     fig.axes[0].imshow(ch2, cmap=cc.cm.kr, alpha=0.55, vmin=vmin2, vmax=vmax2)
     fig.axes[0].set_title("Ch1 is green, Ch2 is red")
     fig.canvas.set_window_title(f"{new_fname}")
     plt.show(block=False)
     return roi_fname
+
+
+def _get_accepted_components(fname: pathlib.Path) -> np.ndarray:
+    with h5py.File(fname, 'r') as f:
+        data = f['estimates']['idx_components'][()]
+        if len(data) == 0:
+            data = np.arange(len(f['estimates']['F_dff'][()]))
+    return data
 
 
 def _determine_ch2_validity(ch2_fname: pathlib.Path) -> Optional[pathlib.Path]:
@@ -169,19 +178,19 @@ def show_traces_and_rois(
     ch1 = _process_single_channel_data(ch1_fname, ch1_frames)
     ch2_fname = _determine_ch2_validity(ch2_fname)
     if ch2_fname:
-        print("hi")
         ch2 = _process_single_channel_data(ch2_fname, ch2_frames)
-        im = combine_two_images(ch1, ch2)
+        im, ch1, ch2 = combine_two_images(ch1, ch2)
     else:
         im = ch1
-    fig = plot_cells_and_traces.show_side_by_side([im], [results_fname], None)
+    accepted_component_indices = _get_accepted_components(results_fname)
+    fig = plot_cells_and_traces.show_side_by_side([im], [results_fname], [accepted_component_indices])
     if ch2_fname:
         roi_fname = two_channel_pipeline(ch1, ch1_fname, ch2, ch2_fname, fig)
     else:
         roi_fname = ch1_fname.parent / ("only_roi" + ch1_fname.name)
 
     plot_cells_and_traces.draw_rois_over_cells(
-        im, results_file=results_fname, roi_fname=roi_fname
+        im, results_file=results_fname, roi_fname=roi_fname, crds=accepted_component_indices,
     )
     plt.show(block=False)
     return roi_fname
