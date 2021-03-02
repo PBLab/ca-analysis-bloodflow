@@ -6,6 +6,7 @@ import pathlib
 import re
 import itertools
 import warnings
+from typing import Optional, Dict
 
 import attr
 from attr.validators import instance_of
@@ -83,7 +84,7 @@ class CalciumReview:
             self.raw_data[day] = xr.open_dataset(file)
         self.days = np.unique(np.array(parsed_days))
         stats = ["_mean", "_std"]
-        self.conditions = ["LH", "RH"]
+        self.conditions = self.raw_data[day].condition.values.tolist()
         self.df_columns = [
             "".join(x) for x in itertools.product(self.conditions, stats)
         ] + ["t", "p"]
@@ -112,16 +113,17 @@ class CalciumReview:
                 unselected_data, condition=condition.value, epoch=epoch
             )
 
-    def apply_analysis_funcs(self, funcs: list, epoch: str):
-        """ Call the list of methods given to save time and memory """
+    def apply_analysis_funcs_two_conditions(self, funcs: list, epoch: str, mouse_id: Optional[str] = None):
+        """ Call the list of methods given to save time and memory. Applicable
+        if the dataset has two conditions, like left and right. """
         norm1, norm2 = 1, 1
         for day, raw_datum in dict(sorted(self.raw_data.items())).items():
             print(f"Analyzing day {day}...")
             selected_first = filter_da(
-                raw_datum, condition=self.conditions[0], epoch=epoch
+                raw_datum, condition=self.conditions[0], epoch=epoch, mouse_id=mouse_id,
             )
             selected_second = filter_da(
-                raw_datum, condition=self.conditions[1], epoch=epoch
+                raw_datum, condition=self.conditions[1], epoch=epoch, mouse_id=mouse_id,
             )
             if selected_first.shape[0] == 0 or selected_second.shape[0] == 0:
                 continue
@@ -158,8 +160,42 @@ class CalciumReview:
                     pd.DataFrame(df_dict, index=[day])
                 )
 
-    def plot_df(self, df, title):
+    def apply_analysis_single_condition(self, funcs: list, epoch: str, mouse_id: Optional[str] = None):
+        """Run a list of methods on the object for the given epoch if we have
+        only a single condition"""
+
+        for day, raw_datum in dict(sorted(self.raw_data.items())).items():
+            print(f"Analyzing day {day}...")
+            selected_first = filter_da(
+                raw_datum, condition=self.conditions[0], epoch=epoch, mouse_id=mouse_id
+            )
+            if selected_first.shape[0] == 0:
+                warnings.warn("No data rows in this day.")
+                continue
+            for func in funcs:
+                cond1 = getattr(dff_analysis, func.value)(selected_first)
+                cond1_mean, cond1_sem = (
+                    cond1.mean(),
+                    cond1.std(ddof=1) / np.sqrt(cond1.shape[0]),
+                )
+                df_dict = {
+                    col: data
+                    for col, data in zip(
+                        [self.df_columns[0], self.df_columns[1]],
+                        [
+                            cond1_mean,
+                            cond1_sem,
+                        ],
+                    )
+                }
+                self.funcs_dict[func] = self.funcs_dict[func].append(
+                    pd.DataFrame(df_dict, index=[day])
+                )
+
+    def plot_df_two_conditions(self, df, title, conditions=None):
         """ Helper method to plot DataFrames """
+        if conditions is None:
+            conditions = self.conditions
         fig, ax = plt.subplots()
 
         ax.errorbar(
@@ -167,41 +203,75 @@ class CalciumReview:
             df[df.columns[0]],
             df[df.columns[1]],
             c="C0",
-            label=self.conditions[0],
-            fmt="o",
+            label=conditions[0],
+            fmt="-o",
         )
         ax.errorbar(
             df.index.values,
             df[df.columns[2]],
             df[df.columns[3]],
             c="C1",
-            label=self.conditions[1],
-            fmt="o",
+            label=conditions[1],
+            fmt="-o",
         )
         ax.legend()
         ax.set_xticks(df.index.values)
         ax.set_xlabel("Days")
         ax.set_title(title)
 
+    def plot_single_condition(self, df, title):
+        fig, ax = plt.subplots()
+        ax.errorbar(df.index.values,
+        df.iloc[:, 0], df.iloc[:, 1], c="C0", fmt='o')
+        ax.set_xticks(df.index.values)
+        ax.set_xlabel('Days')
+        ax.set_title(title)
+
+
+def plot_single_cond_per_mouse(ca: CalciumReview, analysis_methods: list):
+    """Generates a plot of the values over time of each mouse in the experiment"""
+    mids = np.unique(ca.raw_data[0].mouse_id.values)
+    stats = ['mean', 'std']
+    columns = ["_".join(x) for x in itertools.product(mids, stats)]
+    datacache = pd.DataFrame(index=sorted(list(ca.raw_data.keys())), columns=columns)
+    results = {func_name.name: datacache.copy() for func_name in analysis_methods}
+    for day, raw_datum in dict(sorted(ca.raw_data.items())).items():
+        print(f"Analyzing day {day}...")
+        for mid, data in raw_datum.groupby(raw_datum.mouse_id):
+            filtered = filter_da(data, epoch='all')
+            for func in analysis_methods:
+                result = getattr(dff_analysis, func.value)(filtered)
+                result_mean, result_sem = (
+                    result.mean(),
+                    result.std(ddof=1) / np.sqrt(result.shape[0]),
+                )
+                results[func.name].loc[day, f"{mid}_mean"] = result_mean
+                results[func.name].loc[day, f"{mid}_std"] = result_sem
+
+    ca.plot_df_two_conditions(results['AUC'], 'AUC both mice', mids)
+    ca.plot_df_two_conditions(results['SPIKERATE'], 'Spike rate both mice', mids)
+
+
 
 if __name__ == "__main__":
-    folder = pathlib.Path(r"/data/David/TAC_survivors")
+    folder = pathlib.Path(r"/data/Amit_QNAP/Thy1GCaMP_chABC")
     assert folder.exists()
     ca = CalciumReview(folder, "data_*.nc")
-    if len(ca.conditions) == 1:
-        warnings.warn(f"Issue with")
     analysis_methods = [
         AvailableFuncs.AUC,
         AvailableFuncs.MEAN,
         AvailableFuncs.SPIKERATE,
     ]
     epoch = "all"
-    ca.apply_analysis_funcs(analysis_methods, epoch)
-    ca.plot_df(ca.funcs_dict[AvailableFuncs.AUC], f"AUC of Fluo Traces, Epoch: {epoch}")
-    ca.plot_df(
-        ca.funcs_dict[AvailableFuncs.SPIKERATE],
-        f"Spike Rate of Fluo Traces, Epoch: {epoch}",
-    )
-    ca.plot_df(ca.funcs_dict[AvailableFuncs.MEAN], f"Mean dF/F of Fluo Traces, Epoch: {epoch}")
-
+    # ca.apply_analysis_funcs_two_conditions(analysis_methods, epoch)
+    # ca.plot_df_two_conditions(ca.funcs_dict[AvailableFuncs.AUC], f"AUC of Fluo Traces, Epoch: {epoch}")
+    # ca.plot_df_two_conditions(
+    #     ca.funcs_dict[AvailableFuncs.SPIKERATE],
+    #     f"Spike Rate of Fluo Traces, Epoch: {epoch}",
+    # )
+    # ca.plot_df_two_conditions(ca.funcs_dict[AvailableFuncs.MEAN], f"Mean dF/F of Fluo Traces, Epoch: {epoch}")
+    # ca.apply_analysis_single_condition(analysis_methods, epoch, mouse_id='514')
+    # ca.plot_single_condition(ca.funcs_dict[AvailableFuncs.AUC], f"AUC of Fluo Traces, Epoch: {epoch} [514]")
+    # ca.plot_single_condition(ca.funcs_dict[AvailableFuncs.SPIKERATE], f"Spike Rate of Fluo Traces, Epoch: {epoch} [514]")
+    plot_single_cond_per_mouse(ca, analysis_methods)
     plt.show(block=False)

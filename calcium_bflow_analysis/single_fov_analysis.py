@@ -282,7 +282,8 @@ class SingleFovViz:
         different epochs """
 
         df_auc = pd.DataFrame(
-            np.full((400, len(self.epochs_to_display)), np.nan),
+            # 1000 is max number of components per FOV
+            np.full((1000, len(self.epochs_to_display)), np.nan),
             columns=self.epochs_to_display,
         )
         df_spikes = df_auc.copy()
@@ -305,16 +306,28 @@ class SingleFovViz:
         ax_spikes.set_ylabel("Spikes per second")
 
 
+def _filter_condition(epoch_data: xr.Dataset, condition: str) -> xr.Dataset:
+    temp = epoch_data.where(epoch_data.condition == condition)
+    temp['epoch_times'] = temp['epoch_times'].astype(bool)
+    epoch_data = temp
+    return epoch_data
+
+
+def _filter_mouse_id(epoch_data: xr.Dataset, mouse_id: str) -> xr.Dataset:
+    relevant_fnames = (epoch_data.mouse_id == mouse_id).values
+    return epoch_data.sel(fname=relevant_fnames)
+
+
 def filter_da(
-        data: xr.Dataset, epoch: str, condition: Optional[str] = None
+        data: xr.Dataset, epoch: str, condition: Optional[str] = None, mouse_id: Optional[str] = None
 ) -> np.ndarray:
-    """ Filter a Dataset by the given condition and epoch.
+    """ Filter a Dataset by the given condition, mouse_id and epoch.
          Returns a numpy array in the shape of cells x time """
     epoch_data = data.sel(epoch=epoch)
     if condition:
-        temp = epoch_data.where(epoch_data.condition == condition)
-        temp['epoch_times'] = temp['epoch_times'].astype(bool)
-        epoch_data = temp
+        epoch_data = _filter_condition(epoch_data, condition)
+    if mouse_id:
+        epoch_data = _filter_mouse_id(epoch_data, mouse_id)
 
     # The final array, in the shape of (all_cells x time), will
     # be concatenated from nan-filled arrays that will be created on the fly.
