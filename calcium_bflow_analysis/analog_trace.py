@@ -255,15 +255,15 @@ class AnalyzedAnalogTrace:
         """
         Retrieves metadata from ScanImage files.
         """
-        with tifffile.TiffFile(str(self.tif_filename)) as f:
-            meta = f.scanimage_metadata
+        with open(self.tif_filename, 'rb') as f:
+            meta, _ = tifffile.read_scanimage_metadata(f)
             if meta is None:
                 data = f.asarray()
                 num_of_lines = data.shape[1]
                 num_of_frames = data.shape[0] // self.metadata.num_of_channels
             else:
-                num_of_lines = int(meta["FrameData"]["SI.hRoiManager.linesPerFrame"])
-                num_of_frames = int(meta["FrameData"]["SI.hStackManager.framesPerSlice"])
+                num_of_lines = int(meta["SI.hRoiManager.linesPerFrame"])
+                num_of_frames = int(meta["SI.hStackManager.framesPerSlice"])
         return num_of_lines, num_of_frames
 
     @staticmethod

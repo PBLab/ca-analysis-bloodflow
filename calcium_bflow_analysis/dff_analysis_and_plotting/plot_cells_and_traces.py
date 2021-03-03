@@ -350,17 +350,17 @@ def get_coords_from_hdf5(hdf_fname: pathlib.Path) -> List[Dict]:
     return coordinates
 
 
-def _add_text_labels(ax: plt.Axes, rois: List):
-    coms = [c['CoM'] for c in rois]
-
-    pass
+def _add_text_labels(ax: plt.Axes, rois: List, roi_ids: np.ndarray):
+    coms = [c["CoM"] for c in rois]
+    for com, roi_id in zip(coms, roi_ids):
+        ax.text(com[1], com[0], str(roi_id), color="w", size=10, clip_on=True)
 
 
 def get_accepted_components_idx(hdf_fname: pathlib.Path) -> Optional[np.ndarray]:
     """Returns the 0-based indices of the accepted components"""
-    with h5py.File(hdf_fname, 'r') as f:
-        idx = f['estimates']['idx_components'][()]
-    if idx == 'NoneType':
+    with h5py.File(hdf_fname, "r") as f:
+        idx = f["estimates"]["idx_components"][()]
+    if idx == "NoneType":
         return None
     return idx
 
@@ -397,7 +397,7 @@ def draw_rois_over_cells(
 
     all_rois_objects = get_coords_from_hdf5(results_file)
     all_rois_objects = [all_rois_objects[i] for i in crds]
-    all_rois = [c['coordinates'] for c in all_rois_objects]
+    all_rois = [c["coordinates"] for c in all_rois_objects]
 
     if ax_img is None:
         fig, ax_img = plt.subplots()
@@ -407,8 +407,9 @@ def draw_rois_over_cells(
     ax_img.imshow(np.zeros_like(tif), cmap="gray")
     ax_img.axis("off")
     ax_img.set_aspect("equal")
-    ax_img.add_collection(LineCollection(all_rois, colors='white', linewidths=0.7))
-    # _add_text_labels(ax_img, all_rois_objects)
+    ax_img.add_collection(LineCollection(all_rois, colors="white", linewidths=0.7))
+    _add_text_labels(ax_img, all_rois_objects, crds)
+
     if roi_fname:
         # ax_img.figure.savefig(str(roi_fname), transparent=True, format='tif', bbox_inches='tight', pad_inches=0)
         ax_img.figure.tight_layout(pad=0)
@@ -432,10 +433,14 @@ def draw_rois_over_cells(
 
 if __name__ == "__main__":
     tifs = [
-        pathlib.Path("/data/Amit_QNAP/WT_WFA-FITC_RCaMP_chABC/285/285_WT_RCaMP7_WFA-FITC_x10_mag3_FOV1_z490_1040nm_256px_210218_00001_CHANNEL_2.tif"),
+        pathlib.Path(
+            "/data/Amit_QNAP/WT_WFA-FITC_RCaMP_chABC/285/285_WT_RCaMP7_WFA-FITC_x10_mag3_FOV1_z490_1040nm_256px_210218_00001_CHANNEL_2.tif"
+        ),
     ]
     results = [
-        pathlib.Path("/data/Amit_QNAP/WT_WFA-FITC_RCaMP_chABC/285/285_WT_RCaMP7_WFA-FITC_x10_mag3_FOV1_z200_1040nm_256px_210218_00001_CHANNEL_2_memmap__d1_256_d2_256_d3_1_order_C_frames_9000_.hdf5"),
+        pathlib.Path(
+            "/data/Amit_QNAP/WT_WFA-FITC_RCaMP_chABC/285/285_WT_RCaMP7_WFA-FITC_x10_mag3_FOV1_z200_1040nm_256px_210218_00001_CHANNEL_2_memmap__d1_256_d2_256_d3_1_order_C_frames_9000_.hdf5"
+        ),
     ]
     fig = show_side_by_side(tifs, results)
     # fig.savefig('/data/Amit_QNAP/rcamp107_wfa_120320/all_fovs.pdf', transparent=True, dpi=300)

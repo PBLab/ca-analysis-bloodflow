@@ -36,10 +36,10 @@ class FluoMetadata:
     def _get_si_meta(self):
         """ Parse the metadata from the SI-generated file """
         try:
-            with tifffile.TiffFile(str(self.fname)) as f:
-                si_meta = f.scanimage_metadata
-                self.fps = self._round_fps(float(si_meta['FrameData']['SI.hRoiManager.scanFrameRate']))
-                save_chans = si_meta['FrameData']['SI.hChannels.channelSave']
+            with open(self.fname, 'rb') as f:
+                si_meta, _ = tifffile.read_scanimage_metadata(f)
+                self.fps = self._round_fps(float(si_meta['SI.hRoiManager.scanFrameRate']))
+                save_chans = si_meta['SI.hChannels.channelSave']
                 if type(save_chans) is int:
                     self.num_of_channels = 1
                 else:
