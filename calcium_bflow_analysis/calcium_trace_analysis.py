@@ -84,7 +84,7 @@ class CalciumReview:
             self.raw_data[day] = xr.open_dataset(file)
         self.days = np.unique(np.array(parsed_days))
         stats = ["_mean", "_std"]
-        self.conditions = self.raw_data[day].condition.values.tolist()
+        self.conditions = list(set(self.raw_data[day].condition.values.tolist()))
         self.df_columns = [
             "".join(x) for x in itertools.product(self.conditions, stats)
         ] + ["t", "p"]
@@ -254,7 +254,7 @@ def plot_single_cond_per_mouse(ca: CalciumReview, analysis_methods: list):
 
 
 if __name__ == "__main__":
-    folder = pathlib.Path(r"/data/Amit_QNAP/Thy1GCaMP_chABC")
+    folder = pathlib.Path(r"/data/David/TAC_group_7_baseline")
     assert folder.exists()
     ca = CalciumReview(folder, "data_*.nc")
     analysis_methods = [
@@ -263,15 +263,15 @@ if __name__ == "__main__":
         AvailableFuncs.SPIKERATE,
     ]
     epoch = "all"
-    # ca.apply_analysis_funcs_two_conditions(analysis_methods, epoch)
-    # ca.plot_df_two_conditions(ca.funcs_dict[AvailableFuncs.AUC], f"AUC of Fluo Traces, Epoch: {epoch}")
-    # ca.plot_df_two_conditions(
-    #     ca.funcs_dict[AvailableFuncs.SPIKERATE],
-    #     f"Spike Rate of Fluo Traces, Epoch: {epoch}",
-    # )
-    # ca.plot_df_two_conditions(ca.funcs_dict[AvailableFuncs.MEAN], f"Mean dF/F of Fluo Traces, Epoch: {epoch}")
+    ca.apply_analysis_funcs_two_conditions(analysis_methods, epoch)
+    ca.plot_df_two_conditions(ca.funcs_dict[AvailableFuncs.AUC], f"AUC of Fluo Traces, Epoch: {epoch}")
+    ca.plot_df_two_conditions(
+        ca.funcs_dict[AvailableFuncs.SPIKERATE],
+        f"Spike Rate of Fluo Traces, Epoch: {epoch}",
+    )
+    ca.plot_df_two_conditions(ca.funcs_dict[AvailableFuncs.MEAN], f"Mean dF/F of Fluo Traces, Epoch: {epoch}")
     # ca.apply_analysis_single_condition(analysis_methods, epoch, mouse_id='514')
     # ca.plot_single_condition(ca.funcs_dict[AvailableFuncs.AUC], f"AUC of Fluo Traces, Epoch: {epoch} [514]")
     # ca.plot_single_condition(ca.funcs_dict[AvailableFuncs.SPIKERATE], f"Spike Rate of Fluo Traces, Epoch: {epoch} [514]")
-    plot_single_cond_per_mouse(ca, analysis_methods)
+    # plot_single_cond_per_mouse(ca, analysis_methods)
     plt.show(block=False)

@@ -45,7 +45,11 @@ class FluoMetadata:
                 else:
                     self.num_of_channels = len(save_chans)
                 self.start_time = str(datetime.fromtimestamp(os.path.getmtime(str(self.fname))))
-                length = len(f.pages)//self.num_of_channels
+                try:
+                    num_slices = si_meta['SI.actualNumSlice']
+                except KeyError:
+                    num_slices = si_meta['SI.numSlices']
+                length = num_slies * si_meta['SI.framesPerSlice']
                 self.timestamps = np.arange(length)/self.fps
         except (TypeError, KeyError):
             self.timestamps = None
