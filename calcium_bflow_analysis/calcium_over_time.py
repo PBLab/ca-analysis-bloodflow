@@ -75,11 +75,11 @@ class FileFinder:
         Main entrance to pipeline of class. Returns a DataFrame in which
         each row is a doublet\\triplet of corresponding files.
         """
-        fluo_files, analog_files, result_files, colabeled_files = (
+        fluo_files, analog_files, result_files, colabeled_files, hdf5_files = (
             self._find_all_relevant_files()
         )
         self.data_files = self._make_table(
-            fluo_files, analog_files, result_files, colabeled_files
+            fluo_files, analog_files, result_files, colabeled_files, hdf5_files
         )
         return self.data_files
 
@@ -95,7 +95,8 @@ class FileFinder:
         analog_files = []
         result_files = []
         colabeled_files = []
-        summary_str = "Found the following {num} files:\nFluo: {fluo}\nAnalog: {analog}\nCaImAn: {caiman}\nColabeled: {colabeled}"
+        hdf5_files = []
+        summary_str = "Found the following {num} files:\nFluo: {fluo}\nAnalog: {analog}\nCaImAn: {caiman}\nColabeled: {colabeled}\nHDF5: {hdf5}"
         for folder, globstr in self.folder_globs.items():
             for file in folder.rglob(globstr):
                 num_of_files_found = 1
@@ -110,10 +111,14 @@ class FileFinder:
                 else:
                     analog_file = None
                 try:
+                    hdf5_file = next(folder.rglob(fname + "*.hdf5"))
+                except StopIteration:
+                    print(f"File {file} has no HDF5 counterpart.")
+                try:
                     result_file = next(folder.rglob(fname + "*results.npz"))
                     num_of_files_found += 1
                 except StopIteration:
-                    print(f"File {file} has no result.npz couterpart.")
+                    print(f"File {file} has no results.npz couterpart.")
                     continue
                 if self.with_colabeled:
                     try:
@@ -134,27 +139,29 @@ class FileFinder:
                             analog=analog_file,
                             caiman=result_file,
                             colabeled=colabeled_file,
+                            hdf5=hdf5_file,
                         )
                     )
                     fluo_files.append(file)
                     result_files.append(result_file)
                     colabeled_files.append(colabeled_file)
                     analog_files.append(analog_file)
+                    hdf5_files.append(hdf5_file)
 
         print(
             "\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C"
         )
-        return fluo_files, analog_files, result_files, colabeled_files
+        return fluo_files, analog_files, result_files, colabeled_files, hdf5_files
 
     def _make_table(
-        self, fluo_files, analog_files, result_files, colabeled_files
+        self, fluo_files, analog_files, result_files, colabeled_files, hdf5_files
     ) -> pd.DataFrame:
         """
         Turns list of pathlib.Path objects into a DataFrame.
         """
-        columns = ["tif", "caiman", "analog", "colabeled"]
+        columns = ["tif", "caiman", "analog", "colabeled", "hdf5"]
         data_files = pd.DataFrame([], columns=columns)
-        to_zip = [fluo_files, result_files, analog_files, colabeled_files]
+        to_zip = [fluo_files, result_files, analog_files, colabeled_files, hdf5_files]
         files_iter = zip(*to_zip)
 
         for idx, files_tup in enumerate(files_iter):
@@ -238,6 +245,8 @@ class CalciumAnalysisOverTime:
         fov = SingleFovParser(
             analog_fname=files_row.analog,
             results_fname=files_row.caiman,
+            colabeled=files_row.colabeled,
+            results_hdf5=files_row.hdf5,
             metadata=meta,
             analog=analog,
             summarize_in_plot=True,
@@ -329,8 +338,8 @@ class CalciumAnalysisOverTime:
 
 
 if __name__ == "__main__":
-    home = Path("/data/David/")
-    folder = Path("TAC_group_7_baseline")
+    home = Path("/data/Amit_QNAP/PV-GCaMP/")
+    folder = Path("289")
     results_folder = home / folder
     assert results_folder.exists()
     globstr = "*.tif"
@@ -340,14 +349,14 @@ if __name__ == "__main__":
         results_folder=results_folder,
         folder_globs=folder_and_files,
         analog=analog_type,
-        with_colabeled=False,
+        with_colabeled=True,
     )
     files_table = filefinder.find_files()
     regex = {
-        "cond_reg": r"condition_(\w+)_mag",
-        "id_reg": r"mouse_(\d+)_day",
-        "fov_reg": r"fov_(\d+)_condition",
-        "day_reg": r"day_(\d)_fov"
+        "cond_reg": r"(0)",
+        "id_reg": r"(289)",
+        "fov_reg": r"_FOV(\d)_",
+        "day_reg": r"(0)"
     }
     res = CalciumAnalysisOverTime(
         files_table=files_table,

@@ -139,12 +139,12 @@ def show_side_by_side(
         assert len(tifs) == 1
         axes = [ax]
 
-    if crds is None:
-        crds = tuple([slice(None) for item in tifs])
-
     for tif, result, crd, ax in zip(tifs, results, crds, axes):
         with h5py.File(result, "r") as data:
-            dff = np.asarray(data["estimates"]["F_dff"])[crd]
+            dff = np.asarray(data["estimates"]["F_dff"])
+            if crd == 'NoneType':
+                crd = np.arange(len(dff))
+            dff = dff[crd]
             fps = data["params"]["data"]["fr"][()]
         dff = pd.DataFrame(dff.T).rolling(int(fps)).mean().to_numpy().T
         time_vec = np.arange(dff.shape[1]) / fps
@@ -396,8 +396,7 @@ def draw_rois_over_cells(
         tif = tif_fname
 
     all_rois_objects = get_coords_from_hdf5(results_file)
-    all_rois_objects = [all_rois_objects[i] for i in crds]
-    all_rois = [c["coordinates"] for c in all_rois_objects]
+    all_rois = [all_rois_objects[i]["coordinates"] for i in crds]
 
     if ax_img is None:
         fig, ax_img = plt.subplots()
