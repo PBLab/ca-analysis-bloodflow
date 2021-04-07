@@ -115,7 +115,7 @@ class ColabeledCells:
         res_file = np.load(self.result_file)
         all_crd = res_file['crd']
         if 'params' not in res_file:  # newer .npz files are already "filtered" and so this line isn't needed
-            all_crd = all_crd[res_file['idx_components']]  # filters bad components
+            all_crd = all_crd[res_file['accepted_list']]  # filters bad components
         centroids_functional = np.array([data['CoM'] for data in all_crd])
         assert centroids_functional.shape[1] == 2  # two columns, x and y
         large_regions = [region for region in regions if region.area > self.cell_radius ** 2]

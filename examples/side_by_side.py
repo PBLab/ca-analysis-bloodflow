@@ -111,7 +111,7 @@ def two_channel_pipeline(
 
 def _get_accepted_components(fname: pathlib.Path) -> np.ndarray:
     with h5py.File(fname, 'r') as f:
-        data = f['estimates']['idx_components'][()]
+        data = f['estimates']['accepted_list'][()]
         if (data == 'NoneType') or (len(data) == 0):
             data = np.arange(len(f['estimates']['F_dff'][()]))
     return data

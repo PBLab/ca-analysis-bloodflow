@@ -2,6 +2,7 @@ from typing import List, Tuple, Union, MutableMapping, Optional
 import itertools
 
 import numpy as np
+import h5py
 import pandas as pd
 import xarray as xr
 import seaborn as sns
@@ -40,6 +41,8 @@ class SingleFovParser:
     fluo_analyzed = attr.ib(
         init=False
     )  # xr.Dataset with the different slices of run, stim and dF/F
+    fluo_colabeled = attr.ib(init=False)
+    fluo_non_colabeled = attr.ib(init=False)
 
     def _analyze_analog_data(self):
         """Run the analog analysis pipeline assuming that the analog
@@ -54,7 +57,7 @@ class SingleFovParser:
             names=["stimulus", "run"],
             index_col=False,
             # sep="\",  # old data format is \t
-        ).iloc[:self.fluo_trace.shape[1]]
+        )
 
         self.analog_analyzed = analog_trace_runner(
             self.metadata.fname,
@@ -63,18 +66,30 @@ class SingleFovParser:
             self.metadata,
             occluder=False,
         )
-        self.fluo_analyzed = self.analog_analyzed * self.fluo_trace
 
-    def _get_hdf5_name(self):
-        """Extracts the name of the corresponding HDF5 name for this
-        FOV."""
-        name = self.results_fname.stem[:-8]
-        
+    def read_dff_of_hdf5(self):
+        """Returns an np.ndarray of dF/F traces (cell x time).
 
-    def separate_colabled(self):
-        hdf_fname = self._get_hdf5_name()
-        with h5py.File(hdf_fname)
-        
+        If there was a filteration step using the CaImAn GUI then the method
+        will only return the filtered cells.
+        """
+        with h5py.File(self.results_hdf5, 'r') as f:
+            accepted_list = f['estimates']['accepted_list'][()]
+            dff = f['estimates']['F_dff'][()]
+        if isinstance(accepted_list, np.ndarray):
+            dff = dff[accepted_list]
+        return dff
+
+    def separate_colabeled(self):
+        """Generate two arrays of DFF - colabeled and not colabeled"""
+        colabeled_idx = np.load(self.colabeled)
+        with h5py.File(self.results_hdf5, 'r') as f:
+            dff = f['estimates']['F_dff'][()]
+            colabeled = dff[np.intersect1d(f['estimates']['accepted_list'][()], colabeled_idx)]
+            total = np.arange(len(dff))
+            not_colabeled = np.setdiff1d(total, colabeled_idx)
+            not_colabeled = dff[np.intersect1d(not_colabeled, f['estimates']['accepted_list'])]
+        return colabeled, not_colabeled
 
     def _mock_data(self):
         """Generates a Dataset when the analog data is missing.
@@ -109,13 +124,18 @@ class SingleFovParser:
         After it's run, self.fluo_analyzed is populated with a Dataset containing
         the analyzed data.
         """
+        if self.analog is not AnalogAcquisitionType.NONE:
+            self._analyze_analog_data()
+        else:
+            self._mock_data()
+
         if self.colabeled:
-            dff, colabeled, non_colabeled = self.separate_colabled()
-            self.fluo_colabeled = 
+            colabeled, non_colabeled = self.separate_colabeled()
+            self.fluo_colabeled = self.analog_analyzed * colabeled
+            self.fluo_non_colabeled = self.analog_analyzed * non_colabeled
 
         else:
-            with np.load(str(self.results_fname), "r+") as self.all_fluo_results:
-                self.fluo_trace = self.all_fluo_results["F_dff"]
+            self.fluo_trace = self.read_dff_of_hdf5()
             try:
                 if not self.fluo_trace or len(self.fluo_trace.shape) == 0:  # no cells detected
                     self.fluo_trace = np.array([])
@@ -124,15 +144,11 @@ class SingleFovParser:
             if self.fluo_trace.shape[0] == 0:
                 self.fluo_analyzed = None
                 return
+            self.fluo_analyzed = self.analog_analyzed * self.fluo_trace
 
-        if self.analog is not AnalogAcquisitionType.NONE:
-            self._analyze_analog_data()
-        else:
-            self._mock_data()
-
-        if self.summarize_in_plot:
-            viz = SingleFovViz(self)
-            viz.draw()
+            if self.summarize_in_plot:
+                viz = SingleFovViz(self, show=True)
+                viz.draw()
 
     def add_metadata_and_serialize(self):
         """
@@ -148,13 +164,19 @@ class SingleFovParser:
         except StopIteration:  # the file doesn't exist, we'll make a new one
             try:
                 raw_data = self.fluo_analyzed.dff
-            except AttributeError:
-                print("No fluorescent data in this FOV.")
-                return
-            print("Writing new NetCDF to disk.")
-            self.fluo_analyzed.to_netcdf(
-                str(self.metadata.fname)[:-4] + ".nc", mode="w"
-            )
+            except AttributeError:  # no fluo, but perhaps we have colabeled data
+                if self.colabeled:
+                    self.fluo_colabeled.to_netcdf(str(self.metadata.fname)[:-4] + "_colabeled.nc", mode='w')
+                    self.fluo_non_colabeled.to_netcdf(str(self.metadata.fname)[:-4] + "_non_colabeled.nc", mode = 'w')
+                    return
+                else:
+                    print("No fluorescent data in this FOV.")
+                    return
+            else:
+                print("Writing new NetCDF to disk.")
+                self.fluo_analyzed.to_netcdf(
+                    str(self.metadata.fname)[:-4] + ".nc", mode="w"
+                )
 
 
 @attr.s
@@ -173,6 +195,7 @@ class SingleFovViz:
     fov = attr.ib(validator=instance_of(SingleFovParser))
     save = attr.ib(default=True, validator=instance_of(bool))
     axes_for_dff = attr.ib(default=14, validator=instance_of(int))
+    show = attr.ib(default=False, validator=instance_of(bool))
     fig = attr.ib(init=False)
     analog_vectors = attr.ib(init=False)
     epochs_to_display = attr.ib(init=False)
@@ -228,6 +251,8 @@ class SingleFovViz:
                 dpi=300,
                 format="pdf",
             )
+        if self.show:
+            plt.show(block=False)
 
     def _create_rect_patches(self, fps: float, height: int):
         """ Creates plt.patches.Rectangle patches to be later added to an existing axis.
@@ -265,7 +290,7 @@ class SingleFovViz:
     def _scat_spikes(self, ax):
         """ Plots all dF/F traces and spikes on a given axes """
         spikes = dff_tools.locate_spikes_scipy(
-            self.fov.fluo_trace, self.fov.metadata.fps
+            self.fov.fluo_trace, fps=self.fov.metadata.fps
         )
         time_vec = np.arange(self.fov.fluo_trace.shape[1]) / self.fov.metadata.fps
         dff_tools.scatter_spikes(
@@ -309,7 +334,7 @@ class SingleFovViz:
             cur_data = filter_da(self.fov.fluo_analyzed, epoch=epoch)
             if cur_data.shape[0] == 0:
                 continue
-            auc = dff_tools.calc_auc(cur_data)
+            auc = dff_tools.calc_total_auc_around_spikes(cur_data, self.fov.metadata.fps)
             df_auc[epoch][: len(auc)] = auc
             spikes = dff_tools.calc_mean_spike_num(cur_data, fps=self.fov.metadata.fps)
             df_spikes[epoch][: len(spikes)] = spikes
@@ -332,6 +357,8 @@ def _filter_condition(epoch_data: xr.Dataset, condition: str) -> xr.Dataset:
 
 
 def _filter_mouse_id(epoch_data: xr.Dataset, mouse_id: str) -> xr.Dataset:
+    if isinstance(epoch_data.mouse_id.values, np.ndarray):
+        return epoch_data
     relevant_fnames = (epoch_data.mouse_id == mouse_id).values
     return epoch_data.sel(fname=relevant_fnames)
 

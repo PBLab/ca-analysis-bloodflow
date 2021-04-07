@@ -359,7 +359,7 @@ def _add_text_labels(ax: plt.Axes, rois: List, roi_ids: np.ndarray):
 def get_accepted_components_idx(hdf_fname: pathlib.Path) -> Optional[np.ndarray]:
     """Returns the 0-based indices of the accepted components"""
     with h5py.File(hdf_fname, "r") as f:
-        idx = f["estimates"]["idx_components"][()]
+        idx = f["estimates"]["accepted_list"][()]
     if idx == "NoneType":
         return None
     return idx

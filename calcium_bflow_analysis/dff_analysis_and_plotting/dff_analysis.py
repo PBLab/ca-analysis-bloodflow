@@ -82,7 +82,9 @@ def locate_spikes_peakutils(
     return all_spikes
 
 
-def locate_spikes_scipy(data, fps=30.03, thresh=2.2, min_dist=None, max_allowed_firing_rate=1):
+def locate_spikes_scipy(
+    data, fps=30.03, thresh=0.8, min_dist=None, max_allowed_firing_rate=1
+):
     """Find spikes from a dF/F matrix using the find_peaks function.
     The fps parameter is used to calculate the minimum allowed distance
     between consecutive spikes, and to disqualify cells which had no
@@ -105,15 +107,22 @@ def locate_spikes_scipy(data, fps=30.03, thresh=2.2, min_dist=None, max_allowed_
         spikes".
     """
     assert len(data.shape) == 2 and data.shape[0] > 0
+    sec_in_samples = int(fps)
     if min_dist is None:
-        min_dist = int(fps)
+        min_dist = sec_in_samples
     else:
         min_dist = int(min_dist)
     all_spikes: np.ndarray = np.zeros_like(data)
-    nan_to_zero = np.nan_to_num(data)
     max_spike_num = int(data.shape[1] // fps) * max_allowed_firing_rate
+    nan_to_zero = np.nan_to_num(data)
     for row, cell in enumerate(nan_to_zero):
-        peaks, _ = scipy.signal.find_peaks(cell, prominence=thresh, threshold=(0.1, 5), distance=min_dist)
+        peaks, _ = scipy.signal.find_peaks(
+            cell,
+            prominence=thresh,
+            distance=min_dist,
+            wlen=sec_in_samples * 5,
+            width=(sec_in_samples // 8, sec_in_samples * 10)
+        )
         num_of_peaks = len(peaks)
         if (num_of_peaks > 0) and (num_of_peaks < max_spike_num):
             all_spikes[row, peaks] = 1
@@ -129,8 +138,8 @@ def calc_mean_spike_num(data, fps=30.03, thresh=0.75):
     :param thresh: Peakutils threshold for spikes
     :return: Number of spikes for each neuron
     """
-    all_spikes = locate_spikes_peakutils(data, fps, thresh)
-    mean_of_spikes = np.nanmean(all_spikes, axis=1)
+    all_spikes = locate_spikes_scipy(data, fps, thresh)
+    mean_of_spikes = np.nansum(all_spikes, axis=1)
     return mean_of_spikes
 
 
@@ -165,7 +174,9 @@ def scatter_spikes(
     else:
         fig = ax.figure
     downsampled_data = raw_data[::downsample_display]
-    downsampled_data = np.where(downsampled_data < np.float64(8), downsampled_data, np.float64(0))
+    downsampled_data = np.where(
+        downsampled_data < np.float64(8), downsampled_data, np.float64(0)
+    )
     num_displayed_cells = downsampled_data.shape[0]
     y_step = 2
     y_heights = np.arange(0, num_displayed_cells * y_step, y_step)[:, np.newaxis]
@@ -217,7 +228,7 @@ def plot_mean_vals(
     return ax, mean_val[0].mean()
 
 
-def calc_auc(data):
+def calc_auc(data, *args):
     """ Return the normalized area under the curve of all neurons in the data matrix.
     Uses a simple trapezoidal rule, and subtracts the offset of each cell before
     the computation.
@@ -228,7 +239,54 @@ def calc_auc(data):
     return auc
 
 
-def calc_mean_dff(data):
+def calc_total_auc_around_spikes(data, fps=58.21, thresh=0.75):
+    """Calculates the area under the data curve for the data, but only around
+    spike locations. This should give a better approximation of the data when
+    there are very high or very low counts of spikes."""
+    offsets = np.nanmin(data, axis=1)[:, np.newaxis]
+    no_offset = data - offsets
+    spikes = locate_spikes_scipy(no_offset, fps, thresh)
+    spikes_bloated = bloat_area_around_spikes(spikes, int(fps // 2))
+    auc = np.zeros_like(no_offset)
+    auc[np.where(spikes_bloated)] = no_offset[np.where(spikes_bloated)]
+    backgrounds = calc_background_per_cell(no_offset)
+    return np.nansum(auc / backgrounds[:, None], axis=1)
+
+
+def calc_mean_auc_around_spikes(data, fps=58.21, thresh=0.75):
+    """Calculates the area under the data curve for the data, but only around
+    spike locations. This should give a better approximation of the data when
+    there are very high or very low counts of spikes."""
+    offsets = np.nanmin(data, axis=1)[:, np.newaxis]
+    no_offset = data - offsets
+    spikes = locate_spikes_scipy(no_offset, fps, thresh)
+    spikes_bloated = bloat_area_around_spikes(spikes, int(fps // 2))
+    auc = np.zeros_like(no_offset)
+    auc[np.where(spikes_bloated)] = no_offset[np.where(spikes_bloated)]
+    backgrounds = calc_background_per_cell(no_offset)
+    return np.nanmean(auc / backgrounds[:, None], axis=1)
+
+
+def bloat_area_around_spikes(spikes: np.ndarray, window: int) -> np.ndarray:
+    """Increase the labeled area around each spike.
+    Each spike is marked in the spikes array as 1, while the rest of the cells
+    are 0. This function takes each spike and sets the area around it to have
+    ones too."""
+    win = np.ones(window)
+    bloated = np.zeros_like(spikes)
+    for idx, row in enumerate(spikes):
+        bloated[idx] = np.clip(np.convolve(row, win, 'same'), 0, 1)
+
+    return bloated
+
+
+def calc_background_per_cell(data) -> np.ndarray:
+    """Per row, emit a single value corresponding to the background noise level
+    of that neuron"""
+    return np.nanmedian(data, axis=1)
+
+
+def calc_mean_dff(data, *args):
     """ Return the mean dF/F value, and the SEM of all neurons in the data matrix.
     Subtracts the offset of each cell before the computation.
     """
@@ -301,11 +359,11 @@ def generate_spikes_roc_curve(dff: np.ndarray, fps: float):
 
 
 if __name__ == "__main__":
-    baseline_folder = pathlib.Path('/data/Amit_QNAP/Calcium_FXS/x10')
-    basic_fmr_filename = 'FXS_614_X10_FOV5_mag3_20181010_00005'
-    fmr_tif = baseline_folder / 'FXS_614' / f'{basic_fmr_filename}.tif'
-    fmr_results = fmr_tif.with_name(f'{basic_fmr_filename}_results.npz')
-    fmr_analog = fmr_tif.with_name(f'{basic_fmr_filename}_analog.txt')
+    baseline_folder = pathlib.Path("/data/Amit_QNAP/Calcium_FXS/x10")
+    basic_fmr_filename = "FXS_614_X10_FOV5_mag3_20181010_00005"
+    fmr_tif = baseline_folder / "FXS_614" / f"{basic_fmr_filename}.tif"
+    fmr_results = fmr_tif.with_name(f"{basic_fmr_filename}_results.npz")
+    fmr_analog = fmr_tif.with_name(f"{basic_fmr_filename}_analog.txt")
 
     # cell_radius = 9
     # number_of_channels = 2

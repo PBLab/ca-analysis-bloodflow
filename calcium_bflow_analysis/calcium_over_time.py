@@ -68,6 +68,7 @@ class FileFinder:
     folder_globs = attr.ib(default={Path("."): "*.tif"}, validator=instance_of(dict))
     analog = attr.ib(default=AnalogAcquisitionType.NONE)
     with_colabeled = attr.ib(default=False, validator=instance_of(bool))
+    filtered = attr.ib(default=False, validator=instance_of(bool))
     data_files = attr.ib(init=False)
 
     def find_files(self) -> pd.DataFrame:
@@ -111,9 +112,11 @@ class FileFinder:
                 else:
                     analog_file = None
                 try:
-                    hdf5_file = next(folder.rglob(fname + "*.hdf5"))
+                    hdf5_str = '*_F.hdf5' if self.filtered else '*.hdf5'
+                    hdf5_file = next(folder.rglob(fname + hdf5_str))
                 except StopIteration:
                     print(f"File {file} has no HDF5 counterpart.")
+                    continue
                 try:
                     result_file = next(folder.rglob(fname + "*results.npz"))
                     num_of_files_found += 1
@@ -252,7 +255,6 @@ class CalciumAnalysisOverTime:
             summarize_in_plot=True,
         )
         fov.parse()
-        plt.close()
         if self.serialize:
             fov.add_metadata_and_serialize()
         return fov
@@ -286,6 +288,8 @@ class CalciumAnalysisOverTime:
             try:
                 day = int(xr.open_dataset(file).day)
             except AttributeError:  # older datasets
+                continue
+            except FileNotFoundError:  # no calcium in FOV
                 continue
             fovs_by_day[day].append(file)
 

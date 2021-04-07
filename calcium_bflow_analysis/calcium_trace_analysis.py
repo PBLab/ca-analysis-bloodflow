@@ -31,8 +31,8 @@ class AvailableFuncs(Enum):
     """ Allowed analysis functions that can be used with CalciumReview.
     The values of the enum variants are names of functions in dff_analysis.py """
 
-    AUC = "calc_auc"
-    MEAN = "calc_mean_dff"
+    AUC = "calc_total_auc_around_spikes"
+    MEAN = "calc_mean_auc_around_spikes"
     SPIKERATE = "calc_mean_spike_num"
 
 
@@ -69,7 +69,7 @@ class CalciumReview:
         """
         self.files = []
         self.raw_data = {}
-        all_files = folder.rglob(self.glob)
+        all_files = self.folder.rglob(self.glob)
         day_reg = re.compile(r".+?of_day_(\d+).nc")
         parsed_days = []
         print("Found the following files:")
@@ -103,17 +103,16 @@ class CalciumReview:
     def data_of_day(self, day: int, condition: Condition, epoch="spont"):
         """ A function used to retrieve the "raw" data of dF/F, in the form of
         cells x time, to the user. Supply a proper day, condition and epoch and receive a numpy array. """
-        assert type(condition) == Condition
         try:
             unselected_data = self.raw_data[day]
         except KeyError:
             print(f"The day {day} is invalid. Valid days are {self.days}.")
         else:
-            return filter_da(
-                unselected_data, condition=condition.value, epoch=epoch
-            )
+            return filter_da(unselected_data, condition=condition.value, epoch=epoch)
 
-    def apply_analysis_funcs_two_conditions(self, funcs: list, epoch: str, mouse_id: Optional[str] = None):
+    def apply_analysis_funcs_two_conditions(
+        self, funcs: list, epoch: str, mouse_id: Optional[str] = None
+    ):
         """ Call the list of methods given to save time and memory. Applicable
         if the dataset has two conditions, like left and right. """
         norm1, norm2 = 1, 1
@@ -128,12 +127,12 @@ class CalciumReview:
             if selected_first.shape[0] == 0 or selected_second.shape[0] == 0:
                 continue
             for func in funcs:
-                cond1 = getattr(dff_analysis, func.value)(selected_first)
+                cond1 = getattr(dff_analysis, func.value)(selected_first, self.raw_data[0].fps)
                 cond1_mean, cond1_sem = (
                     cond1.mean(),
                     cond1.std(ddof=1) / np.sqrt(cond1.shape[0]),
                 )
-                cond2 = getattr(dff_analysis, func.value)(selected_second)
+                cond2 = getattr(dff_analysis, func.value)(selected_second, self.raw_data[0].fps)
                 cond2_mean, cond2_sem = (
                     cond2.mean(),
                     cond2.std(ddof=1) / np.sqrt(cond2.shape[0]),
@@ -160,7 +159,9 @@ class CalciumReview:
                     pd.DataFrame(df_dict, index=[day])
                 )
 
-    def apply_analysis_single_condition(self, funcs: list, epoch: str, mouse_id: Optional[str] = None):
+    def apply_analysis_single_condition(
+        self, funcs: list, epoch: str, mouse_id: Optional[str] = None
+    ):
         """Run a list of methods on the object for the given epoch if we have
         only a single condition"""
 
@@ -173,7 +174,7 @@ class CalciumReview:
                 warnings.warn("No data rows in this day.")
                 continue
             for func in funcs:
-                cond1 = getattr(dff_analysis, func.value)(selected_first)
+                cond1 = getattr(dff_analysis, func.value)(selected_first, self.raw_data[0].fps)
                 cond1_mean, cond1_sem = (
                     cond1.mean(),
                     cond1.std(ddof=1) / np.sqrt(cond1.shape[0]),
@@ -182,10 +183,7 @@ class CalciumReview:
                     col: data
                     for col, data in zip(
                         [self.df_columns[0], self.df_columns[1]],
-                        [
-                            cond1_mean,
-                            cond1_sem,
-                        ],
+                        [cond1_mean, cond1_sem,],
                     )
                 }
                 self.funcs_dict[func] = self.funcs_dict[func].append(
@@ -221,24 +219,23 @@ class CalciumReview:
 
     def plot_single_condition(self, df, title):
         fig, ax = plt.subplots()
-        ax.errorbar(df.index.values,
-        df.iloc[:, 0], df.iloc[:, 1], c="C0", fmt='o')
+        ax.errorbar(df.index.values, df.iloc[:, 0], df.iloc[:, 1], c="C0", fmt="o")
         ax.set_xticks(df.index.values)
-        ax.set_xlabel('Days')
+        ax.set_xlabel("Days")
         ax.set_title(title)
 
 
 def plot_single_cond_per_mouse(ca: CalciumReview, analysis_methods: list):
     """Generates a plot of the values over time of each mouse in the experiment"""
     mids = np.unique(ca.raw_data[0].mouse_id.values)
-    stats = ['mean', 'std']
+    stats = ["mean", "std"]
     columns = ["_".join(x) for x in itertools.product(mids, stats)]
     datacache = pd.DataFrame(index=sorted(list(ca.raw_data.keys())), columns=columns)
     results = {func_name.name: datacache.copy() for func_name in analysis_methods}
     for day, raw_datum in dict(sorted(ca.raw_data.items())).items():
         print(f"Analyzing day {day}...")
         for mid, data in raw_datum.groupby(raw_datum.mouse_id):
-            filtered = filter_da(data, epoch='all')
+            filtered = filter_da(data, epoch="all")
             for func in analysis_methods:
                 result = getattr(dff_analysis, func.value)(filtered)
                 result_mean, result_sem = (
@@ -248,9 +245,8 @@ def plot_single_cond_per_mouse(ca: CalciumReview, analysis_methods: list):
                 results[func.name].loc[day, f"{mid}_mean"] = result_mean
                 results[func.name].loc[day, f"{mid}_std"] = result_sem
 
-    ca.plot_df_two_conditions(results['AUC'], 'AUC both mice', mids)
-    ca.plot_df_two_conditions(results['SPIKERATE'], 'Spike rate both mice', mids)
-
+    ca.plot_df_two_conditions(results["AUC"], "AUC both mice", mids)
+    ca.plot_df_two_conditions(results["SPIKERATE"], "Spike rate both mice", mids)
 
 
 if __name__ == "__main__":
@@ -264,12 +260,16 @@ if __name__ == "__main__":
     ]
     epoch = "all"
     ca.apply_analysis_funcs_two_conditions(analysis_methods, epoch)
-    ca.plot_df_two_conditions(ca.funcs_dict[AvailableFuncs.AUC], f"AUC of Fluo Traces, Epoch: {epoch}")
+    ca.plot_df_two_conditions(
+        ca.funcs_dict[AvailableFuncs.AUC], f"AUC of Fluo Traces, Epoch: {epoch}"
+    )
     ca.plot_df_two_conditions(
         ca.funcs_dict[AvailableFuncs.SPIKERATE],
         f"Spike Rate of Fluo Traces, Epoch: {epoch}",
     )
-    ca.plot_df_two_conditions(ca.funcs_dict[AvailableFuncs.MEAN], f"Mean dF/F of Fluo Traces, Epoch: {epoch}")
+    ca.plot_df_two_conditions(
+        ca.funcs_dict[AvailableFuncs.MEAN], f"Mean dF/F of Fluo Traces, Epoch: {epoch}"
+    )
     # ca.apply_analysis_single_condition(analysis_methods, epoch, mouse_id='514')
     # ca.plot_single_condition(ca.funcs_dict[AvailableFuncs.AUC], f"AUC of Fluo Traces, Epoch: {epoch} [514]")
     # ca.plot_single_condition(ca.funcs_dict[AvailableFuncs.SPIKERATE], f"Spike Rate of Fluo Traces, Epoch: {epoch} [514]")
