@@ -243,13 +243,11 @@ def calc_total_auc_around_spikes(data, fps=58.21, thresh=0.75):
     """Calculates the area under the data curve for the data, but only around
     spike locations. This should give a better approximation of the data when
     there are very high or very low counts of spikes."""
-    offsets = np.nanmin(data, axis=1)[:, np.newaxis]
-    no_offset = data - offsets
-    spikes = locate_spikes_scipy(no_offset, fps, thresh)
+    spikes = locate_spikes_scipy(data, fps, thresh)
     spikes_bloated = bloat_area_around_spikes(spikes, int(fps // 2))
-    auc = np.zeros_like(no_offset)
-    auc[np.where(spikes_bloated)] = no_offset[np.where(spikes_bloated)]
-    backgrounds = calc_background_per_cell(no_offset)
+    auc = np.zeros_like(data)
+    auc[np.where(spikes_bloated)] = data[np.where(spikes_bloated)]
+    backgrounds = calc_background_per_cell(data)
     return np.nansum(auc / backgrounds[:, None], axis=1)
 
 
@@ -257,13 +255,11 @@ def calc_mean_auc_around_spikes(data, fps=58.21, thresh=0.75):
     """Calculates the area under the data curve for the data, but only around
     spike locations. This should give a better approximation of the data when
     there are very high or very low counts of spikes."""
-    offsets = np.nanmin(data, axis=1)[:, np.newaxis]
-    no_offset = data - offsets
-    spikes = locate_spikes_scipy(no_offset, fps, thresh)
+    spikes = locate_spikes_scipy(data, fps, thresh)
     spikes_bloated = bloat_area_around_spikes(spikes, int(fps // 2))
-    auc = np.zeros_like(no_offset)
-    auc[np.where(spikes_bloated)] = no_offset[np.where(spikes_bloated)]
-    backgrounds = calc_background_per_cell(no_offset)
+    auc = np.zeros_like(data)
+    auc[np.where(spikes_bloated)] = data[np.where(spikes_bloated)]
+    backgrounds = calc_background_per_cell(data)
     return np.nanmean(auc / backgrounds[:, None], axis=1)
 
 
