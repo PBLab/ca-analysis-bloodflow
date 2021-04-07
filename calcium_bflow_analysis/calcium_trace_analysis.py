@@ -127,12 +127,12 @@ class CalciumReview:
             if selected_first.shape[0] == 0 or selected_second.shape[0] == 0:
                 continue
             for func in funcs:
-                cond1 = getattr(dff_analysis, func.value)(selected_first, self.raw_data[0].fps)
+                cond1 = getattr(dff_analysis, func.value)(selected_first, self.raw_data[day].fps)
                 cond1_mean, cond1_sem = (
                     cond1.mean(),
                     cond1.std(ddof=1) / np.sqrt(cond1.shape[0]),
                 )
-                cond2 = getattr(dff_analysis, func.value)(selected_second, self.raw_data[0].fps)
+                cond2 = getattr(dff_analysis, func.value)(selected_second, self.raw_data[day].fps)
                 cond2_mean, cond2_sem = (
                     cond2.mean(),
                     cond2.std(ddof=1) / np.sqrt(cond2.shape[0]),
@@ -174,7 +174,7 @@ class CalciumReview:
                 warnings.warn("No data rows in this day.")
                 continue
             for func in funcs:
-                cond1 = getattr(dff_analysis, func.value)(selected_first, self.raw_data[0].fps)
+                cond1 = getattr(dff_analysis, func.value)(selected_first, self.raw_data[day].fps)
                 cond1_mean, cond1_sem = (
                     cond1.mean(),
                     cond1.std(ddof=1) / np.sqrt(cond1.shape[0]),
@@ -183,7 +183,7 @@ class CalciumReview:
                     col: data
                     for col, data in zip(
                         [self.df_columns[0], self.df_columns[1]],
-                        [cond1_mean, cond1_sem,],
+                        [cond1_mean, cond1_sem],
                     )
                 }
                 self.funcs_dict[func] = self.funcs_dict[func].append(

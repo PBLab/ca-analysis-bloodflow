@@ -12,7 +12,7 @@ from calcium_bflow_analysis.calcium_trace_analysis import CalciumReview, Availab
 from calcium_bflow_analysis.dff_analysis_and_plotting.dff_analysis import calc_auc, calc_mean_spike_num, calc_mean_dff
 
 
-home = Path("/data/Amit_QNAP/Thy1GCaMP_chABC/514")
+home = Path("/data/Amit_QNAP/Thy1GCaMP_chABC/669")
 folder = Path("post3")
 results_folder = home / folder
 assert results_folder.exists()
@@ -24,14 +24,14 @@ filefinder = FileFinder(
     folder_globs=folder_and_files,
     analog=analog_type,
     with_colabeled=False,
-    filtered=True,
+    filtered=False,
 )
 files_table = filefinder.find_files()
 regex = {
     "cond_reg": r"(0)",
-    "id_reg": r"(514)",
+    "id_reg": r"(669)",
     "fov_reg": r"_FOV(\d)_",
-    "day_reg": r"(3)"
+    "day_reg": r"(0)"
 }
 res = CalciumAnalysisOverTime(
     files_table=files_table,
@@ -43,7 +43,7 @@ res = CalciumAnalysisOverTime(
 # res.run_batch_of_timepoints(results_folder)
 # res.generate_ds_per_day(results_folder, '*.nc', recursive=True)
 home = Path("/data/Amit_QNAP/Thy1GCaMP_chABC/")
-folder = Path("514")
+folder = Path("669")
 review_folder = home / folder
 ca = CalciumReview(review_folder, "data_of_day_*.nc")
 
@@ -54,10 +54,10 @@ analysis_methods = [
 ]
 epoch = "all"
 
-ca.apply_analysis_single_condition(analysis_methods, epoch, mouse_id="514")
-ca.plot_single_condition(ca.funcs_dict[AvailableFuncs.AUC], f"Total AUC of Fluo Traces, Epoch: {epoch} [514]")
-ca.plot_single_condition(ca.funcs_dict[AvailableFuncs.MEAN], f"Mean AUC per spike of Fluo Traces, Epoch: {epoch} [514]")
-ca.plot_single_condition(ca.funcs_dict[AvailableFuncs.SPIKERATE], f"Spikerate of Fluo Traces, Epoch: {epoch} [514]")
+ca.apply_analysis_single_condition(analysis_methods, epoch, mouse_id="669")
+ca.plot_single_condition(ca.funcs_dict[AvailableFuncs.AUC], f"Total AUC of Fluo Traces, Epoch: {epoch} [669]")
+ca.plot_single_condition(ca.funcs_dict[AvailableFuncs.MEAN], f"Mean AUC per spike of Fluo Traces, Epoch: {epoch} [669]")
+ca.plot_single_condition(ca.funcs_dict[AvailableFuncs.SPIKERATE], f"Spikerate of Fluo Traces, Epoch: {epoch} [669]")
 # ca.plot_single_cond_per_mouse(ca, analysis_methods)
 plt.show(block=False)
 # colabeled = xr.open_dataset('/data/Amit_QNAP/PV-GCaMP/289/colabeled_data_of_day_0.nc')

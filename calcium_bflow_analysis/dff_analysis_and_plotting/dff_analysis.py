@@ -55,7 +55,7 @@ def calc_dff_batch(files):
 
 
 def locate_spikes_peakutils(
-    data, fps=30.03, thresh=0.7, min_dist=None, max_allowed_firing_rate=1
+    data, fps=30.03, thresh=0.8, min_dist=None, max_allowed_firing_rate=1
 ) -> np.ndarray:
     """
     Find spikes from a dF/F matrix using the peakutils package.
@@ -129,7 +129,7 @@ def locate_spikes_scipy(
     return all_spikes
 
 
-def calc_mean_spike_num(data, fps=30.03, thresh=0.75):
+def calc_mean_spike_num(data, fps=30.03, thresh=0.8):
     """
     Find the spikes in the data (using "locate_spikes_peakutils") and count
     them, to create statistics on their average number.
@@ -140,10 +140,11 @@ def calc_mean_spike_num(data, fps=30.03, thresh=0.75):
     """
     all_spikes = locate_spikes_scipy(data, fps, thresh)
     mean_of_spikes = np.nansum(all_spikes, axis=1)
+    print(f"Found a total of {mean_of_spikes.sum()} spikes, or {mean_of_spikes.mean()} per neuron")
     return mean_of_spikes
 
 
-def calc_mean_spike_num_no_background(data, fps=30.03, thresh=0.75, q=20):
+def calc_mean_spike_num_no_background(data, fps=30.03, thresh=0.8, q=20):
     """Find the spikes in the data and count them, but do that
     after removing some quantile that is treated as background.
     """
@@ -239,28 +240,29 @@ def calc_auc(data, *args):
     return auc
 
 
-def calc_total_auc_around_spikes(data, fps=58.21, thresh=0.75):
+def calc_total_auc_around_spikes(data, fps=58.21, thresh=0.8):
     """Calculates the area under the data curve for the data, but only around
     spike locations. This should give a better approximation of the data when
     there are very high or very low counts of spikes."""
     spikes = locate_spikes_scipy(data, fps, thresh)
-    spikes_bloated = bloat_area_around_spikes(spikes, int(fps // 2))
+    spikes_bloated = bloat_area_around_spikes(spikes, int(fps / 2))
     auc = np.zeros_like(data)
     auc[np.where(spikes_bloated)] = data[np.where(spikes_bloated)]
-    backgrounds = calc_background_per_cell(data)
-    return np.nansum(auc / backgrounds[:, None], axis=1)
+    return np.nansum(auc, axis=1)
 
 
-def calc_mean_auc_around_spikes(data, fps=58.21, thresh=0.75):
+def calc_mean_auc_around_spikes(data, fps=58.21, thresh=0.8):
     """Calculates the area under the data curve for the data, but only around
     spike locations. This should give a better approximation of the data when
     there are very high or very low counts of spikes."""
     spikes = locate_spikes_scipy(data, fps, thresh)
+    spikes_per_neuron = spikes.sum(axis=1)
     spikes_bloated = bloat_area_around_spikes(spikes, int(fps // 2))
     auc = np.zeros_like(data)
-    auc[np.where(spikes_bloated)] = data[np.where(spikes_bloated)]
-    backgrounds = calc_background_per_cell(data)
-    return np.nanmean(auc / backgrounds[:, None], axis=1)
+    auc[np.where(spikes_bloated > 0)] = data[np.where(spikes_bloated > 0)]
+    neurons_that_spiked = np.where(spikes_per_neuron > 0)[0]
+    auc[neurons_that_spiked] /= spikes_per_neuron[neurons_that_spiked, None]
+    return np.nanmean(auc, axis=1)
 
 
 def bloat_area_around_spikes(spikes: np.ndarray, window: int) -> np.ndarray:
@@ -274,12 +276,6 @@ def bloat_area_around_spikes(spikes: np.ndarray, window: int) -> np.ndarray:
         bloated[idx] = np.clip(np.convolve(row, win, 'same'), 0, 1)
 
     return bloated
-
-
-def calc_background_per_cell(data) -> np.ndarray:
-    """Per row, emit a single value corresponding to the background noise level
-    of that neuron"""
-    return np.nanmedian(data, axis=1)
 
 
 def calc_mean_dff(data, *args):

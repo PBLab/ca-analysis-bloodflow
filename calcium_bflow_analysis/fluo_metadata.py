@@ -13,7 +13,7 @@ class FluoMetadata:
     """ Simple datacontainer class to hold metadata of fluorescence recordings """
 
     fname = attr.ib(validator=instance_of(pathlib.Path))
-    fps = attr.ib(default=15.24)  # framerate
+    fps = attr.ib(default=58.24)  # framerate
     num_of_channels = attr.ib(default=1)
     start_time = attr.ib(default=0)
     id_reg = attr.ib(default=r'(^\d+?)_', validator=instance_of(str))
