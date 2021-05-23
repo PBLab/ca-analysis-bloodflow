@@ -27,7 +27,7 @@ def write_to_cache(foldername, data: dict):
         print(repr(e))
 
 
-def read_from_cache(foldername) -> dict:
+def read_from_cache(foldername) -> Optional[dict]:
     if not foldername.exists():
         return
     filename = foldername / "overlay_channels.json"
@@ -198,4 +198,3 @@ def show_traces_and_rois(
 
 if __name__ == "__main__":
     show_traces_and_rois.show(run=True)
-    # show_traces_and_rois()

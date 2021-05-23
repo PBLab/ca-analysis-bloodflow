@@ -133,7 +133,8 @@ class FileFinder:
                 else:
                     colabeled_file = None
                 try:
-                    _ = next(folder.rglob(f"{str(file.name)[:-4]}*.nc"))
+                    already_analyzed = next(folder.rglob(f"{fname}*.nc"))
+                    print(f"File {fname} was already analyzed: {already_analyzed}")
                 except StopIteration:  # FOV wasn't already analyzed
                     print(
                         summary_str.format(

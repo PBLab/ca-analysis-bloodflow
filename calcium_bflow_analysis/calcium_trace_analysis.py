@@ -73,6 +73,7 @@ class CalciumReview:
         day_reg = re.compile(r".+?of_day_(\d+).nc")
         parsed_days = []
         print("Found the following files:")
+        day = 0
         for file in all_files:
             print(file)
             self.files.append(file)

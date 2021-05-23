@@ -74,7 +74,10 @@ class SingleFovParser:
         will only return the filtered cells.
         """
         with h5py.File(self.results_hdf5, 'r') as f:
-            accepted_list = f['estimates']['accepted_list'][()]
+            try:
+                accepted_list = f['estimates']['accepted_list'][()]
+            except KeyError:
+                accepted_list = None
             dff = f['estimates']['F_dff'][()]
         if isinstance(accepted_list, np.ndarray):
             dff = dff[accepted_list]

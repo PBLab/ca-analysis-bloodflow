@@ -14,7 +14,8 @@ from calcium_bflow_analysis.analog_trace import AnalogAcquisitionType
 
 foldername = pathlib.Path("/data/Hagai/WFA_InVivo/new/")
 channel_suffix = '_CHANNEL_1.tif'
-results_suffix = '_CHANNEL_1_results.npz'
+results_suffix_hdf = '*.hdf5'
+results_suffix_npz = '*.npz'
 tifs = [
     '774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z200_200802_00001',
     '774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV1_z270_200802_00001',
@@ -22,8 +23,9 @@ tifs = [
     '774_WFA-FITC_RCaMP7_x10_mag4_1040nm_256px_FOV2_z330_500802_00001',
 ]
 
-channel1 = [(foldername / tif).with_name(tif + channel_suffix) for tif in tifs]
-results = [(foldername / tif).with_name(tif + results_suffix) for tif in tifs]
+channel1 = [next(foldername.glob(tif + channel_suffix)) for tif in tifs]
+results_hdf5 = [next(foldername.glob(tif + results_suffix_hdf)) for tif in tifs]
+results_npz = [next(foldername.glob(tif + results_suffix_npz)) for tif in tifs]
 
 pnn_coords = [
     np.array([5]),
@@ -46,9 +48,9 @@ fov_reg = r'_FOV(\d)_'
 cond_reg = '(1040)'
 
 if __name__ == "__main__":
-    fig_pnn = show_side_by_side(channel1, results, pnn_coords, cell_radius)
+    fig_pnn = show_side_by_side(channel1, results_hdf5, pnn_coords)
     fig_pnn.suptitle('PNN cells')
-    fig_non_pnn = show_side_by_side(channel1, results, non_pnn_coords, cell_radius)
+    fig_non_pnn = show_side_by_side(channel1, results_hdf5, non_pnn_coords)
     fig_non_pnn.suptitle('Non-PNN cells')
     for idx, tif in enumerate(tifs):
         meta = FluoMetadata((foldername / tif).with_suffix('.tif'), fps,
@@ -59,7 +61,8 @@ if __name__ == "__main__":
             continue
         single_fov = SingleFovParser(
             analog_fname,
-            results[0],
+            results_npz[idx],
+            results_hdf5[idx],
             meta, AnalogAcquisitionType.TREADMILL, False)
         single_fov.parse()
         puff_coords: np.ndarray = single_fov.fluo_analyzed['epoch_times'].sel(epoch='stim').values

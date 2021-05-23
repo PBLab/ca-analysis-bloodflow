@@ -140,7 +140,6 @@ def calc_mean_spike_num(data, fps=30.03, thresh=0.8):
     """
     all_spikes = locate_spikes_scipy(data, fps, thresh)
     mean_of_spikes = np.nansum(all_spikes, axis=1)
-    print(f"Found a total of {mean_of_spikes.sum()} spikes, or {mean_of_spikes.mean()} per neuron")
     return mean_of_spikes
 
 
@@ -240,7 +239,7 @@ def calc_auc(data, *args):
     return auc
 
 
-def calc_total_auc_around_spikes(data, fps=58.21, thresh=0.8):
+def calc_total_auc_around_spikes(data, fps=58.21, thresh=0.8) -> np.ndarray:
     """Calculates the area under the data curve for the data, but only around
     spike locations. This should give a better approximation of the data when
     there are very high or very low counts of spikes."""
@@ -251,7 +250,7 @@ def calc_total_auc_around_spikes(data, fps=58.21, thresh=0.8):
     return np.nansum(auc, axis=1)
 
 
-def calc_mean_auc_around_spikes(data, fps=58.21, thresh=0.8):
+def calc_mean_auc_around_spikes(data, fps=58.21, thresh=0.8) -> np.ndarray:
     """Calculates the area under the data curve for the data, but only around
     spike locations. This should give a better approximation of the data when
     there are very high or very low counts of spikes."""
@@ -263,6 +262,20 @@ def calc_mean_auc_around_spikes(data, fps=58.21, thresh=0.8):
     neurons_that_spiked = np.where(spikes_per_neuron > 0)[0]
     auc[neurons_that_spiked] /= spikes_per_neuron[neurons_that_spiked, None]
     return np.nanmean(auc, axis=1)
+
+
+def calc_median_auc_around_spikes(data, fps=58.21, thresh=0.8) -> np.ndarray:
+    """Calculates the area under the data curve for the data, but only around
+    spike locations. This should give a better approximation of the data when
+    there are very high or very low counts of spikes."""
+    spikes = locate_spikes_scipy(data, fps, thresh)
+    spikes_per_neuron = spikes.sum(axis=1)
+    spikes_bloated = bloat_area_around_spikes(spikes, int(fps // 2))
+    auc = np.full_like(data, np.nan)
+    auc[np.where(spikes_bloated > 0)] = data[np.where(spikes_bloated > 0)]
+    neurons_that_spiked = np.where(spikes_per_neuron > 0)[0]
+    auc[neurons_that_spiked] /= spikes_per_neuron[neurons_that_spiked, None]
+    return np.nanmedian(auc, axis=1)
 
 
 def bloat_area_around_spikes(spikes: np.ndarray, window: int) -> np.ndarray:

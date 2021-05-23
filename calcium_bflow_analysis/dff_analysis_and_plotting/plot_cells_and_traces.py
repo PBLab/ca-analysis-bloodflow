@@ -350,10 +350,9 @@ def get_coords_from_hdf5(hdf_fname: pathlib.Path) -> List[Dict]:
     return coordinates
 
 
-def _add_text_labels(ax: plt.Axes, rois: List, roi_ids: np.ndarray):
-    coms = [c["CoM"] for c in rois]
+def _add_text_labels(ax: plt.Axes, coms: List[Tuple], roi_ids: np.ndarray):
     for com, roi_id in zip(coms, roi_ids):
-        ax.text(com[1], com[0], str(roi_id), color="w", size=10, clip_on=True)
+        ax.text(com[0], com[1], str(roi_id), color="w", size=10, clip_on=True)
 
 
 def get_accepted_components_idx(hdf_fname: pathlib.Path) -> Optional[np.ndarray]:
@@ -363,6 +362,19 @@ def get_accepted_components_idx(hdf_fname: pathlib.Path) -> Optional[np.ndarray]
     if idx == "NoneType":
         return None
     return idx
+
+
+def _post_process_rois(all_rois_objects: List, crds: np.ndarray) -> Tuple[List[np.ndarray], List[Tuple]]:
+    all_rois = []
+    coms = []
+    for crd in crds:
+        current_roi = all_rois_objects[crd]["coordinates"]
+        # current_roi[:, 0], current_roi[:, 1] = current_roi[:, 1], current_roi[:, 0].copy()
+        all_rois.append(current_roi)
+        comx = np.nanmean(current_roi[:, 0])
+        comy = np.nanmean(current_roi[:, 1])
+        coms.append((comx, comy))
+    return all_rois, coms
 
 
 def draw_rois_over_cells(
@@ -396,7 +408,7 @@ def draw_rois_over_cells(
         tif = tif_fname
 
     all_rois_objects = get_coords_from_hdf5(results_file)
-    all_rois = [all_rois_objects[i]["coordinates"] for i in crds]
+    all_rois, coms = _post_process_rois(all_rois_objects, crds)
 
     if ax_img is None:
         fig, ax_img = plt.subplots()
@@ -407,7 +419,7 @@ def draw_rois_over_cells(
     ax_img.axis("off")
     ax_img.set_aspect("equal")
     ax_img.add_collection(LineCollection(all_rois, colors="white", linewidths=0.7))
-    _add_text_labels(ax_img, all_rois_objects, crds)
+    _add_text_labels(ax_img, coms, crds)
 
     if roi_fname:
         # ax_img.figure.savefig(str(roi_fname), transparent=True, format='tif', bbox_inches='tight', pad_inches=0)

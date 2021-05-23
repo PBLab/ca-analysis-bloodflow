@@ -31,7 +31,7 @@ regex = {
     "cond_reg": r"(0)",
     "id_reg": r"(669)",
     "fov_reg": r"_FOV(\d)_",
-    "day_reg": r"(0)"
+    "day_reg": r"(3)"
 }
 res = CalciumAnalysisOverTime(
     files_table=files_table,
@@ -40,7 +40,7 @@ res = CalciumAnalysisOverTime(
     analog=analog_type,
     regex=regex,
 )
-# res.run_batch_of_timepoints(results_folder)
+res.run_batch_of_timepoints(results_folder)
 # res.generate_ds_per_day(results_folder, '*.nc', recursive=True)
 home = Path("/data/Amit_QNAP/Thy1GCaMP_chABC/")
 folder = Path("669")
