@@ -6,6 +6,9 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.stats
+import tifffile
+import skimage.measure as measure
+import h5py
 
 from calcium_bflow_analysis.calcium_over_time import FileFinder, CalciumAnalysisOverTime, FormatFinder
 from calcium_bflow_analysis.analog_trace import AnalogAcquisitionType
@@ -30,15 +33,50 @@ assert results_folder.exists()
 globstr = "289*.tif"
 folder_and_files = {home / folder: globstr}
 analog_type = AnalogAcquisitionType.TREADMILL
-analog_format = FormatFinder('analog', '*analog.txt')
-hdf5_format = FormatFinder('hdf5', '*.hdf5')
-npz_fomrat = FormatFinder('caiman', '*results.npz')
-colabeled_format = FormatFinder('colabeled', '*_colabeled.npy')
-
+file_formats = [
+    FormatFinder('analog', '*analog.txt'),
+    FormatFinder('hdf5', '*.hdf5'),
+    FormatFinder('caiman', '*results.npz'),
+    FormatFinder('colabeled', '*_colabeled.npy'),
+    FormatFinder('masked', '*_masked.tif'),
+]
 filefinder = FileFinder(
     results_folder=results_folder,
+    file_formats=file_formats,
     folder_globs=folder_and_files,
-    analog=analog_type,
-    with_colabeled=False,
-    filtered=False,
 )
+file_table = filefinder.find_files()
+print(f"Found {len(file_table)} files!")
+
+for num, siblings in file_table.iterrows():
+    mask = tifffile.imread(str(siblings.masked))
+    labeled_mask = measure.label(mask)
+    regions = pd.DataFrame(measure.regionprops_table(labeled_mask, properties=('label', 'area'))).set_index('label')
+    print(f"Number of regions: {len(regions)}")
+    with h5py.File(siblings.hdf5, 'r') as f:
+        img_components = np.asarray(f['estimates']['img_components'])
+        accepted_list = np.asarray(f['estimates']['accepted_list'])
+    if len(accepted_list) > 0:
+        print(f"We have {len(accepted_list)} accepted components out of {len(img_components)}")
+        img_components = img_components[accepted_list]
+    else:
+        accepted_list = range(len(img_components))
+    img_components[img_components > 0] = 1
+    labeled_components = img_components * labeled_mask
+    non_pnn_indices, pnn_indices = [], []
+    assert len(accepted_list) == len(labeled_components) == len(img_components)
+    for component_idx, single_labeled_component, single_component in zip(accepted_list, labeled_components, img_components):
+        uniques, counts = np.unique(single_labeled_component, return_counts=True)
+        if len(uniques) == 1:
+            non_pnn_indices.append(component_idx)
+            continue
+        fraction_covered_by_pnn = counts[1] / single_component.sum() 
+        if fraction_covered_by_pnn < 0.1:
+            non_pnn_indices.append(component_idx)
+        if fraction_covered_by_pnn > 0.5:
+            pnn_indices.append(component_idx)
+        continue
+    if len(pnn_indices) > 0:
+        colabeled_fname = str(siblings.tif)[:-4] + '_colabeled.npy'
+        np.save(colabeled_fname, np.asarray(pnn_indices))
+

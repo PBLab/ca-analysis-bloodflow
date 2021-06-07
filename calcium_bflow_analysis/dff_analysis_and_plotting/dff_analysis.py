@@ -55,7 +55,7 @@ def calc_dff_batch(files):
 
 
 def locate_spikes_peakutils(
-    data, fps=30.03, thresh=0.8, min_dist=None, max_allowed_firing_rate=1
+    data, fps=58.21, thresh=0.7, min_dist=None, max_allowed_firing_rate=1
 ) -> np.ndarray:
     """
     Find spikes from a dF/F matrix using the peakutils package.
@@ -83,7 +83,7 @@ def locate_spikes_peakutils(
 
 
 def locate_spikes_scipy(
-    data, fps=30.03, thresh=0.8, min_dist=None, max_allowed_firing_rate=1
+    data, fps=58.21, thresh=0.7, min_dist=None, max_allowed_firing_rate=1
 ):
     """Find spikes from a dF/F matrix using the find_peaks function.
     The fps parameter is used to calculate the minimum allowed distance
@@ -129,9 +129,9 @@ def locate_spikes_scipy(
     return all_spikes
 
 
-def calc_mean_spike_num(data, fps=30.03, thresh=0.8):
+def calc_mean_spike_num(data, fps=58.21, thresh=0.7):
     """
-    Find the spikes in the data (using "locate_spikes_peakutils") and count
+    Find the spikes in the data  and count
     them, to create statistics on their average number.
     :param data: Raw data, cells x time
     :param fps: Framerate
@@ -139,11 +139,11 @@ def calc_mean_spike_num(data, fps=30.03, thresh=0.8):
     :return: Number of spikes for each neuron
     """
     all_spikes = locate_spikes_scipy(data, fps, thresh)
-    mean_of_spikes = np.nansum(all_spikes, axis=1)
-    return mean_of_spikes
+    sum_of_spikes = np.nansum(all_spikes, axis=1)
+    return sum_of_spikes
 
 
-def calc_mean_spike_num_no_background(data, fps=30.03, thresh=0.8, q=20):
+def calc_mean_spike_num_no_background(data, fps=58.21, thresh=0.7, q=20):
     """Find the spikes in the data and count them, but do that
     after removing some quantile that is treated as background.
     """
@@ -239,7 +239,7 @@ def calc_auc(data, *args):
     return auc
 
 
-def calc_total_auc_around_spikes(data, fps=58.21, thresh=0.8) -> np.ndarray:
+def calc_total_auc_around_spikes(data, fps=58.21, thresh=0.7) -> np.ndarray:
     """Calculates the area under the data curve for the data, but only around
     spike locations. This should give a better approximation of the data when
     there are very high or very low counts of spikes."""
@@ -250,7 +250,7 @@ def calc_total_auc_around_spikes(data, fps=58.21, thresh=0.8) -> np.ndarray:
     return np.nansum(auc, axis=1)
 
 
-def calc_mean_auc_around_spikes(data, fps=58.21, thresh=0.8) -> np.ndarray:
+def calc_mean_auc_around_spikes(data, fps=58.21, thresh=0.7) -> np.ndarray:
     """Calculates the area under the data curve for the data, but only around
     spike locations. This should give a better approximation of the data when
     there are very high or very low counts of spikes."""
@@ -264,7 +264,7 @@ def calc_mean_auc_around_spikes(data, fps=58.21, thresh=0.8) -> np.ndarray:
     return np.nanmean(auc, axis=1)
 
 
-def calc_median_auc_around_spikes(data, fps=58.21, thresh=0.8) -> np.ndarray:
+def calc_median_auc_around_spikes(data, fps=58.21, thresh=0.7) -> np.ndarray:
     """Calculates the area under the data curve for the data, but only around
     spike locations. This should give a better approximation of the data when
     there are very high or very low counts of spikes."""

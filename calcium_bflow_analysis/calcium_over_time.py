@@ -3,7 +3,6 @@ A module designed to analyze FOVs of in vivo calcium
 activity. This module's main class, :class:`CalciumOverTime`,
 is used to run
 """
-from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
 from collections import defaultdict
@@ -102,8 +101,9 @@ class FileFinder:
         them into a list. A list None is returned if this
         experiment had no colabeling or analog data associated with it.
         """
-        all_found_files = {fileformat.name: [] for fileformat in self.file_formats}
-        siblings = {fileformat.name: None for fileformat in self.file_formats}
+        format_names = list(fmt.name for fmt in self.file_formats) + ['tif']
+        all_found_files = {fmt: [] for fmt in format_names}
+        siblings = {fmt: Path() for fmt in format_names}
         if len(all_found_files) == 0:
             return
         for folder, globstr in self.folder_globs.items():
@@ -120,6 +120,7 @@ class FileFinder:
                     else:
                         break
                 else:  # No break occurred - we found all needed files
+                    siblings['tif'] = file
                     [
                         all_found_files[name].append(found_file)
                         for name, found_file in siblings.items()
@@ -227,7 +228,7 @@ class CalciumAnalysisOverTime:
         fov = SingleFovParser(
             analog_fname=files_row.analog,
             results_fname=files_row.caiman,
-            colabeled=files_row.colabeled,
+            colabeled=files_row.colabeled if "colabeled" in files_row._fields else False,
             results_hdf5=files_row.hdf5,
             metadata=meta,
             analog=analog,

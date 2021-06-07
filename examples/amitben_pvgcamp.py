@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.stats
 
-from calcium_bflow_analysis.calcium_over_time import FileFinder, CalciumAnalysisOverTime
+from calcium_bflow_analysis.calcium_over_time import FileFinder, CalciumAnalysisOverTime, FormatFinder
 from calcium_bflow_analysis.analog_trace import AnalogAcquisitionType
 from calcium_bflow_analysis.calcium_trace_analysis import (
     CalciumReview,
@@ -30,12 +30,16 @@ assert results_folder.exists()
 globstr = "289*.tif"
 folder_and_files = {home / folder: globstr}
 analog_type = AnalogAcquisitionType.TREADMILL
+file_formats = [
+    FormatFinder('analog', '*analog.txt'),
+    FormatFinder('hdf5', '*.hdf5'),
+    FormatFinder('caiman', '*results.npz'),
+    FormatFinder('colabeled', '*_colabeled.npy'),
+]
 filefinder = FileFinder(
     results_folder=results_folder,
+    file_formats=file_formats,
     folder_globs=folder_and_files,
-    analog=analog_type,
-    with_colabeled=True,
-    filtered=False,
 )
 files_table = filefinder.find_files()
 regex = {
@@ -66,7 +70,7 @@ review_folder = home / folder
 #     AvailableFuncs.MEAN,
 #     AvailableFuncs.SPIKERATE,
 # ]
-epoch = "all"
+epoch = "stim"
 
 colabeled = xr.open_dataset("/data/Amit_QNAP/PV-GCaMP/289/colabeled_data_of_day_0.nc")
 non_colabeled = xr.open_dataset(
@@ -97,7 +101,7 @@ plots = pd.DataFrame(
 sr_colabeled = calc_mean_spike_num(colabeled_sel)
 sr_non_colabeled = calc_mean_spike_num(non_colabeled_sel)
 plots["spikerate"] = np.concatenate([sr_colabeled, sr_non_colabeled])
-plots_for_display = plots.drop(index=plots.mean_auc.nlargest(10).index)
+plots_for_display = plots.drop(index=plots.mean_auc.nlargest(0).index)
 
 # Plotting
 ax_auc = sns.boxenplot(
@@ -159,7 +163,7 @@ print(
 )
 
 print(
-    "Median AUC",
+    "Median AUC: ",
     scipy.stats.ttest_ind(
         plots.query('labels == "colabeled"').loc[:, "median_auc"],
         plots.query('labels == "non_colabeled"').loc[:, "median_auc"],

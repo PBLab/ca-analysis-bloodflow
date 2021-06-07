@@ -251,7 +251,7 @@ def plot_single_cond_per_mouse(ca: CalciumReview, analysis_methods: list):
 
 
 if __name__ == "__main__":
-    folder = pathlib.Path(r"/data/David/TAC_group_7_baseline")
+    folder = pathlib.Path(r"/data/David/thy1_g_test")
     assert folder.exists()
     ca = CalciumReview(folder, "data_*.nc")
     analysis_methods = [
