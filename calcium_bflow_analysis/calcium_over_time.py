@@ -8,7 +8,7 @@ from enum import Enum
 from pathlib import Path
 from collections import defaultdict
 import itertools
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Dict
 
 import pandas as pd
 import xarray as xr
@@ -39,25 +39,30 @@ class Epoch(Enum):
     STAND_JUXTA = "stand_juxta"
     STAND_SPONT = "stand_spont"
 
-class FormatFinder(ABC):
-    """A template for types of files that can be found in the directory.
 
-    This template should be implemented per file type, such as TIFs, analog
-    data and more, and will be used by the FileFinder class to populate the
-    file table.
+class FormatFinder:
+    """A generic class to find files in a folder with a given glob string.
+
+    This class can be instantiated once per file format and then passed to the
+    FileFinder object.
     """
-    def __init__(self, glob: str) -> None:
-        self.glob = glob
-        self.file_list = []
 
-    @abstractmethod
-    def find_file(self, path: Path) -> bool: 
+    def __init__(self, name: str, glob: str) -> None:
+        self.name = name
+        self.glob = glob
+
+    def find_file(self, folder: Path, filename: str) -> Optional[Path]:
         """Main method designed to check whether this file exists in the given
-        path. If so then the file_list attribute is populated and "True" is
-        returned.
+        path. It will use the glob string to recursively check for files in
+        the given directory.
         """
-        raise NotImplementedError
-        
+        try:
+            fname = next(folder.rglob(filename + self.glob))
+        except StopIteration:
+            return None
+        else:
+            return fname
+
 
 @attr.s(slots=True)
 class FileFinder:
@@ -74,26 +79,22 @@ class FileFinder:
     """
 
     results_folder = attr.ib(validator=instance_of(Path))
+    file_formats = attr.ib(validator=instance_of(list))
     folder_globs = attr.ib(default={Path("."): "*.tif"}, validator=instance_of(dict))
-    analog = attr.ib(default=AnalogAcquisitionType.NONE)
-    with_colabeled = attr.ib(default=False, validator=instance_of(bool))
-    filtered = attr.ib(default=False, validator=instance_of(bool))
     data_files = attr.ib(init=False)
 
-    def find_files(self) -> pd.DataFrame:
+    def find_files(self) -> Optional[pd.DataFrame]:
         """
         Main entrance to pipeline of class. Returns a DataFrame in which
         each row is a doublet\\triplet of corresponding files.
         """
-        fluo_files, analog_files, result_files, colabeled_files, hdf5_files = (
-            self._find_all_relevant_files()
-        )
-        self.data_files = self._make_table(
-            fluo_files, analog_files, result_files, colabeled_files, hdf5_files
-        )
-        return self.data_files
+        all_found_files = self._find_all_relevant_files()
+        if all_found_files:
+            self.data_files = self._make_table(all_found_files)
+            return self.data_files
+        return None
 
-    def _find_all_relevant_files(self) -> Tuple[List[Optional[Path]], ...]:
+    def _find_all_relevant_files(self) -> Optional[Dict[str, List[Path]]]:
         """
         Passes each .tif file it finds (with the given glob string)
         and looks for its results, analog and colabeled friends.
@@ -101,81 +102,48 @@ class FileFinder:
         them into a list. A list None is returned if this
         experiment had no colabeling or analog data associated with it.
         """
-        fluo_files = []
-        analog_files = []
-        result_files = []
-        colabeled_files = []
-        hdf5_files = []
-        summary_str = "Found the following {num} files:\nFluo: {fluo}\nAnalog: {analog}\nCaImAn: {caiman}\nColabeled: {colabeled}\nHDF5: {hdf5}"
+        all_found_files = {fileformat.name: [] for fileformat in self.file_formats}
+        siblings = {fileformat.name: None for fileformat in self.file_formats}
+        if len(all_found_files) == 0:
+            return
         for folder, globstr in self.folder_globs.items():
             for file in folder.rglob(globstr):
-                num_of_files_found = 1
-                fname = str(file.name)[:-4]
-                if self.analog is not AnalogAcquisitionType.NONE:
-                    try:
-                        analog_file = next(folder.rglob(fname + "*analog*.txt"))
-                        num_of_files_found += 1
-                    except StopIteration:
-                        print(f"File {file} has no analog counterpart.")
-                        continue
-                else:
-                    analog_file = None
-                try:
-                    hdf5_str = '*_F.hdf5' if self.filtered else '*.hdf5'
-                    hdf5_file = next(folder.rglob(fname + hdf5_str))
-                except StopIteration:
-                    print(f"File {file} has no HDF5 counterpart.")
+                fname = file.stem
+                already_analyzed = self._assert_file_wasnt_analyzed(folder, fname)
+                if already_analyzed:
                     continue
-                try:
-                    result_file = next(folder.rglob(fname + "*results.npz"))
-                    num_of_files_found += 1
-                except StopIteration:
-                    print(f"File {file} has no results.npz couterpart.")
-                    continue
-                if self.with_colabeled:
-                    try:
-                        colabeled_file = next(folder.rglob(fname + "*_colabeled*.npy"))
-                        num_of_files_found += 1
-                    except StopIteration:
-                        print(f"File {file} has no colabeled.npy couterpart.")
-                        continue
-                else:
-                    colabeled_file = None
-                try:
-                    already_analyzed = next(folder.rglob(f"{fname}*.nc"))
-                    print(f"File {fname} was already analyzed: {already_analyzed}")
-                except StopIteration:  # FOV wasn't already analyzed
-                    print(
-                        summary_str.format(
-                            num=num_of_files_found,
-                            fluo=file,
-                            analog=analog_file,
-                            caiman=result_file,
-                            colabeled=colabeled_file,
-                            hdf5=hdf5_file,
-                        )
-                    )
-                    fluo_files.append(file)
-                    result_files.append(result_file)
-                    colabeled_files.append(colabeled_file)
-                    analog_files.append(analog_file)
-                    hdf5_files.append(hdf5_file)
 
-        print(
-            "\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C\u301C"
-        )
-        return fluo_files, analog_files, result_files, colabeled_files, hdf5_files
+                for fileformat in self.file_formats:
+                    found_file = fileformat.find_file(folder, fname)
+                    if found_file:
+                        siblings[fileformat.name] = found_file
+                    else:
+                        break
+                else:  # No break occurred - we found all needed files
+                    [
+                        all_found_files[name].append(found_file)
+                        for name, found_file in siblings.items()
+                    ]
+        return all_found_files
 
-    def _make_table(
-        self, fluo_files, analog_files, result_files, colabeled_files, hdf5_files
-    ) -> pd.DataFrame:
+    @staticmethod
+    def _assert_file_wasnt_analyzed(folder, fname) -> bool:
+        try:
+            next(folder.rglob(f"{fname}.nc"))
+        except StopIteration:
+            return False
+        else:
+            print(f"File {fname} was already analyzed")
+            return True
+
+    @staticmethod
+    def _make_table(all_found_files: Dict[str, List[Path]]) -> pd.DataFrame:
         """
         Turns list of pathlib.Path objects into a DataFrame.
         """
-        columns = ["tif", "caiman", "analog", "colabeled", "hdf5"]
+        columns = all_found_files.keys()
         data_files = pd.DataFrame([], columns=columns)
-        to_zip = [fluo_files, result_files, analog_files, colabeled_files, hdf5_files]
-        files_iter = zip(*to_zip)
+        files_iter = zip(*all_found_files.values())
 
         for idx, files_tup in enumerate(files_iter):
             cur_row = pd.DataFrame([files_tup], columns=columns, index=[idx])
@@ -270,7 +238,9 @@ class CalciumAnalysisOverTime:
             fov.add_metadata_and_serialize()
         return fov
 
-    def generate_ds_per_day(self, results_folder: Path, globstr="*FOV*.nc", recursive=True):
+    def generate_ds_per_day(
+        self, results_folder: Path, globstr="*FOV*.nc", recursive=True
+    ):
         """
         Parse .nc files that were generated from the previous analysis
         and chain all "DAY_X" Datasets together into a single list.
@@ -293,7 +263,11 @@ class CalciumAnalysisOverTime:
             all_files = itertools.chain(*all_files)
 
         for file in all_files:
-            if "NEW_crystal_skull_TAC_161018" in str(file) or "crystal_skull_TAC_180719" in str(file) or "602_HYPER_HYPO_DAY_0_AND_ALL" in str(file):
+            if (
+                "NEW_crystal_skull_TAC_161018" in str(file)
+                or "crystal_skull_TAC_180719" in str(file)
+                or "602_HYPER_HYPO_DAY_0_AND_ALL" in str(file)
+            ):
                 continue
             print(file)
             try:
@@ -335,8 +309,7 @@ class CalciumAnalysisOverTime:
                 concat["epoch_times"] = (["fname", "epoch", "time"], asbool)
                 self.concat = concat
                 concat.to_netcdf(
-                    str(results_folder / f"{fname_to_save + str(day)}.nc"),
-                    mode="w",
+                    str(results_folder / f"{fname_to_save + str(day)}.nc"), mode="w",
                 )
 
     def _get_metadata(self, list_of_da: list, key: str, default):
@@ -371,7 +344,7 @@ if __name__ == "__main__":
         "cond_reg": r"(0)",
         "id_reg": r"(289)",
         "fov_reg": r"_FOV(\d)_",
-        "day_reg": r"(0)"
+        "day_reg": r"(0)",
     }
     res = CalciumAnalysisOverTime(
         files_table=files_table,
