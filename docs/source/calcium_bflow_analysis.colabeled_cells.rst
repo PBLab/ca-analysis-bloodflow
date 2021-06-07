@@ -11,6 +11,7 @@ calcium\_bflow\_analysis.colabeled\_cells.compare\_labeled\_unlabeled module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.colabeled\_cells.find\_colabeled\_cells module
 -----------------------------------------------------------------------
@@ -19,6 +20,7 @@ calcium\_bflow\_analysis.colabeled\_cells.find\_colabeled\_cells module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.colabeled\_cells.manually\_colabel module
 ------------------------------------------------------------------
@@ -27,7 +29,7 @@ calcium\_bflow\_analysis.colabeled\_cells.manually\_colabel module
    :members:
    :undoc-members:
    :show-inheritance:
-
+   :private-members:
 
 Module contents
 ---------------
@@ -36,3 +38,4 @@ Module contents
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:

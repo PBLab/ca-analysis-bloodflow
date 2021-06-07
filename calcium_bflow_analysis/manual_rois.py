@@ -10,7 +10,7 @@ import pandas as pd
 from calcium_bflow_analysis.roipoly import roipoly
 import matplotlib.pyplot as plt
 
-from dff_calc.df_f_calculation import DffCalculator
+from dff_calc import dff_calc
 
 
 @attr.s
@@ -39,7 +39,7 @@ class ManualRoiDrawing:
         self._offset_data()
         self._draw_rois()
         self._get_trace_from_masks()
-        self.dff = DffCalculator(self.raw_traces, fps=self.fps).calc()
+        self.dff = dff_calc(self.raw_traces, fps=self.fps)
         self.dff = self.moving_average(self.dff, int(self.fps / 2))
         self._display_roi_with_trace()
         return self.dff
@@ -227,7 +227,7 @@ class ParseFijiRoiCsv:
             trace = self.movie[:, mask[0]:mask[1], mask[2]:mask[3]].mean((1, 2))
             traces[idx, :] = trace
 
-        return DffCalculator(traces, fps=float(fps)).calc()
+        return dff_calc(traces, fps=float(fps))
 
 
     def _write_results(self, params, cn, crd, dff):

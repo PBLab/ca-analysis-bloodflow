@@ -11,6 +11,7 @@ calcium\_bflow\_analysis.dff\_analysis\_and\_plotting.dff\_analysis module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.dff\_analysis\_and\_plotting.plot\_cells\_and\_traces module
 -------------------------------------------------------------------------------------
@@ -19,7 +20,7 @@ calcium\_bflow\_analysis.dff\_analysis\_and\_plotting.plot\_cells\_and\_traces m
    :members:
    :undoc-members:
    :show-inheritance:
-
+   :private-members:
 
 Module contents
 ---------------
@@ -28,3 +29,4 @@ Module contents
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:

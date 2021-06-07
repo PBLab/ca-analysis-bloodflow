@@ -3,14 +3,16 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to calcium_bflow_analysis's documentation!
+Welcome to PBLab's Calcium Analysis documentation!
 ===================================================
+
+This package is a library which contains many useful scripts for analysis of
+calcium data. The functions in this package shouldn't be used in one order.
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
-   welcome
    calcium_bflow_analysis
 
 Indices and tables

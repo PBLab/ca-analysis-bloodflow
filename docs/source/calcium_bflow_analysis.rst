@@ -5,9 +5,11 @@ Subpackages
 -----------
 
 .. toctree::
+   :maxdepth: 4
 
    calcium_bflow_analysis.colabeled_cells
    calcium_bflow_analysis.dff_analysis_and_plotting
+   calcium_bflow_analysis.sequencer
 
 Submodules
 ----------
@@ -19,6 +21,7 @@ calcium\_bflow\_analysis.analog\_trace module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.analysis\_gui module
 ---------------------------------------------
@@ -27,6 +30,7 @@ calcium\_bflow\_analysis.analysis\_gui module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.analyze\_ca\_stacks\_with\_vessels module
 ------------------------------------------------------------------
@@ -35,6 +39,7 @@ calcium\_bflow\_analysis.analyze\_ca\_stacks\_with\_vessels module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.caiman\_funcs\_for\_comparison module
 --------------------------------------------------------------
@@ -43,6 +48,7 @@ calcium\_bflow\_analysis.caiman\_funcs\_for\_comparison module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.calcium\_over\_time module
 ---------------------------------------------------
@@ -51,6 +57,7 @@ calcium\_bflow\_analysis.calcium\_over\_time module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.calcium\_trace\_analysis module
 --------------------------------------------------------
@@ -59,6 +66,7 @@ calcium\_bflow\_analysis.calcium\_trace\_analysis module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.dff\_dataset module
 --------------------------------------------
@@ -67,6 +75,7 @@ calcium\_bflow\_analysis.dff\_dataset module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.dff\_heatmap module
 --------------------------------------------
@@ -75,6 +84,7 @@ calcium\_bflow\_analysis.dff\_heatmap module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.filter\_cells module
 ---------------------------------------------
@@ -83,6 +93,7 @@ calcium\_bflow\_analysis.filter\_cells module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.fluo\_metadata module
 ----------------------------------------------
@@ -91,6 +102,7 @@ calcium\_bflow\_analysis.fluo\_metadata module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.grid2d module
 --------------------------------------
@@ -99,6 +111,7 @@ calcium\_bflow\_analysis.grid2d module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.manual\_rois module
 --------------------------------------------
@@ -107,6 +120,7 @@ calcium\_bflow\_analysis.manual\_rois module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.roipoly module
 ---------------------------------------
@@ -115,6 +129,7 @@ calcium\_bflow\_analysis.roipoly module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.single\_fov\_analysis module
 -----------------------------------------------------
@@ -123,6 +138,7 @@ calcium\_bflow\_analysis.single\_fov\_analysis module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.trace\_converter module
 ------------------------------------------------
@@ -131,6 +147,7 @@ calcium\_bflow\_analysis.trace\_converter module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.vasc\_occ\_analysis module
 ---------------------------------------------------
@@ -139,6 +156,7 @@ calcium\_bflow\_analysis.vasc\_occ\_analysis module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.vasc\_occ\_parsing module
 --------------------------------------------------
@@ -147,6 +165,7 @@ calcium\_bflow\_analysis.vasc\_occ\_parsing module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
 
 calcium\_bflow\_analysis.vessel\_diameter\_avg\_to\_sheet module
 ----------------------------------------------------------------
@@ -155,7 +174,7 @@ calcium\_bflow\_analysis.vessel\_diameter\_avg\_to\_sheet module
    :members:
    :undoc-members:
    :show-inheritance:
-
+   :private-members:
 
 Module contents
 ---------------
@@ -164,3 +183,4 @@ Module contents
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:

@@ -751,19 +751,21 @@ def update_order_greedy(A, flag_AA=True):
     """Determines the update order of the temporal components
     this, given the spatial components using a greedy method
     Basically we can update the components that are not overlapping, in parallel
+
     Input:
-     -------
-     A:       sparse crc matrix
-              matrix of spatial components (d x K)
-     OR
-              A.T.dot(A) matrix (d x d) if flag_AA = true
-     flag_AA: boolean (default true)
-     Outputs:
-     ---------
-     parllcomp:   list of sets
-          list of subsets of components. The components of each subset can be updated in parallel
-     len_parrllcomp:  list
-          length of each subset
+    ------
+    A:       sparse crc matrix
+             matrix of spatial components (d x K)
+    OR
+             A.T.dot(A) matrix (d x d) if flag_AA = true
+    flag_AA: boolean (default true)
+
+    Outputs:
+    --------
+    parllcomp:   list of sets
+         list of subsets of components. The components of each subset can be updated in parallel
+    len_parrllcomp:  list
+         length of each subset
     @author: Eftychios A. Pnevmatikakis, Simons Foundation, 2017
     """
     K = np.shape(A)[-1]

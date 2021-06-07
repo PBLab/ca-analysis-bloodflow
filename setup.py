@@ -34,7 +34,7 @@ setup(
                       'ipython >= 7',
                       'pandas >= 1',
                       'xarray >= 0.14',
-                      'seaborn >= 0.9',
+                      'seaborn >= 0.10',
                       'ansimarkup >= 1.4',
                       'scikit-learn >= 0.22',
                       'scikit-image >= 0.16',
@@ -45,6 +45,9 @@ setup(
                       'openpyxl',
                       'peakutils',
                       'magicgui[pyqt5] >= 0.2.6',
+                      'sphinx_rtd_theme',
+                      'dff_calc',
+                      'statsmodels >= 0.12',
                    ],
     dependency_links=['git+https://github.com/napari/magicgui.git'],
 )

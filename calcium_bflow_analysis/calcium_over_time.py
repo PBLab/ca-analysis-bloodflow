@@ -3,32 +3,22 @@ A module designed to analyze FOVs of in vivo calcium
 activity. This module's main class, :class:`CalciumOverTime`,
 is used to run
 """
-
+from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
-import os
-import re
 from collections import defaultdict
 import itertools
-from datetime import datetime
-import multiprocessing as mp
 from typing import Tuple, List, Optional
 
 import pandas as pd
 import xarray as xr
-import matplotlib.pyplot as plt
 import numpy as np
 import attr
-import tifffile
-from scipy.ndimage.morphology import binary_fill_holes
 from attr.validators import instance_of
 
 from calcium_bflow_analysis.fluo_metadata import FluoMetadata
 from calcium_bflow_analysis.analog_trace import AnalogAcquisitionType
-from calcium_bflow_analysis.trace_converter import RawTraceConverter, ConversionMethod
-import calcium_bflow_analysis.caiman_funcs_for_comparison
 from calcium_bflow_analysis.single_fov_analysis import SingleFovParser
-from calcium_bflow_analysis.calcium_trace_analysis import Condition
 
 
 class Epoch(Enum):
@@ -49,6 +39,25 @@ class Epoch(Enum):
     STAND_JUXTA = "stand_juxta"
     STAND_SPONT = "stand_spont"
 
+class FormatFinder(ABC):
+    """A template for types of files that can be found in the directory.
+
+    This template should be implemented per file type, such as TIFs, analog
+    data and more, and will be used by the FileFinder class to populate the
+    file table.
+    """
+    def __init__(self, glob: str) -> None:
+        self.glob = glob
+        self.file_list = []
+
+    @abstractmethod
+    def find_file(self, path: Path) -> bool: 
+        """Main method designed to check whether this file exists in the given
+        path. If so then the file_list attribute is populated and "True" is
+        returned.
+        """
+        raise NotImplementedError
+        
 
 @attr.s(slots=True)
 class FileFinder:
@@ -204,11 +213,13 @@ class CalciumAnalysisOverTime:
         Main method to analyze all FOVs in all timepoints in all experiments.
         Generally used for TAC experiments, which have multiple FOVs per mouse, and
         an experiment design which spans multiple days.
-        The script expects a filename containing the following "self.fov_analysis_files.append(fields)"::
-            * Mouse ID (digits at the beginning of filename)
-            * Either 'HYPER' or 'HYPO'
-            * 'DAY_0/1/n'
-            * 'FOV_n'
+        The script expects a filename containing the following "self.fov_analysis_files.append(fields)":
+
+        * Mouse ID (digits at the beginning of filename)
+        * Either 'HYPER' or 'HYPO'
+        * 'DAY_0/1/n'
+        * 'FOV_n'
+
         After creating a xr.Dataset out of each file, the script will write this DataArray to
         disk (only if it doesn't exist yet, and only if self.serialize is True) to make future processing faster.
         Finally, it will take all created DataArrays and concatenate them into a single DataArray,
@@ -217,7 +228,6 @@ class CalciumAnalysisOverTime:
         that will parse the metadata from the file name. The default regexes are
         described above. Valid keys are "id_reg", "fov_reg", "cond_reg" and "day_reg".
         """
-
         # Multiprocessing doesn't work due to the fact that not all objects are
         # pickleable
         # with mp.Pool() as pool:
