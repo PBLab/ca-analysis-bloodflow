@@ -66,17 +66,15 @@ class FormatFinder:
 @attr.s(slots=True)
 class FileFinder:
     """
-    A class designated to find all doublets or triplets of files
+    A class designated to find all corresponding files
     for a given FOV. This means that each tif file that represents
     a recorded field of view should always have a corresponding
     .npz file containing the results from the calcium analysis
     pipeline, and if analog data was recorded then this FOV also
-    has a .txt file to go along with it. This class is aimed at
-    finding these triplets (or doublets if the analog file is
-    missing) and returning them to other classes for furthing
-    processing.
+    has a .txt file to go along with it. It may have other accompanying
+    data files as well. This class is aimed at finding these "siblings" 
+    and returning them to other classes for further processing.
     """
-
     results_folder = attr.ib(validator=instance_of(Path))
     file_formats = attr.ib(validator=instance_of(list))
     folder_globs = attr.ib(default={Path("."): "*.tif"}, validator=instance_of(dict))

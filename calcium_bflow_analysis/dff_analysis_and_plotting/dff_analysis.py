@@ -247,7 +247,7 @@ def calc_total_auc_around_spikes(data, fps=58.21, thresh=0.7) -> np.ndarray:
     spikes_bloated = bloat_area_around_spikes(spikes, int(fps / 2))
     auc = np.zeros_like(data)
     auc[np.where(spikes_bloated)] = data[np.where(spikes_bloated)]
-    return np.nansum(auc, axis=1)
+    return np.nan_to_num(np.nansum(auc, axis=1))
 
 
 def calc_mean_auc_around_spikes(data, fps=58.21, thresh=0.7) -> np.ndarray:
@@ -257,11 +257,11 @@ def calc_mean_auc_around_spikes(data, fps=58.21, thresh=0.7) -> np.ndarray:
     spikes = locate_spikes_scipy(data, fps, thresh)
     spikes_per_neuron = spikes.sum(axis=1)
     spikes_bloated = bloat_area_around_spikes(spikes, int(fps // 2))
-    auc = np.zeros_like(data)
+    auc = np.full_like(data, np.nan)
     auc[np.where(spikes_bloated > 0)] = data[np.where(spikes_bloated > 0)]
     neurons_that_spiked = np.where(spikes_per_neuron > 0)[0]
     auc[neurons_that_spiked] /= spikes_per_neuron[neurons_that_spiked, None]
-    return np.nanmean(auc, axis=1)
+    return np.nan_to_num(np.nanmean(auc, axis=1))
 
 
 def calc_median_auc_around_spikes(data, fps=58.21, thresh=0.7) -> np.ndarray:
@@ -275,7 +275,7 @@ def calc_median_auc_around_spikes(data, fps=58.21, thresh=0.7) -> np.ndarray:
     auc[np.where(spikes_bloated > 0)] = data[np.where(spikes_bloated > 0)]
     neurons_that_spiked = np.where(spikes_per_neuron > 0)[0]
     auc[neurons_that_spiked] /= spikes_per_neuron[neurons_that_spiked, None]
-    return np.nanmedian(auc, axis=1)
+    return np.nan_to_num(np.nanmedian(auc, axis=1))
 
 
 def bloat_area_around_spikes(spikes: np.ndarray, window: int) -> np.ndarray:

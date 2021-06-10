@@ -12,32 +12,21 @@ import h5py
 
 from calcium_bflow_analysis.calcium_over_time import FileFinder, CalciumAnalysisOverTime, FormatFinder
 from calcium_bflow_analysis.analog_trace import AnalogAcquisitionType
-from calcium_bflow_analysis.calcium_trace_analysis import (
-    CalciumReview,
-    AvailableFuncs,
-    plot_single_cond_per_mouse,
-    filter_da,
-)
-from calcium_bflow_analysis.dff_analysis_and_plotting.dff_analysis import (
-    calc_total_auc_around_spikes,
-    calc_mean_auc_around_spikes,
-    calc_mean_spike_num,
-    calc_median_auc_around_spikes,
-)
 
+
+MOUSE_ID = "289"
 
 home = Path("/data/Amit_QNAP/PV-GCaMP/")
-folder = Path("289")
+folder = Path(f"{MOUSE_ID}_new_analysis")
 results_folder = home / folder
 assert results_folder.exists()
-globstr = "289*.tif"
+globstr = f"{MOUSE_ID}*.tif"
 folder_and_files = {home / folder: globstr}
 analog_type = AnalogAcquisitionType.TREADMILL
 file_formats = [
     FormatFinder('analog', '*analog.txt'),
     FormatFinder('hdf5', '*.hdf5'),
     FormatFinder('caiman', '*results.npz'),
-    FormatFinder('colabeled', '*_colabeled.npy'),
     FormatFinder('masked', '*_masked.tif'),
 ]
 filefinder = FileFinder(
@@ -48,6 +37,8 @@ filefinder = FileFinder(
 file_table = filefinder.find_files()
 print(f"Found {len(file_table)} files!")
 
+all_pnn, all_non = [], []
+fractions = []
 for num, siblings in file_table.iterrows():
     mask = tifffile.imread(str(siblings.masked))
     labeled_mask = measure.label(mask)
@@ -71,12 +62,20 @@ for num, siblings in file_table.iterrows():
             non_pnn_indices.append(component_idx)
             continue
         fraction_covered_by_pnn = counts[1] / single_component.sum() 
+        fractions.append(fraction_covered_by_pnn)
         if fraction_covered_by_pnn < 0.1:
             non_pnn_indices.append(component_idx)
-        if fraction_covered_by_pnn > 0.5:
+        if fraction_covered_by_pnn > 0.6:
             pnn_indices.append(component_idx)
         continue
     if len(pnn_indices) > 0:
         colabeled_fname = str(siblings.tif)[:-4] + '_colabeled.npy'
         np.save(colabeled_fname, np.asarray(pnn_indices))
+
+    all_pnn.extend(pnn_indices)
+    all_non.extend(non_pnn_indices)
+
+print(f"found {len(all_pnn)} pnn cells in {len(file_table)} ROIs")
+plt.hist(fractions)
+plt.show()
 

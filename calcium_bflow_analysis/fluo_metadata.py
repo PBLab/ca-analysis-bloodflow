@@ -56,7 +56,7 @@ class FluoMetadata:
 
     def _get_meta_using_regex(self, reg: str):
         """ Parse the given regex from the filename """
-        reg = re.compile(reg)
+        reg = re.compile(reg, re.IGNORECASE)
         try:
             return reg.findall(str(self.fname.name))[0]
         except IndexError:
