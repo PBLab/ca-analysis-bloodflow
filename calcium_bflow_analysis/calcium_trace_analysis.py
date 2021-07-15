@@ -33,6 +33,7 @@ class AvailableFuncs(Enum):
 
     AUC = "calc_total_auc_around_spikes"
     MEAN = "calc_mean_auc_around_spikes"
+    MEDIAN = "calc_median_auc_around_spikes"
     SPIKERATE = "calc_mean_spike_num"
 
 
@@ -113,10 +114,11 @@ class CalciumReview:
 
     def apply_analysis_funcs_two_conditions(
         self, funcs: list, epoch: str, mouse_id: Optional[str] = None
-    ):
+    ) -> pd.DataFrame:
         """ Call the list of methods given to save time and memory. Applicable
-        if the dataset has two conditions, like left and right. """
-        norm1, norm2 = 1, 1
+        if the dataset has two conditions, like left and right. Returns a DF
+        that can be used for later viz using seaborn."""
+        summary_df = pd.DataFrame()
         for day, raw_datum in dict(sorted(self.raw_data.items())).items():
             print(f"Analyzing day {day}...")
             selected_first = filter_da(
@@ -127,30 +129,35 @@ class CalciumReview:
             )
             if selected_first.shape[0] == 0 or selected_second.shape[0] == 0:
                 continue
+            spikes_first = dff_analysis.locate_spikes_scipy(selected_first, self.raw_data[day].fps)
+            spikes_second = dff_analysis.locate_spikes_scipy(selected_second, self.raw_data[day].fps)
             for func in funcs:
-                cond1 = getattr(dff_analysis, func.value)(selected_first, self.raw_data[day].fps)
+                cond1 = getattr(dff_analysis, func.value)(spikes_first, selected_first, self.raw_data[day].fps)
+                cond1_label = np.full(cond1.shape, ca.conditions[0])
                 cond1_mean, cond1_sem = (
                     cond1.mean(),
                     cond1.std(ddof=1) / np.sqrt(cond1.shape[0]),
                 )
-                cond2 = getattr(dff_analysis, func.value)(selected_second, self.raw_data[day].fps)
+                cond2 = getattr(dff_analysis, func.value)(spikes_second, selected_second, self.raw_data[day].fps)
+                cond2_label = np.full(cond2.shape, ca.conditions[1])
+                data = np.concatenate([cond1, cond2])
+                labels = np.concatenate([cond1_label, cond2_label])
+                df = pd.DataFrame({'data': np.nan_to_num(data), 'condition': labels, 'day': day, 'measure': func.value})
+                summary_df = summary_df.append(df)
                 cond2_mean, cond2_sem = (
                     cond2.mean(),
                     cond2.std(ddof=1) / np.sqrt(cond2.shape[0]),
                 )
-                # if func == AvailableFuncs.AUC and day == 0:
-                #     norm1 = cond1_mean
-                #     norm2 = cond2_mean
                 t, p = stats.ttest_ind(cond1, cond2, equal_var=False)
                 df_dict = {
                     col: data
                     for col, data in zip(
                         self.df_columns,
                         [
-                            cond1_mean / norm1,
-                            cond1_sem / norm1,
-                            cond2_mean / norm2,
-                            cond2_sem / norm2,
+                            cond1_mean,
+                            cond1_sem,
+                            cond2_mean,
+                            cond2_sem,
                             t,
                             p,
                         ],
@@ -159,6 +166,7 @@ class CalciumReview:
                 self.funcs_dict[func] = self.funcs_dict[func].append(
                     pd.DataFrame(df_dict, index=[day])
                 )
+        return summary_df
 
     def apply_analysis_single_condition(
         self, funcs: list, epoch: str, mouse_id: Optional[str] = None

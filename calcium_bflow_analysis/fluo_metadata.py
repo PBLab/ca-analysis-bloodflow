@@ -49,16 +49,25 @@ class FluoMetadata:
                     num_slices = si_meta['SI.actualNumSlice']
                 except KeyError:
                     num_slices = si_meta['SI.numSlices']
-                length = num_slies * si_meta['SI.framesPerSlice']
+                length = num_slices * si_meta['SI.framesPerSlice']
                 self.timestamps = np.arange(length)/self.fps
-        except (TypeError, KeyError):
-            self.timestamps = None
+        except (TypeError, KeyError, ValueError):
+            fps = self.fps if self.fps else 58.2
+            data = tifffile.imread(self.fname).shape[0]
+            self.timestamps = np.arange(data) / fps
 
     def _get_meta_using_regex(self, reg: str):
         """ Parse the given regex from the filename """
         reg = re.compile(reg, re.IGNORECASE)
         try:
-            return reg.findall(str(self.fname.name))[0]
+            result = reg.findall(str(self.fname.name))[0]
+            if isinstance(result, tuple):
+                if len(result[0]) == 0:  # first match was empty
+                    return result[1]
+                else:
+                    return result[0]
+            else:
+                return result
         except IndexError:
             return -1
 

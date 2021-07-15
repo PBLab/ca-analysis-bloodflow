@@ -144,75 +144,35 @@ ax_sr = sns.barplot(
 ax_sr.set_title("Spike rate")
 
 # Stats
-print(
-    "Mean AUC: ",
-    scipy.stats.ttest_ind(
-        plots.query('labels=="colabeled"').loc[:, "mean_auc"],
-        plots.query('labels=="non_colabeled"').loc[:, "mean_auc"],
-    ),
-)
+stat_value = []
+p_value = []
+stat_header = []
 
-print(
-    "KS test: ",
-    scipy.stats.ks_2samp(
-        plots.query('labels=="colabeled"').loc[:, "mean_auc"].to_numpy(),
-        plots.query('labels=="non_colabeled"').loc[:, "mean_auc"].to_numpy(),
-    )
-)
+for stat in ["mean_auc", "median_auc", "total_auc", "spikerate"]:
+    print(stat)
+    colabeled = plots.query('labels=="colabeled"').loc[:, stat].to_numpy()
+    non_colabeled = plots.query('labels=="non_colabeled"').loc[:, stat].to_numpy()
 
-print(
-    "Total AUC: ",
-    scipy.stats.ttest_ind(
-        plots.query('labels == "colabeled"').loc[:, "total_auc"],
-        plots.query('labels == "non_colabeled"').loc[:, "total_auc"],
-    ),
-)
+    stat_val, p_val = scipy.stats.ttest_ind(colabeled, non_colabeled)
+    stat_value.append(stat_val)
+    p_value.append(p_val)
+    stat_header.append(stat + "_ttest")
+    stat_val, p_val = scipy.stats.ks_2samp(colabeled, non_colabeled)
+    stat_value.append(stat_val)
+    p_value.append(p_val)
+    stat_header.append(stat + "_ks")
+    stat_val, p_val = scipy.stats.levene(colabeled, non_colabeled)
+    stat_value.append(stat_val)
+    p_value.append(p_val)
+    stat_header.append(stat + "_levene")
 
-print(
-    "KS test: ",
-    scipy.stats.kstest(
-        plots.query('labels=="colabeled"').loc[:, "total_auc"].to_numpy(),
-        plots.query('labels=="non_colabeled"').loc[:, "total_auc"].to_numpy(),
-    )
-)
+stats_df = pd.DataFrame({'statistic': stat_value, 'p_value': p_value}, index=stat_header)
+stats_df.to_excel(home / "stat_table.xlsx")
 
-print(
-    "Mean spike rate: ",
-    scipy.stats.ttest_ind(
-        plots.query('labels == "colabeled"').loc[:, "spikerate"],
-        plots.query('labels == "non_colabeled"').loc[:, "spikerate"],
-    ),
-)
-
-print(
-    "KS test: ",
-    scipy.stats.kstest(
-        plots.query('labels=="colabeled"').loc[:, "spikerate"].to_numpy(),
-        plots.query('labels=="non_colabeled"').loc[:, "spikerate"].to_numpy(),
-    )
-)
-
-print(
-    "Median AUC: ",
-    scipy.stats.ttest_ind(
-        plots.query('labels == "colabeled"').loc[:, "median_auc"],
-        plots.query('labels == "non_colabeled"').loc[:, "median_auc"],
-        nan_policy='omit',
-    ),
-)
-
-print(
-    "KS test: ",
-    scipy.stats.kstest(
-        plots.query('labels=="colabeled"').loc[:, "median_auc"].to_numpy(),
-        plots.query('labels=="non_colabeled"').loc[:, "median_auc"].to_numpy(),
-    )
-)
-
-ax_auc.figure.savefig("/data/Hagai/mean_auc_per_spike_pvgcamp_575_699_289.pdf", transparent=True, dpi=300)
-ax_auc_tot.figure.savefig("/data/Hagai/total_auc_per_spike_pvgcamp_575_699_289.pdf", transparent=True, dpi=300)
-ax_auc_median.figure.savefig("/data/Hagai/median_auc_per_spike_pvgcamp_575_699_289.pdf", transparent=True, dpi=300)
-ax_sr.figure.savefig("/data/Hagai/spikerate_pvgcamp_575_699_289.pdf", transparent=True, dpi=300)
+# ax_auc.figure.savefig("/data/Hagai/mean_auc_per_spike_pvgcamp_575_699_289.pdf", transparent=True, dpi=300)
+# ax_auc_tot.figure.savefig("/data/Hagai/total_auc_per_spike_pvgcamp_575_699_289.pdf", transparent=True, dpi=300)
+# ax_auc_median.figure.savefig("/data/Hagai/median_auc_per_spike_pvgcamp_575_699_289.pdf", transparent=True, dpi=300)
+# ax_sr.figure.savefig("/data/Hagai/spikerate_pvgcamp_575_699_289.pdf", transparent=True, dpi=300)
 
 plt.show(block=True)
 

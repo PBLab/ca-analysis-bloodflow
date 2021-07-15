@@ -256,9 +256,12 @@ class AnalyzedAnalogTrace:
         Retrieves metadata from ScanImage files.
         """
         with open(self.tif_filename, 'rb') as f:
-            meta, _, _ = tifffile.read_scanimage_metadata(f)
+            try:
+                meta, _, _ = tifffile.read_scanimage_metadata(f)
+            except ValueError:
+                meta = None
             if meta is None:
-                data = f.asarray()
+                data = tifffile.imread(self.tif_filename)
                 num_of_lines = data.shape[1]
                 num_of_frames = data.shape[0] // self.metadata.num_of_channels
             else:

@@ -5,6 +5,7 @@ import sys
 import numpy as np
 import pandas as pd
 import xarray as xr
+import numba
 import seaborn as sns
 from ansimarkup import ansiprint as aprint
 import peakutils
@@ -21,7 +22,7 @@ import scipy.ndimage
 import scipy.signal
 
 from calcium_bflow_analysis import caiman_funcs_for_comparison
-from calcium_bflow_analysis.colabeled_cells.find_colabeled_cells import TiffChannels
+
 
 # from calcium_bflow_analysis.single_fov_analysis import SingleFovParser
 
@@ -84,7 +85,7 @@ def locate_spikes_peakutils(
 
 def locate_spikes_scipy(
     data, fps=58.21, thresh=0.7, min_dist=None, max_allowed_firing_rate=1
-):
+) -> np.ndarray:
     """Find spikes from a dF/F matrix using the find_peaks function.
     The fps parameter is used to calculate the minimum allowed distance
     between consecutive spikes, and to disqualify cells which had no
@@ -112,7 +113,7 @@ def locate_spikes_scipy(
         min_dist = sec_in_samples
     else:
         min_dist = int(min_dist)
-    all_spikes: np.ndarray = np.zeros_like(data)
+    all_spikes: np.ndarray = np.zeros(data.shape, dtype=np.uint8)
     max_spike_num = int(data.shape[1] // fps) * max_allowed_firing_rate
     nan_to_zero = np.nan_to_num(data)
     for row, cell in enumerate(nan_to_zero):
@@ -129,18 +130,20 @@ def locate_spikes_scipy(
     return all_spikes
 
 
-def calc_mean_spike_num(data, fps=58.21, thresh=0.7):
+def calc_mean_spike_num(spikes: np.ndarray, data: np.ndarray, fps: float) -> np.ndarray:
     """
     Find the spikes in the data  and count
     them, to create statistics on their average number.
-    :param data: Raw data, cells x time
-    :param fps: Framerate
-    :param thresh: Peakutils threshold for spikes
     :return: Number of spikes for each neuron
     """
-    all_spikes = locate_spikes_scipy(data, fps, thresh)
-    sum_of_spikes = np.nansum(all_spikes, axis=1)
-    return sum_of_spikes
+    try:
+        assert len(np.unique(spikes)) <= 2
+    except AssertionError as e:
+        raise AssertionError("Did you pass in the data instead of the spikes?") from e
+    finite = np.isfinite(data)
+    num_of_spikes = (spikes * finite).sum(axis=1)
+    num_of_seconds = finite.sum(axis=1) / fps
+    return num_of_spikes / num_of_seconds
 
 
 def calc_mean_spike_num_no_background(data, fps=58.21, thresh=0.7, q=20):
@@ -239,22 +242,29 @@ def calc_auc(data, *args):
     return auc
 
 
-def calc_total_auc_around_spikes(data, fps=58.21, thresh=0.7) -> np.ndarray:
+def calc_total_auc_around_spikes(spikes: np.ndarray, data: np.ndarray, fps=58.21) -> np.ndarray:
     """Calculates the area under the data curve for the data, but only around
     spike locations. This should give a better approximation of the data when
     there are very high or very low counts of spikes."""
-    spikes = locate_spikes_scipy(data, fps, thresh)
+    try:
+        assert len(np.unique(spikes)) <= 2
+    except AssertionError as e:
+        print(np.unique(spikes))
+        raise AssertionError("Did you pass in the data instead of the spikes?") from e
     spikes_bloated = bloat_area_around_spikes(spikes, int(fps / 2))
     auc = np.zeros_like(data)
     auc[np.where(spikes_bloated)] = data[np.where(spikes_bloated)]
     return np.nan_to_num(np.nansum(auc, axis=1))
 
 
-def calc_mean_auc_around_spikes(data, fps=58.21, thresh=0.7) -> np.ndarray:
+def calc_mean_auc_around_spikes(spikes: np.ndarray, data: np.ndarray, fps=58.21) -> np.ndarray:
     """Calculates the area under the data curve for the data, but only around
     spike locations. This should give a better approximation of the data when
     there are very high or very low counts of spikes."""
-    spikes = locate_spikes_scipy(data, fps, thresh)
+    try:
+        assert len(np.unique(spikes)) <= 2
+    except AssertionError as e:
+        raise AssertionError("Did you pass in the data instead of the spikes?") from e
     spikes_per_neuron = spikes.sum(axis=1)
     spikes_bloated = bloat_area_around_spikes(spikes, int(fps // 2))
     auc = np.full_like(data, np.nan)
@@ -264,11 +274,14 @@ def calc_mean_auc_around_spikes(data, fps=58.21, thresh=0.7) -> np.ndarray:
     return np.nan_to_num(np.nanmean(auc, axis=1))
 
 
-def calc_median_auc_around_spikes(data, fps=58.21, thresh=0.7) -> np.ndarray:
+def calc_median_auc_around_spikes(spikes: np.ndarray, data: np.ndarray, fps=58.21) -> np.ndarray:
     """Calculates the area under the data curve for the data, but only around
     spike locations. This should give a better approximation of the data when
     there are very high or very low counts of spikes."""
-    spikes = locate_spikes_scipy(data, fps, thresh)
+    try:
+        assert len(np.unique(spikes)) <= 2
+    except AssertionError as e:
+        raise AssertionError("Did you pass in the data instead of the spikes?") from e
     spikes_per_neuron = spikes.sum(axis=1)
     spikes_bloated = bloat_area_around_spikes(spikes, int(fps // 2))
     auc = np.full_like(data, np.nan)
@@ -304,7 +317,7 @@ def _filter_backgroud_from_dff(data: np.ndarray, q: int = 20) -> np.ndarray:
     """Filters out a quantile q from the data, returning it
     in the same shape but with values below q as nan.
     """
-    q: np.ndarray = np.nanpercentile(data, 20, axis=1)
+    q: np.ndarray = np.nanpercentile(data, q, axis=1)
     above = data > q.reshape((len(q), 1))
     data[~above] = np.nan
     return data
@@ -364,18 +377,6 @@ def generate_spikes_roc_curve(dff: np.ndarray, fps: float):
 
 
 if __name__ == "__main__":
-    baseline_folder = pathlib.Path("/data/Amit_QNAP/Calcium_FXS/x10")
-    basic_fmr_filename = "FXS_614_X10_FOV5_mag3_20181010_00005"
-    fmr_tif = baseline_folder / "FXS_614" / f"{basic_fmr_filename}.tif"
-    fmr_results = fmr_tif.with_name(f"{basic_fmr_filename}_results.npz")
-    fmr_analog = fmr_tif.with_name(f"{basic_fmr_filename}_analog.txt")
-
-    # cell_radius = 9
-    # number_of_channels = 2
-    fps = 30.04
-    raw_data = np.load(fmr_results, allow_pickle=True)["F_dff"]
-    spikes = locate_spikes_scipy(raw_data, fps)
-    time_vec = np.arange(raw_data.shape[1]) / fps
-    scatter_spikes(raw_data, spikes, downsample_display=1, time_vec=time_vec)
-    plt.show()
+    baseline_folder = pathlib.Path("/data/Amit_QNAP/Calcium_FXS/")
+    data = xr.open_dataset(next(baseline_folder.glob('*.nc')))
 

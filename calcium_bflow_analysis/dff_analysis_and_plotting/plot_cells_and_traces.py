@@ -20,24 +20,13 @@ import h5py
 from calcium_bflow_analysis.colabeled_cells.find_colabeled_cells import TiffChannels
 
 
-def rank_dff_by_stim(dff: np.ndarray, spikes: np.ndarray, stim: np.ndarray, fps: float):
-    """Draws a plot of neurons ranked by the correlation they exhibit between
-    a spike an air puff.
-
-    Parameters:
-    :param dff np.ndarray: Array of (cell x time) containing dF/F values of cells over time.
-    :param spikes np.ndarray: Array of (cell x time) containing 1 wherever the cell fired
-    and 0 otherwise. Result of ``locate_spikes_peakutils``.
-    :param stim np.ndarray: A vector with the length of the experiment containing 1 wherever
-    the stimulus occurred.
-    :param float fps: Frames per second
-    """
+def sort_spikes_by_stim(dff: np.ndarray, spikes: np.ndarray, stim: np.ndarray, fps: float) -> pd.DataFrame:
+    """Finds the closest spike for each stim for each neuron."""
     stim_edges = np.concatenate((np.diff(np.nan_to_num(stim)), [0]))
     assert len(stim_edges) == dff.shape[1]
     ends_of_stim_idx = np.where(stim_edges == 1)[0]
     frame_diffs = np.full((dff.shape[0], len(ends_of_stim_idx)), np.nan)
     dff_diffs = frame_diffs.copy()
-    spike_placeholder = np.zeros_like(spikes)
     spikes_idx = np.array(
         np.where(spikes == 1)
     )  # two rows, 'time' columns. First row is row indices, second row is column index (i.e. time).
@@ -84,10 +73,25 @@ def rank_dff_by_stim(dff: np.ndarray, spikes: np.ndarray, stim: np.ndarray, fps:
     # Change a couple of things around for seaborn plottings
     data["Cell number"] = data["Cell number"].astype(np.int32).astype("category")
     data["Stimulus number"] = data["Stimulus number"].astype("category")
+    return data
+
+
+def rank_dff_by_stim(dff: np.ndarray, spikes: np.ndarray, stim: np.ndarray, fps: float):
+    """Draws a plot of neurons ranked by the correlation they exhibit between
+    a spike an air puff.
+
+    Parameters:
+    :param dff np.ndarray: Array of (cell x time) containing dF/F values of cells over time.
+    :param spikes np.ndarray: Array of (cell x time) containing 1 wherever the cell fired
+    and 0 otherwise. Result of ``locate_spikes_peakutils``.
+    :param stim np.ndarray: A vector with the length of the experiment containing 1 wherever
+    the stimulus occurred.
+    :param float fps: Frames per second
+    """
+    data = sort_spikes_by_stim(dff, spikes, stim, fps)
     order = np.array(
         data.groupby("Cell number", sort=True).mean().sort_values("Delay [sec]").index
     )
-
     fig, ax_frame = plt.subplots()
     fig2, ax_dff = plt.subplots()
     fig3, ax_corr = plt.subplots()
@@ -111,7 +115,7 @@ def rank_dff_by_stim(dff: np.ndarray, spikes: np.ndarray, stim: np.ndarray, fps:
     ax_frame.set_title(
         "Average minimal delay between spikes and stimulus for all neurons"
     )
-    ax_dff.set_title("Average dF/F value during the spike")
+    ax_dff.set_title("Average dF/F value of spike")
 
 
 def show_side_by_side(
@@ -167,15 +171,24 @@ def show_side_by_side(
     return ax[0].figure
 
 
-def display_heatmap(data, ax=None, epoch="All cells", downsample_factor=8, fps=30.03):
+def display_heatmap(data, ax=None, epoch="All cells", downsample_factor=8, fps=30.03, colorscale=None):
     """ Show an "image" of the dF/F of all cells """
     if not ax:
         _, ax = plt.subplots()
-    downsampled = data[::downsample_factor, ::downsample_factor].copy()
-    top = np.nanpercentile(downsampled, q=95)
-    bot = np.nanpercentile(downsampled, q=5)
-    try:
+    if isinstance(downsample_factor, int):
+        downsampled = data[::downsample_factor, ::downsample_factor].copy()
         xaxis = np.arange(downsampled.shape[1]) * downsample_factor / fps
+    elif isinstance(downsample_factor, (tuple, list, np.ndarray)):
+        assert len(downsample_factor) == 2
+        downsampled = data[::downsample_factor[0], ::downsample_factor[1]].copy()
+        xaxis = np.arange(downsampled.shape[1]) * downsample_factor[1] / fps
+
+    if colorscale is None:
+        top = np.nanpercentile(downsampled, q=95)
+        bot = np.nanpercentile(downsampled, q=5)
+    else:
+        top, bot = colorscale
+    try:
         yaxis = np.arange(downsampled.shape[0])
         ax.pcolor(xaxis, yaxis, downsampled, vmin=bot, vmax=top)
     except ValueError:  # emptry array
@@ -184,6 +197,7 @@ def display_heatmap(data, ax=None, epoch="All cells", downsample_factor=8, fps=3
     ax.set_ylabel("Cell ID")
     ax.set_xlabel("Time (sec)")
     ax.set_title(f"dF/F Heatmap for {epoch}")
+    return (top, bot)
 
 
 def extract_cells_from_tif(

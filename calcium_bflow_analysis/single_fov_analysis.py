@@ -31,8 +31,7 @@ class SingleFovParser:
     results_fname = attr.ib(validator=instance_of(pathlib.Path))
     results_hdf5 = attr.ib(validator=instance_of(pathlib.Path))
     metadata = attr.ib()  # validator=instance_of(FluoMetadata)
-    analog = attr.ib(
-        default=AnalogAcquisitionType.NONE)
+    analog = attr.ib(default=AnalogAcquisitionType.NONE)
     colabeled = attr.ib(default=False)
     summarize_in_plot = attr.ib(default=False, validator=instance_of(bool))
     analog_analyzed = attr.ib(init=False, repr=False)  # AnalogTraceAnalyzer instance
@@ -73,12 +72,12 @@ class SingleFovParser:
         If there was a filteration step using the CaImAn GUI then the method
         will only return the filtered cells.
         """
-        with h5py.File(self.results_hdf5, 'r') as f:
+        with h5py.File(self.results_hdf5, "r") as f:
             try:
-                accepted_list = f['estimates']['accepted_list'][()]
+                accepted_list = f["estimates"]["accepted_list"][()]
             except KeyError:
                 accepted_list = None
-            dff = f['estimates']['F_dff'][()]
+            dff = f["estimates"]["F_dff"][()]
         if isinstance(accepted_list, np.ndarray):
             dff = dff[accepted_list]
         return dff
@@ -86,12 +85,16 @@ class SingleFovParser:
     def separate_colabeled(self):
         """Generate two arrays of DFF - colabeled and not colabeled"""
         colabeled_idx = np.load(self.colabeled)
-        with h5py.File(self.results_hdf5, 'r') as f:
-            dff = f['estimates']['F_dff'][()]
-            colabeled = dff[np.intersect1d(f['estimates']['accepted_list'][()], colabeled_idx)]
+        with h5py.File(self.results_hdf5, "r") as f:
+            dff = f["estimates"]["F_dff"][()]
+            colabeled = dff[
+                np.intersect1d(f["estimates"]["accepted_list"][()], colabeled_idx)
+            ]
             total = np.arange(len(dff))
             not_colabeled = np.setdiff1d(total, colabeled_idx)
-            not_colabeled = dff[np.intersect1d(not_colabeled, f['estimates']['accepted_list'])]
+            not_colabeled = dff[
+                np.intersect1d(not_colabeled, f["estimates"]["accepted_list"])
+            ]
         return colabeled, not_colabeled
 
     def _mock_data(self):
@@ -140,7 +143,9 @@ class SingleFovParser:
         else:
             self.fluo_trace = self.read_dff_of_hdf5()
             try:
-                if not self.fluo_trace or len(self.fluo_trace.shape) == 0:  # no cells detected
+                if (
+                    not self.fluo_trace or len(self.fluo_trace.shape) == 0
+                ):  # no cells detected
                     self.fluo_trace = np.array([])
             except ValueError:
                 pass
@@ -169,8 +174,12 @@ class SingleFovParser:
                 raw_data = self.fluo_analyzed.dff
             except AttributeError:  # no fluo, but perhaps we have colabeled data
                 if self.colabeled:
-                    self.fluo_colabeled.to_netcdf(str(self.metadata.fname)[:-4] + "_colabeled.nc", mode='w')
-                    self.fluo_non_colabeled.to_netcdf(str(self.metadata.fname)[:-4] + "_non_colabeled.nc", mode = 'w')
+                    self.fluo_colabeled.to_netcdf(
+                        str(self.metadata.fname)[:-4] + "_colabeled.nc", mode="w"
+                    )
+                    self.fluo_non_colabeled.to_netcdf(
+                        str(self.metadata.fname)[:-4] + "_non_colabeled.nc", mode="w"
+                    )
                     return
                 else:
                     print("No fluorescent data in this FOV.")
@@ -244,8 +253,8 @@ class SingleFovViz:
             )
             [scatter_ax.add_artist(p) for p in gen_patches]
             cur_used_axes = self._draw_analog_plots(gs, colors)
-            auc_axes = plt.subplot(gs[cur_used_axes + 1:, 0])
-            spikes_axes = plt.subplot(gs[cur_used_axes + 1:, 1])
+            auc_axes = plt.subplot(gs[cur_used_axes + 1 :, 0])
+            spikes_axes = plt.subplot(gs[cur_used_axes + 1 :, 1])
             self._summarize_stats_in_epochs(auc_axes, spikes_axes)
         if self.save:
             self.fig.savefig(
@@ -306,7 +315,7 @@ class SingleFovViz:
         labels = ["Air puff", "Juxtaposed\npuff", "Run time", "CCA\nocclusion times"]
 
         for idx, (label, data, color) in enumerate(
-                zip(labels, self.analog_vectors, colors), self.axes_for_dff
+            zip(labels, self.analog_vectors, colors), self.axes_for_dff
         ):
             cur_ax = plt.subplot(gs[idx, :])
             cur_ax.plot(data, color=color)
@@ -337,9 +346,12 @@ class SingleFovViz:
             cur_data = filter_da(self.fov.fluo_analyzed, epoch=epoch)
             if cur_data.shape[0] == 0:
                 continue
-            auc = dff_tools.calc_total_auc_around_spikes(cur_data, self.fov.metadata.fps)
+            spikes = dff_tools.locate_spikes_scipy(cur_data, self.fov.metadata.fps, thresh=0.7)
+            auc = dff_tools.calc_total_auc_around_spikes(
+                spikes, cur_data, self.fov.metadata.fps
+            )
             df_auc[epoch][: len(auc)] = auc
-            spikes = dff_tools.calc_mean_spike_num(cur_data, fps=self.fov.metadata.fps)
+            spikes = dff_tools.calc_mean_spike_num(spikes, cur_data, fps=self.fov.metadata.fps)
             df_spikes[epoch][: len(spikes)] = spikes
 
         sns.boxenplot(data=df_auc, ax=ax_auc)
@@ -354,7 +366,7 @@ class SingleFovViz:
 
 def _filter_condition(epoch_data: xr.Dataset, condition: str) -> xr.Dataset:
     temp = epoch_data.where(epoch_data.condition == condition)
-    temp['epoch_times'] = temp['epoch_times'].astype(bool)
+    temp["epoch_times"] = temp["epoch_times"].astype(bool)
     epoch_data = temp
     return epoch_data
 
@@ -367,7 +379,10 @@ def _filter_mouse_id(epoch_data: xr.Dataset, mouse_id: str) -> xr.Dataset:
 
 
 def filter_da(
-        data: xr.Dataset, epoch: str, condition: Optional[str] = None, mouse_id: Optional[str] = None
+    data: xr.Dataset,
+    epoch: str,
+    condition: Optional[str] = None,
+    mouse_id: Optional[str] = None,
 ) -> np.ndarray:
     """ Filter a Dataset by the given condition, mouse_id and epoch.
          Returns a numpy array in the shape of cells x time """
@@ -395,7 +410,7 @@ def filter_da(
         relevant_epoch_dff = _generate_epoch_df(dff_ds)
         last_column = relevant_epoch_dff.shape[1]
         stacked_dff[
-        last_full_row: (last_full_row + number_of_neurons), :last_column
+            last_full_row : (last_full_row + number_of_neurons), :last_column
         ] = relevant_epoch_dff
         last_full_row += number_of_neurons
 
@@ -414,18 +429,10 @@ def _generate_epoch_df(ds):
     return relevant_epoch_dff
 
 
-if __name__ == "__main__":
-    home = pathlib.Path("/export/home/pblab/")
-    # home = pathlib.Path('/')
-    folder = home / pathlib.Path(
-        r"data/David/NEW_crystal_skull_TAC_161018/DAY_14_ALL/147_HYPER_DAY_14/"
-    )
-    fov = 3
-    analog_fname = next(folder.glob(f"*FOV_{fov}*analog.txt"))
-    results_fname = next(folder.glob(f"*FOV_{fov}*results.npz"))
-    orig_fname = next(folder.glob(f"*FOV_{fov}*01.tif"))
-    meta = FluoMetadata(orig_fname)
-    meta.get_metadata()
-    sfov = SingleFovParser(analog_fname, results_fname, meta, summarize_in_plot=True)
-    sfov.parse()
-    plt.show()
+if __name__ == '__main__':
+    fname = '/data/Amit_QNAP/Calcium_FXS/data_of_day_1.nc'
+    data = xr.open_dataset(fname)
+    for mouse_id, ds in data.groupby('mouse_id'):
+        dff = filter_da(ds, 'all')
+        print(dff)
+        break
