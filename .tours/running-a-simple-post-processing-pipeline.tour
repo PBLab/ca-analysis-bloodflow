@@ -1,0 +1,101 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "Running a simple post-processing pipeline",
+  "steps": [
+    {
+      "file": "use_cases/amit_gcamp_chabc.py",
+      "description": "Welcome to the post-processing tour!\n\nHere we'll show how to analyze a typical experiment using this library. More specifically, we'll show the building blocks of such analysis scripts.",
+      "line": 1
+    },
+    {
+      "file": "use_cases/amit_gcamp_chabc.py",
+      "description": "The basic needed classes for every analysis script.",
+      "line": 9
+    },
+    {
+      "file": "use_cases/amit_gcamp_chabc.py",
+      "description": "Define the folder containing the data. This should be the topmost folder, and the results of our analysis will be written into it.",
+      "line": 14
+    },
+    {
+      "file": "use_cases/amit_gcamp_chabc.py",
+      "description": "The glob pattern that is used to detect the files. This should include all base files, i.e. the files that SI outputted. It's fine if it also includes other files with similar names that shouldn't be analyzed, since the next steps will find out of all files only the ones that were analyzed by CaImAn, which removes many unwanted TIFs.",
+      "line": 16
+    },
+    {
+      "file": "use_cases/amit_gcamp_chabc.py",
+      "description": "This dictionary maps a folder to its glob string. We can potentially include in a single analysis scripts several directories, if the data is located in several folders without a specific parent folder. Having said that, it's usually easier to move all files under one parent folder and run the analysis on that folder.",
+      "line": 17
+    },
+    {
+      "file": "use_cases/amit_gcamp_chabc.py",
+      "description": "FormatFinder is a type that finds a specific file format. We predefine all file type we wish to associate with every SI file. This gives us more fine-grained control over the actual data we're using. For example, if we wish to run the analysis without the analog data component - i.e. when no puffs or run data was recorded - we'll simply omit the respective `FormatFinder` and all downstream scripts will disregard it as well.\n\nPerhaps the other important format not shown here is the `colabeled.npy` format, which we use when we wish to compare two sub-population of cells, for examples those with a PNN shell and those without. In these cases we'll first create a `colabeled.npy` file per SI file containing the cell indices that are \"colabeled\", i.e. form that subpopulation. The rest of the cells will be regarded as belonging to the second subpopulation. Currently we only allow for two subpopulations.",
+      "line": 18
+    },
+    {
+      "file": "use_cases/amit_gcamp_chabc.py",
+      "description": "The format of the analog data.\n\nFor all data recorded after 2019 the correct type is TREADMILL. This affects the way our scripts interpret the accompanying analog data.",
+      "line": 23
+    },
+    {
+      "file": "use_cases/amit_gcamp_chabc.py",
+      "description": "Regexes that define the metadata encoded in the filename of the SI TIF.\n\nThis is an example for a custom implementation. Since late 2020 we have a MATLAB script that generates a uniform filename encoding all needed metadata. Follow the next step to see how these standard regexes look like. This is a more convoluted example that shows that this can be customized.\n\nThe needed fields are the condition (i.e. genotype, or whether the mouse underwent some treatment), mouse ID, FOV and the day of the recording, for non-acute experiments. If it's a single day then all entries should have a similar value, like 0 or 1.",
+      "line": 25
+    },
+    {
+      "file": "use_cases/david_thy1_g_baseline.py",
+      "description": "An example for our standard filename and the regexes that parse them correctly. Let's head back to our previous script.",
+      "line": 24,
+      "selection": {
+        "start": {
+          "line": 24,
+          "character": 1
+        },
+        "end": {
+          "line": 25,
+          "character": 1
+        }
+      }
+    },
+    {
+      "file": "use_cases/amit_gcamp_chabc.py",
+      "description": "Find all groups of files.\n\nThe FileFinder generates a table (DataFrame, following the `.find_files()` call) that has a row per each SI file, and the columns of which are the associated files of that original file. Each column corresponds to one FileFormat that we gave the FileFinder.\n\nThis tabular format lets other objects who wish to work with these files to simply iterate over the rows of this table.",
+      "line": 33
+    },
+    {
+      "file": "use_cases/amit_gcamp_chabc.py",
+      "description": "The main analysis object.\n\nThis object's job is to iterate over each SI file and its associated files (analog data, CaImAn results, etc.) and generate a new file with an `.nc` suffix which contains an `xarray.DataArray` (a multidimensional DataFrame) data structure with the parsed data. \n\nParsed in this sense is that each epoch of the recording - spontaneous activity, evoked, activity during mouse running, etc. - is split up and is easily accessible for downstream scripts. The object essentially convolves the analog data with the dF/F traces and extracts the time periods and puts them in a specific container.\n\nThe end result is that each file has a DataArray, and *each experimental day has an `xarray.Dataset`.* I.e. the object will also add up all DataArrays of the same experimental day into a larger container that is used by downstream objects. ",
+      "line": 39
+    },
+    {
+      "file": "use_cases/amit_gcamp_chabc.py",
+      "description": "The main method to use with this objects.\n\nIt actually does the hard work of iterating and analyzing each FOV.\n\nWhile it does so it also records in a list all files that it has visited. This is because the final step is to concatenate all of these new DataArrays into a single `xarray.Dataset` per experiment day. We'll touch on that in the next few steps, but it's also important to note that it's fine if we don't analyze all files in one single run - there's a differnet function that will generate that list and Dataset for us. ",
+      "line": 48
+    },
+    {
+      "file": "use_cases/amit_gcamp_chabc.py",
+      "description": "This commented out line does the job of looking for all `.nc` files that were generated in our parent folder and concantenate them all into one list, and then turn that list into a few `xarray.Datasets`, one per experimental day. If the experiment is acute then it will concatenate everything into one file.\n\nThis dataset contains all data - all genotypes, all mice, all epochs - but for a specific day.\n\nThis method is called at the end of `run_batch_of_timepoints`, but since we sometimes do multiple runs of analysis then the list that `run_batch_of_timepoints` generates may be incomplete.\n\nAlso note that these two methods look for `.nc` files with the name `data_of_day_*.nc`, so if these files exist already the method won't run at all. Be sure to delete them before doing so.",
+      "line": 49
+    },
+    {
+      "file": "use_cases/amit_gcamp_chabc.py",
+      "description": "Start actually producing analysis results from our data.\n\nWe now have an `.nc` object per SI recording, and a `data_of_day_X.nc` for every experiment day that we analyzed. It's time we aggregate it all into some useful plots. This is the job of our CalciumReview class, which receives the folder containing the aggregate data, and the glob string for the names of the datasets. You then define what analysis you wish to conduct and use one of the methods below to generate plots.\n\nThe plots it generates are predetermined, there's not much room for customization. To create more elaborate plot the class returns the data objects that it uses so that we could run it in our own custom scripts.",
+      "line": 53
+    },
+    {
+      "file": "use_cases/amit_gcamp_chabc.py",
+      "description": "This method compairs two conditions (i.e. genotypes) and plots the results. It returns a long form DF that can be used for further processing.",
+      "line": 64
+    },
+    {
+      "file": "use_cases/amit_gcamp_chabc.py",
+      "description": "A custom analysis script not included in CalciumReview, based on the long form-ness of the DF.",
+      "line": 66
+    },
+    {
+      "file": "examples/amitben_pvgcamp_289.py",
+      "description": "Even more examples of custom \"manual\" analysis.\n\nIn conclusion, we saw the structure of a typical post-processing script and how it's usually used. We didn't look at the `dff_analysis_and_plotting` folder which includes many functions that do specific types of visualizations, so it's best that before writing anything new in that space simply head over there and look for something similar.\n\n The next tour should probably be in the CaImAn repo, at `/data/MatlabCode/PBLabToolkit/CalciumDataAnalysis/run_caiman_remotely`.",
+      "line": 60
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "General introduction",
+  "steps": [
+    {
+      "title": "Introduction",
+      "description": "Welcome to the calcium and bloodflow analysis repo!\n\nThis tour is designed to get you familiar with the different main components of this repo. The more detailed, hands-on work will be done in a different tour.\n\nBefore showing what's included here, it's perhaps useful to know what *isn't* here. \n\n1. Running CaImAn on TIFs: This is done via the \"CaImAn Analysis\" shortcut in the activities menu, which links to `/data/MatlabCode/PBLabToolkit/CalciumDataAnalysis/run_caiman_remotely` which contains the actual code that runs CaImAn on the power9.\n\n2. Inspecting and filtering CaImAn results: We expect our guys to inspect the results CaImAn outputs and to filter faulty cells. This is done via CaImAn's own GUI which can be accessed via the \"CaImAn GUI\" activities shortcut, and the code for which is also located in that previous folder I mentioned.\n\n3. CHIPS: The code for CHIPS is in a different directory: `/data/MatlabCode/PBLabToolkit/External/CHIPS`. Note that it's in a \"si5\" branch currently, since we added support for reading SI5 TIF files. I'm not sure whether this support was merged into the main CHIPS branch yet or not.\n\nOther than that, the rest of the analysis pipelines should all appear here, or at least rely on code located in this package."
+    },
+    {
+      "file": "README.md",
+      "description": "As the README correctly suggests, the Wiki in the GitHub repo has extra details and examples on all fronts of this code base, so if you feel this tour wasn't enough please check it out later.",
+      "line": 14
+    },
+    {
+      "file": "README.md",
+      "description": "This repo was never desgined with its current scale in mind - it's basically a series of patches applied over 5 years on top of some general ideas we had regarding the way we wish to build the calcium analysis pipeline. Due to this evolution many parts of the codebase are generally unmaintained or out of date, and will probably not work as expected. Other parts are more polished, and the more used parts are generally OKish with respect to code quality and up-to-date-ness. \n\nFeel free to modify any part of this repo, especially the older ones. I (Hagai) have deleted many of the older parts of it, but there's still much work to do deletion-wise.",
+      "line": 3
+    },
+    {
+      "directory": "use_cases",
+      "description": "In general, actually using this library can be quite simple. The folders `use_cases`, `examples` and `notebooks` all have plenty of actually-running code that is leverging parts of this library, so when building a new pipeline it's best to use one of these scripts as a skeleton for a new one.\n\nThe next tour will use one of these files as the basis for a deep-dive."
+    },
+    {
+      "directory": "calcium_bflow_analysis",
+      "description": "This repo deals with the analysis steps following CaImAn. In other words, before using most of the things in here you probably want to make sure that CaImAn has already parsed the files. Running CaImAn is done from a different repo, although the steps for doing so are detailed in the Wiki of this repo, as it's the main analysis repo."
+    },
+    {
+      "directory": "calcium_bflow_analysis",
+      "description": "We don't use a database to store results of our analyses. This means that in practice each file will have a few \"decendents\" that embody the different phases of analysis it has gone through. \n\nIt starts with a single TIF file that ScanImage outputs following a recording. This file behaves like a standard BigTiff file, except that it does contain some extra metadata that are stored in a unique, ScanImage-specific manner that Fiji is unable to parse completely. To access the full metadata you either have to use Vidrio's TIF parser, or Python's `tifffile` package, which is done in this repo.\n\nThe fact that only SI is able to write SI TIF files means that any step which changes the TIF - reshaping, downsampling, deinterleaving, etc. - should never override the original file as was written by SI, since no software other than SI is able to replicate the metadata format.\n\nBack to the no-database approach. We have a single TIF file that SI recorded, and it probably also outputted a `.txt` file with the analog data, i.e. data of the run and puff times. The next step is probably to throw the TIF into the CaImAn processing step, which is located outside of this repo (a tour of that repo, `run_caiman_remotely`, also exists BTW). That step outputs a few files per SI file:\n1. A deinterleaved TIF file, if deinterleaving was needed\n2. Two motion-corrected files (stored in two different formats due to internal CaImAn reasons)\n3. A results file in `.npz` (numpy) format.\n4. A results file in `.hdf5` (HDF5) format.\n\nEach of these files will have its name identical to the original file, but with a different suffix signaling its purpose in life. Note that the two results files are kind-of-redundant - we used the numpy file for 3-4 years since CaImAn never bothered to output their own file, but once they did we transitioned nearly all of our pipelines to work with that. With a day or two of work we can probably ditch the `.npz` file for good.\n\nThe next steps of the pipeline, which do take place in this repo, will produce more files of similar type - their basic name will be identical to the original TIF but with a different suffix. We'll detail them in a tour dedicated to writing a post-processing pipeline.\n\nNext we'll cover the structure of this repo."
+    },
+    {
+      "directory": "calcium_bflow_analysis",
+      "description": "The source code of this pacakge is located here. It's a pip-installable package, so one can do `pip install -e .` from inside this folder and then import `calcium_bflow_analysis` like any other package. \n\nWe haven't published it PyPI."
+    },
+    {
+      "directory": "calcium_bflow_analysis/dff_analysis_and_plotting",
+      "description": "Most simple dF/F analysis and plotting code is inside this folder - stuff like showing a bunch of traces together, calculating the mean AUC per neuron per spike, showing a dF/F heatmap, etc."
+    },
+    {
+      "directory": "calcium_bflow_analysis/sequencer",
+      "description": "Code dealing with the [online sequencer](http://sequencer.org/) by Dalya Baron. We haven't really used it except for once for Amit's FXS mice, and this analysis was never used in the paper."
+    },
+    {
+      "directory": "CHIPS",
+      "description": "Metadata for CHIPS. The actual code is located in the QNAP, but not here. These are only the parameters we defined for our acquisition setups."
+    },
+    {
+      "directory": "docs",
+      "description": "All API docs can be viewed as an HTML website by opening the `index.html` file here. The build system is sphinx, and to re-build the docs one has to write `make html`."
+    },
+    {
+      "directory": "calcium_bflow_analysis",
+      "description": "Besides these folders, three extra important files in this folder are the following:\n\n1. `visualize_ep_results.ipynb`: A relatively old notebook designed to show the results of CaImAn. Since we now have CaImAn GUI it's less important.\n2. `calcium_over_time.py`: Main analysis file that parses the CaImAn results into something more usable.\n3. `calcium_trace_analysis.py`: After the previous file does its magic this file comes and produces plots and statistics.\n\nWe'll cover the last two files in more detail in the next tour."
+    }
+  ]
+}
