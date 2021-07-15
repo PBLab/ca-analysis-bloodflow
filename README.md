@@ -17,3 +17,6 @@ As far has high-level usage docs go, please check the Wiki of this repo for
 details. API-level docs exist either in the files themselves and\or as HTML in
 the ``docs`` folder.
 
+A code tour, via the VSCode extension "CodeTour", is also available for this
+repo! Please open this folder in VSCode, install the extension and review the
+tours for additional information.
